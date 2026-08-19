@@ -1,8 +1,7 @@
-// ===========================================================================
-// ⚙️ ANIMATION CONFIGURATION (Ultra-Optimized)
-// ===========================================================================
-const int bootFadeMs = 800; // How long the initial fade-in takes
-const int cascadeDelayMs = 150; // Delay between each button fading in on boot
+const int bootFadeMs = 500;
+const int cascadeDelayMs = 90;
+const int pageTransitionMs = 250;
 
-const int pageTransitionMs =
-    250; // <--- NEW: Speed of the cross-fade between menus
+const int slideshowHoldMs = 4200;
+const int slideshowTransitionMs = 1400;
+const double slideshowPixelCellMultiplier = 2.0;
