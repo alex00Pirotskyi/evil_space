@@ -4,6 +4,8 @@ enum AppRoute {
   desks('/desks'),
   office('/office'),
   studio('/studio'),
+  map('/map'),
+  book('/book'),
   gallery('/gallery'),
   contact('/contact'),
   qr('/qr');
@@ -22,6 +24,8 @@ enum AppRoute {
       '/desk' || '/desks' => AppRoute.desks,
       '/office' || '/offices' => AppRoute.office,
       '/studio' => AppRoute.studio,
+      '/map' || '/floor-map' => AppRoute.map,
+      '/book' || '/visit' => AppRoute.book,
       '/gallery' || '/pixel-gallery' => AppRoute.gallery,
       '/contact' => AppRoute.contact,
       '/qr' => AppRoute.qr,
