@@ -2,7 +2,7 @@ name: evil_space
 description: "Evil Space coworking web app for Nha Trang, Vietnam."
 publish_to: 'none'
 
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ^3.10.4
@@ -29,3 +29,5 @@ flutter:
 
   assets:
     - assets/slideshow/
+    - assets/backgrounds/
+    - assets/content/
