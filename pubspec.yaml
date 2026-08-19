@@ -29,5 +29,10 @@ flutter:
 
   assets:
     - assets/slideshow/
-    - assets/backgrounds/
+    - assets/backgrounds/home/
+    - assets/backgrounds/feed/
+    - assets/backgrounds/desks/
+    - assets/backgrounds/office/
+    - assets/backgrounds/studio/
+    - assets/backgrounds/contact/
     - assets/content/
