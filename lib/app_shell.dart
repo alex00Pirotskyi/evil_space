@@ -139,7 +139,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
                                     alignment: Alignment.topLeft,
                                     children: [
                                       ...previousChildren,
-                                      if (currentChild != null) currentChild,
+                                      ?currentChild,
                                     ],
                                   );
                                 },
