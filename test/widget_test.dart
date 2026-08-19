@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
+import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/pixel_background.dart';
 import 'package:evil_space/pixel_glyphs.dart';
 import 'package:evil_space/pixel_image_slideshow.dart';
 import 'package:evil_space/pixeltools.dart';
@@ -19,15 +21,19 @@ void main() {
       expect(AppRoute.fromUri(Uri.parse('/desks/')), AppRoute.desks);
       expect(AppRoute.fromUri(Uri.parse('/office')), AppRoute.office);
       expect(AppRoute.fromUri(Uri.parse('/studio')), AppRoute.studio);
+      expect(AppRoute.fromUri(Uri.parse('/map')), AppRoute.map);
+      expect(AppRoute.fromUri(Uri.parse('/floor-map')), AppRoute.map);
+      expect(AppRoute.fromUri(Uri.parse('/book')), AppRoute.book);
+      expect(AppRoute.fromUri(Uri.parse('/visit')), AppRoute.book);
       expect(AppRoute.fromUri(Uri.parse('/gallery')), AppRoute.gallery);
       expect(AppRoute.fromUri(Uri.parse('/contact')), AppRoute.contact);
       expect(AppRoute.fromUri(Uri.parse('/qr')), AppRoute.qr);
       expect(AppRoute.fromUri(Uri.parse('/unknown')), AppRoute.home);
 
       final parsed = await parser.parseRouteInformation(
-        RouteInformation(uri: Uri.parse('/gallery')),
+        RouteInformation(uri: Uri.parse('/map')),
       );
-      expect(parsed, AppRoute.gallery);
+      expect(parsed, AppRoute.map);
     });
 
     test('restores canonical browser paths', () {
@@ -36,29 +42,79 @@ void main() {
         '/desks',
       );
       expect(
-        parser.restoreRouteInformation(AppRoute.qr).uri.path,
-        '/qr',
+        parser.restoreRouteInformation(AppRoute.map).uri.path,
+        '/map',
+      );
+      expect(
+        parser.restoreRouteInformation(AppRoute.book).uri.path,
+        '/book',
       );
     });
   });
 
   group('localization', () {
-    test('contains real Russian and Vietnamese translations', () {
+    test('contains Russian and Vietnamese product translations', () {
       final localization = LocalizationController(AppLanguage.ru);
       expect(localization.t('menu_contact'), 'КОНТАКТЫ');
+      expect(localization.t('menu_map'), 'КАРТА ЗАЛА');
 
       localization.setLanguage(AppLanguage.vi);
       expect(localization.t('menu_contact'), 'LIÊN HỆ');
       expect(localization.t('desk_day'), 'VÉ NGÀY');
+      expect(localization.t('cta_work_here'), 'LÀM VIỆC Ở ĐÂY HÔM NAY');
 
       localization.dispose();
     });
 
-    test('falls back to English for unknown keys', () {
+    test('falls back to the key when no translation exists', () {
       final localization = LocalizationController();
       expect(localization.t('menu_gallery'), 'PIXEL GALLERY');
       expect(localization.t('missing_key'), 'missing_key');
       localization.dispose();
+    });
+  });
+
+  group('coworking model', () {
+    test('parses live desk availability', () {
+      final status = CoworkingStatus.fromJson({
+        'updated': 'NOW',
+        'desks': [
+          {'id': 'a', 'label': 'A', 'zone': 'WINDOW', 'state': 'available'},
+          {'id': 'b', 'label': 'B', 'zone': 'QUIET', 'state': 'occupied'},
+        ],
+      });
+
+      expect(status.total, 2);
+      expect(status.available, 1);
+      expect(status.deskById('a')?.state, DeskState.available);
+    });
+
+    test('pricing calculator chooses the cheapest useful product', () {
+      expect(PricingCalculator.forDays(1).bestKey, 'desk_day');
+      expect(PricingCalculator.forDays(5).bestKey, 'desk_week');
+      expect(PricingCalculator.forDays(30).bestKey, 'desk_hot');
+      expect(PricingCalculator.compactVnd(3200000), '3.2M');
+    });
+  });
+
+  group('background scenes', () {
+    test('maps business routes to page-aware photo pools', () {
+      expect(
+        PixelBackgroundScene.fromRoute(AppRoute.desks),
+        PixelBackgroundScene.desks,
+      );
+      expect(
+        PixelBackgroundScene.fromRoute(AppRoute.map),
+        PixelBackgroundScene.desks,
+      );
+      expect(
+        PixelBackgroundScene.fromRoute(AppRoute.book),
+        PixelBackgroundScene.desks,
+      );
+      expect(
+        PixelBackgroundScene.fromRoute(AppRoute.contact),
+        PixelBackgroundScene.contact,
+      );
     });
   });
 
