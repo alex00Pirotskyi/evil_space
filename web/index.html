@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta charset="UTF-8">
+  <meta name="theme-color" content="#222222">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Evil Space</title>
+
+  <style>
+    /* THIS IS THE MAGIC: It runs BEFORE Flutter */
+    body {
+      /* 1. Base dark color */
+      background-color: #222222;
+
+      /* 2. Pure CSS infinite black grid (Matches gridSize: 10.0) */
+      background-image:
+        linear-gradient(to right, #000000 1px, transparent 1px),
+        linear-gradient(to bottom, #000000 1px, transparent 1px);
+      background-size: 10px 10px;
+
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+
+</html>
