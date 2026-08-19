@@ -1,22 +1,27 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
-import 'package:evil_space/pixel_alphabet.dart';
 import 'package:evil_space/config.dart';
+import 'package:evil_space/pixel_glyphs.dart';
 
-// -----------------------------------------------------------------------
-// 1. THE GRID PAINTER
-// -----------------------------------------------------------------------
 class GridPainter extends CustomPainter {
-  final double gridSize;
   GridPainter({required this.gridSize});
+
+  final double gridSize;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (gridSize <= 0) {
+      return;
+    }
+
     final paint = Paint()
       ..color = Colors.black
       ..strokeWidth = 1.0;
+
     for (double x = 0; x <= size.width; x += gridSize) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
@@ -26,81 +31,354 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) {
+    return oldDelegate.gridSize != gridSize;
+  }
 }
 
-// -----------------------------------------------------------------------
-// 2. THE ULTIMATE "ZERO-MATH" GPU RENDERER
-// -----------------------------------------------------------------------
 class MatrixPainter extends CustomPainter {
-  final Path precalculatedPath;
-  final Color color;
-  final bool isHovered;
-
   MatrixPainter({
     required this.precalculatedPath,
     required this.color,
-    required this.isHovered,
+    required this.isHighlighted,
   });
+
+  final Path precalculatedPath;
+  final Color color;
+  final bool isHighlighted;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (precalculatedPath.getBounds().isEmpty) {
+      return;
+    }
+
     final fillPaint = Paint()..color = color;
     final borderPaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    Paint? glowPaint;
-    if (isHovered) {
-      glowPaint = Paint()
-        ..color = Colors.white.withOpacity(0.8)
+    if (isHighlighted) {
+      final glowPaint = Paint()
+        ..color = const Color(0xCCFFFFFF)
         ..maskFilter = const ui.MaskFilter.blur(BlurStyle.normal, 4.0);
-    }
-
-    if (glowPaint != null) {
       canvas.drawPath(precalculatedPath, glowPaint);
     }
+
     canvas.drawPath(precalculatedPath, fillPaint);
     canvas.drawPath(precalculatedPath, borderPaint);
   }
 
   @override
   bool shouldRepaint(covariant MatrixPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.isHovered != isHovered;
+    return oldDelegate.precalculatedPath != precalculatedPath ||
+        oldDelegate.color != color ||
+        oldDelegate.isHighlighted != isHighlighted;
   }
 }
 
-// -----------------------------------------------------------------------
-// 3. STATIC HOVERABLE BLOCKS (Logos & Icons)
-// -----------------------------------------------------------------------
-class HoverablePixelBlock extends StatefulWidget {
-  final List<List<int>> matrix;
-  final double gridSize;
-  final VoidCallback? onTap;
+class _PixelGeometry {
+  const _PixelGeometry({
+    required this.path,
+    required this.size,
+  });
 
+  final Path path;
+  final Size size;
+}
+
+class PixelTextLayout {
+  PixelTextLayout._();
+
+  static const int _spaceCells = 3;
+  static const int _letterSpacingCells = 1;
+
+  static int measureLineCells(String text) {
+    if (text.isEmpty) {
+      return 0;
+    }
+
+    int width = 0;
+    for (int index = 0; index < text.length; index++) {
+      final char = text[index];
+      if (char == ' ') {
+        width += _spaceCells;
+        continue;
+      }
+
+      final glyph = PixelGlyphResolver.resolve(char);
+      width += glyph?.width ?? _spaceCells;
+
+      final bool hasNext = index < text.length - 1;
+      if (hasNext && text[index + 1] != ' ') {
+        width += _letterSpacingCells;
+      }
+    }
+    return width;
+  }
+
+  static String wrapToWidth({
+    required String text,
+    required double maxWidth,
+    required double gridSize,
+  }) {
+    if (text.isEmpty || maxWidth <= 0 || gridSize <= 0) {
+      return text;
+    }
+
+    final maxCells = math.max(4, (maxWidth / gridSize).floor()).toInt();
+    final output = <String>[];
+
+    for (final paragraph in text.split('\n')) {
+      if (paragraph.trim().isEmpty) {
+        output.add('');
+        continue;
+      }
+
+      final words = paragraph.trim().split(RegExp(r'\s+'));
+      String current = '';
+
+      for (final word in words) {
+        if (measureLineCells(word) > maxCells) {
+          if (current.isNotEmpty) {
+            output.add(current);
+            current = '';
+          }
+          output.addAll(_breakWord(word, maxCells));
+          continue;
+        }
+
+        final candidate = current.isEmpty ? word : '$current $word';
+        if (measureLineCells(candidate) <= maxCells) {
+          current = candidate;
+        } else {
+          output.add(current);
+          current = word;
+        }
+      }
+
+      if (current.isNotEmpty) {
+        output.add(current);
+      }
+    }
+
+    return output.join('\n');
+  }
+
+  static List<String> _breakWord(String word, int maxCells) {
+    final lines = <String>[];
+    String current = '';
+
+    for (int index = 0; index < word.length; index++) {
+      final candidate = '$current${word[index]}';
+      if (current.isNotEmpty && measureLineCells(candidate) > maxCells) {
+        lines.add(current);
+        current = word[index];
+      } else {
+        current = candidate;
+      }
+    }
+
+    if (current.isNotEmpty) {
+      lines.add(current);
+    }
+    return lines;
+  }
+}
+
+class _PixelStringGeometryBuilder {
+  _PixelStringGeometryBuilder._();
+
+  static _PixelGeometry build(String word, double gridSize) {
+    final path = Path();
+    final lines = word.split('\n');
+    double y = 0;
+    double maxWidth = 0;
+
+    for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      final line = lines[lineIndex];
+      final glyphs = <PixelGlyph?>[];
+
+      int topRows = 0;
+      int bottomRows = 0;
+      int baseRows = 5;
+
+      for (int index = 0; index < line.length; index++) {
+        final char = line[index];
+        final glyph = char == ' ' ? null : PixelGlyphResolver.resolve(char);
+        glyphs.add(glyph);
+        if (glyph != null) {
+          topRows = math.max(topRows, glyph.topRows).toInt();
+          bottomRows = math.max(bottomRows, glyph.bottomRows).toInt();
+          baseRows = math.max(baseRows, glyph.height).toInt();
+        }
+      }
+
+      double x = 0;
+      for (int index = 0; index < line.length; index++) {
+        final char = line[index];
+        final glyph = glyphs[index];
+
+        if (char == ' ') {
+          x += gridSize * 3;
+          continue;
+        }
+
+        if (glyph == null) {
+          x += gridSize * 3;
+        } else {
+          _drawGlyph(
+            path: path,
+            glyph: glyph,
+            x: x,
+            lineY: y,
+            lineTopRows: topRows,
+            gridSize: gridSize,
+          );
+          x += glyph.width * gridSize;
+        }
+
+        final bool hasNext = index < line.length - 1;
+        if (hasNext && line[index + 1] != ' ') {
+          x += gridSize;
+        }
+      }
+
+      maxWidth = math.max(maxWidth, x).toDouble();
+      final lineHeight = (topRows + baseRows + bottomRows) * gridSize;
+      y += lineHeight;
+
+      if (lineIndex < lines.length - 1) {
+        y += gridSize * 2;
+      }
+    }
+
+    return _PixelGeometry(
+      path: path,
+      size: Size(maxWidth, math.max(gridSize, y).toDouble()),
+    );
+  }
+
+  static void _drawGlyph({
+    required Path path,
+    required PixelGlyph glyph,
+    required double x,
+    required double lineY,
+    required int lineTopRows,
+    required double gridSize,
+  }) {
+    final baseY = lineY + (lineTopRows * gridSize);
+
+    for (int row = 0; row < glyph.matrix.length; row++) {
+      for (int column = 0; column < glyph.matrix[row].length; column++) {
+        if (glyph.matrix[row][column] == 1) {
+          path.addRect(
+            Rect.fromLTWH(
+              x + (column * gridSize),
+              baseY + (row * gridSize),
+              gridSize,
+              gridSize,
+            ),
+          );
+        }
+      }
+    }
+
+    if (glyph.tone == PixelTone.none) {
+      return;
+    }
+
+    final center = glyph.width ~/ 2;
+
+    if (glyph.tone == PixelTone.dot) {
+      path.addRect(
+        Rect.fromLTWH(
+          x + (center * gridSize),
+          baseY + (glyph.height * gridSize),
+          gridSize,
+          gridSize,
+        ),
+      );
+      return;
+    }
+
+    final accentY = lineY + ((lineTopRows - glyph.topRows) * gridSize);
+    final accentCells = _accentCells(glyph.tone, glyph.width, center);
+    for (final cell in accentCells) {
+      path.addRect(
+        Rect.fromLTWH(
+          x + (cell.$1 * gridSize),
+          accentY + (cell.$2 * gridSize),
+          gridSize,
+          gridSize,
+        ),
+      );
+    }
+  }
+
+  static List<(int, int)> _accentCells(
+    PixelTone tone,
+    int width,
+    int center,
+  ) {
+    final left = math.max(0, center - 1).toInt();
+    final right = math.min(width - 1, center + 1).toInt();
+
+    switch (tone) {
+      case PixelTone.acute:
+        return [(right, 0), (center, 1)];
+      case PixelTone.grave:
+        return [(left, 0), (center, 1)];
+      case PixelTone.hook:
+        return [(center, 0), (right, 0), (center, 1)];
+      case PixelTone.tilde:
+        return [(left, 0), (center, 1), (right, 0)];
+      case PixelTone.dot:
+      case PixelTone.none:
+        return const [];
+    }
+  }
+}
+
+class HoverablePixelBlock extends StatefulWidget {
   const HoverablePixelBlock({
-    Key? key,
+    super.key,
     required this.matrix,
     required this.gridSize,
     this.onTap,
-  }) : super(key: key);
+    this.semanticLabel,
+    this.color = const Color(0xFFDDDDDD),
+  });
+
+  final List<List<int>> matrix;
+  final double gridSize;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+  final Color color;
 
   @override
-  _HoverablePixelBlockState createState() => _HoverablePixelBlockState();
+  State<HoverablePixelBlock> createState() => _HoverablePixelBlockState();
 }
 
 class _HoverablePixelBlockState extends State<HoverablePixelBlock> {
-  bool isHovered = false;
-  double _opacity = 0.0;
-  late Path _cachedPath;
+  late Path _path;
+  Timer? _fadeTimer;
+  double _opacity = 0;
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  bool get _highlighted => _hovered || _focused || _pressed;
 
   @override
   void initState() {
     super.initState();
     _buildPath();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) setState(() => _opacity = 1.0);
+    _fadeTimer = Timer(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        setState(() => _opacity = 1);
+      }
     });
   }
 
@@ -113,15 +391,21 @@ class _HoverablePixelBlockState extends State<HoverablePixelBlock> {
     }
   }
 
+  @override
+  void dispose() {
+    _fadeTimer?.cancel();
+    super.dispose();
+  }
+
   void _buildPath() {
-    _cachedPath = Path();
-    for (int r = 0; r < widget.matrix.length; r++) {
-      for (int c = 0; c < widget.matrix[r].length; c++) {
-        if (widget.matrix[r][c] == 1) {
-          _cachedPath.addRect(
+    _path = Path();
+    for (int row = 0; row < widget.matrix.length; row++) {
+      for (int column = 0; column < widget.matrix[row].length; column++) {
+        if (widget.matrix[row][column] == 1) {
+          _path.addRect(
             Rect.fromLTWH(
-              c * widget.gridSize,
-              r * widget.gridSize,
+              column * widget.gridSize,
+              row * widget.gridSize,
               widget.gridSize,
               widget.gridSize,
             ),
@@ -131,242 +415,214 @@ class _HoverablePixelBlockState extends State<HoverablePixelBlock> {
     }
   }
 
+  void _setInteraction({
+    bool? hovered,
+    bool? focused,
+    bool? pressed,
+  }) {
+    setState(() {
+      _hovered = hovered ?? _hovered;
+      _focused = focused ?? _focused;
+      _pressed = pressed ?? _pressed;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    double width = widget.matrix[0].length * widget.gridSize;
-    double height = widget.matrix.length * widget.gridSize;
+    final width = widget.matrix.isEmpty
+        ? widget.gridSize
+        : widget.matrix.first.length * widget.gridSize;
+    final height = widget.matrix.length * widget.gridSize;
 
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: bootFadeMs),
-      opacity: _opacity,
-      child: RepaintBoundary(
-        child: MouseRegion(
-          cursor: widget.onTap != null
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
-          onEnter: (_) => setState(() => isHovered = true),
-          onExit: (_) => setState(() => isHovered = false),
-          child: GestureDetector(
-            // 🚀 MOBILE TOUCH LOGIC FOR THE LOGO
-            onTapDown: (_) => setState(() => isHovered = true),
-            onTapCancel: () => setState(() => isHovered = false),
-            onTapUp: (_) {
-              setState(() => isHovered = false);
-              if (widget.onTap != null) widget.onTap!();
-            },
-            child: TweenAnimationBuilder<Color?>(
-              duration: const Duration(milliseconds: 150),
-              tween: ColorTween(
-                begin: const Color(0xFFDDDDDD),
-                end: isHovered ? Colors.white : const Color(0xFFDDDDDD),
-              ),
-              builder: (context, color, child) {
-                return CustomPaint(
-                  size: Size(width, height),
-                  painter: MatrixPainter(
-                    precalculatedPath: _cachedPath,
-                    color: color ?? const Color(0xFFDDDDDD),
-                    isHovered: isHovered,
-                  ),
-                );
-              },
-            ),
-          ),
+    final paint = RepaintBoundary(
+      child: CustomPaint(
+        size: Size(width, height),
+        painter: MatrixPainter(
+          precalculatedPath: _path,
+          color: _highlighted ? Colors.white : widget.color,
+          isHighlighted: _highlighted,
         ),
+      ),
+    );
+
+    Widget child = paint;
+    if (widget.onTap != null) {
+      child = ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: kMinInteractiveDimension,
+          minHeight: kMinInteractiveDimension,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: paint,
+        ),
+      );
+      child = InkWell(
+        onTap: widget.onTap,
+        onHover: (value) => _setInteraction(hovered: value),
+        onFocusChange: (value) => _setInteraction(focused: value),
+        onHighlightChanged: (value) => _setInteraction(pressed: value),
+        splashFactory: NoSplash.splashFactory,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: child,
+      );
+    }
+
+    return Semantics(
+      label: widget.semanticLabel,
+      button: widget.onTap != null,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: bootFadeMs),
+        opacity: _opacity,
+        child: child,
       ),
     );
   }
 }
 
-// -----------------------------------------------------------------------
-// 4. STRINGS WITH SIMPLE FADE-IN & MOBILE TOUCH
-// -----------------------------------------------------------------------
 class HoverablePixelString extends StatefulWidget {
+  const HoverablePixelString({
+    super.key,
+    required this.word,
+    required this.gridSize,
+    this.onTap,
+    this.bootDelay = Duration.zero,
+    this.isInstant = false,
+    this.semanticLabel,
+    this.color = const Color(0xFFDDDDDD),
+    this.hoverColor = Colors.white,
+  });
+
   final String word;
   final double gridSize;
   final VoidCallback? onTap;
   final Duration bootDelay;
   final bool isInstant;
-
-  const HoverablePixelString({
-    Key? key,
-    required this.word,
-    required this.gridSize,
-    this.bootDelay = Duration.zero,
-    this.isInstant = false,
-    this.onTap,
-  }) : super(key: key);
+  final String? semanticLabel;
+  final Color color;
+  final Color hoverColor;
 
   @override
-  _HoverablePixelStringState createState() => _HoverablePixelStringState();
+  State<HoverablePixelString> createState() => _HoverablePixelStringState();
 }
 
 class _HoverablePixelStringState extends State<HoverablePixelString> {
-  bool isHovered = false;
-  double _opacity = 0.0;
+  late _PixelGeometry _geometry;
+  Timer? _fadeTimer;
+  double _opacity = 0;
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
 
-  late List<Widget> _cachedLetterWidgets;
-
-  // 🚀 Added '/' and ':' to support your new menus and feeds!
+  bool get _highlighted => _hovered || _focused || _pressed;
 
   @override
   void initState() {
     super.initState();
-    _buildCachedWord();
-
-    if (widget.isInstant) {
-      _opacity = 1.0;
-    } else {
-      Future.delayed(widget.bootDelay, () {
-        if (mounted) setState(() => _opacity = 1.0);
-      });
-    }
-  }
-
-  void _buildCachedWord() {
-    List<String> lines = widget.word.split('\n');
-    List<Widget> lineWidgets = [];
-
-    for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      String line = lines[lineIndex];
-      List<Widget> letterWidgets = [];
-
-      for (int i = 0; i < line.length; i++) {
-        String char = line[i].toUpperCase();
-
-        if (char == ' ') {
-          letterWidgets.add(SizedBox(width: widget.gridSize * 3));
-          continue;
-        }
-
-        List<List<int>>? matrix = PixelAlphabet.letters[char];
-        if (matrix != null) {
-          Path letterPath = Path();
-          for (int r = 0; r < matrix.length; r++) {
-            for (int c = 0; c < matrix[r].length; c++) {
-              if (matrix[r][c] == 1) {
-                letterPath.addRect(
-                  Rect.fromLTWH(
-                    c * widget.gridSize,
-                    r * widget.gridSize,
-                    widget.gridSize,
-                    widget.gridSize,
-                  ),
-                );
-              }
-            }
-          }
-
-          double width = matrix[0].length * widget.gridSize;
-          double height = matrix.length * widget.gridSize;
-
-          letterWidgets.add(
-            TweenAnimationBuilder<Color?>(
-              duration: const Duration(milliseconds: 150),
-              tween: ColorTween(
-                begin: const Color(0xFFDDDDDD),
-                end: isHovered ? Colors.white : const Color(0xFFDDDDDD),
-              ),
-              builder: (context, color, child) {
-                return CustomPaint(
-                  size: Size(width, height),
-                  painter: MatrixPainter(
-                    precalculatedPath: letterPath,
-                    color: color ?? const Color(0xFFDDDDDD),
-                    isHovered: isHovered,
-                  ),
-                );
-              },
-            ),
-          );
-
-          if (i < line.length - 1 && line[i + 1] != ' ') {
-            letterWidgets.add(SizedBox(width: widget.gridSize));
-          }
-        }
-      }
-      lineWidgets.add(
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: letterWidgets,
-        ),
-      );
-      if (lineIndex < lines.length - 1)
-        lineWidgets.add(SizedBox(height: widget.gridSize * 2));
-    }
-    _cachedLetterWidgets = lineWidgets;
+    _rebuildGeometry();
+    _scheduleFade();
   }
 
   @override
   void didUpdateWidget(covariant HoverablePixelString oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _buildCachedWord();
+    if (oldWidget.word != widget.word ||
+        oldWidget.gridSize != widget.gridSize) {
+      _rebuildGeometry();
+    }
+    if (oldWidget.isInstant != widget.isInstant ||
+        oldWidget.bootDelay != widget.bootDelay) {
+      _scheduleFade();
+    }
+  }
+
+  @override
+  void dispose() {
+    _fadeTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleFade() {
+    _fadeTimer?.cancel();
+    if (widget.isInstant) {
+      _opacity = 1;
+      return;
+    }
+
+    _opacity = 0;
+    _fadeTimer = Timer(widget.bootDelay, () {
+      if (mounted) {
+        setState(() => _opacity = 1);
+      }
+    });
+  }
+
+  void _rebuildGeometry() {
+    _geometry = _PixelStringGeometryBuilder.build(
+      widget.word,
+      widget.gridSize,
+    );
+  }
+
+  void _setInteraction({
+    bool? hovered,
+    bool? focused,
+    bool? pressed,
+  }) {
+    setState(() {
+      _hovered = hovered ?? _hovered;
+      _focused = focused ?? _focused;
+      _pressed = pressed ?? _pressed;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: bootFadeMs),
-      opacity: _opacity,
-      child: RepaintBoundary(
-        child: MouseRegion(
-          cursor: widget.onTap != null
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
-          // Desktop Hover Logic
-          onEnter: (_) {
-            if (widget.onTap != null) {
-              setState(() {
-                isHovered = true;
-                _buildCachedWord();
-              });
-            }
-          },
-          onExit: (_) {
-            if (widget.onTap != null) {
-              setState(() {
-                isHovered = false;
-                _buildCachedWord();
-              });
-            }
-          },
-          child: GestureDetector(
-            // 🚀 MOBILE TOUCH LOGIC FOR THE TEXT
-            onTapDown: (_) {
-              if (widget.onTap != null) {
-                setState(() {
-                  isHovered = true;
-                  _buildCachedWord();
-                });
-              }
-            },
-            onTapCancel: () {
-              if (widget.onTap != null) {
-                setState(() {
-                  isHovered = false;
-                  _buildCachedWord();
-                });
-              }
-            },
-            onTapUp: (_) {
-              if (widget.onTap != null) {
-                setState(() {
-                  isHovered = false;
-                  _buildCachedWord();
-                });
-                widget
-                    .onTap!(); // Trigger the navigation AFTER the touch is released
-              }
-            },
-            child: Container(
-              color: Colors.transparent,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _cachedLetterWidgets,
-              ),
-            ),
-          ),
+    final paint = RepaintBoundary(
+      child: CustomPaint(
+        size: _geometry.size,
+        painter: MatrixPainter(
+          precalculatedPath: _geometry.path,
+          color: _highlighted ? widget.hoverColor : widget.color,
+          isHighlighted: _highlighted,
         ),
+      ),
+    );
+
+    Widget child = paint;
+    if (widget.onTap != null) {
+      child = ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: kMinInteractiveDimension,
+          minHeight: kMinInteractiveDimension,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: paint,
+        ),
+      );
+      child = InkWell(
+        onTap: widget.onTap,
+        onHover: (value) => _setInteraction(hovered: value),
+        onFocusChange: (value) => _setInteraction(focused: value),
+        onHighlightChanged: (value) => _setInteraction(pressed: value),
+        splashFactory: NoSplash.splashFactory,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: child,
+      );
+    }
+
+    return Semantics(
+      label: widget.semanticLabel ?? widget.word.replaceAll('\n', ' '),
+      button: widget.onTap != null,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: bootFadeMs),
+        opacity: _opacity,
+        child: child,
       ),
     );
   }

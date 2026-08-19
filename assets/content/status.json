@@ -1,0 +1,15 @@
+{
+  "updated": "2026-08-19",
+  "desks": [
+    {"id":"d1","label":"D1","zone":"WINDOW","state":"available"},
+    {"id":"d2","label":"D2","zone":"WINDOW","state":"available"},
+    {"id":"d3","label":"D3","zone":"WINDOW","state":"occupied"},
+    {"id":"d4","label":"D4","zone":"WINDOW","state":"available"},
+    {"id":"d5","label":"D5","zone":"CENTER","state":"available"},
+    {"id":"d6","label":"D6","zone":"CENTER","state":"reserved"},
+    {"id":"d7","label":"D7","zone":"CENTER","state":"available"},
+    {"id":"d8","label":"D8","zone":"CENTER","state":"available"},
+    {"id":"d9","label":"D9","zone":"QUIET","state":"occupied"},
+    {"id":"d10","label":"D10","zone":"QUIET","state":"available"}
+  ]
+}

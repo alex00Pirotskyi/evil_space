@@ -1,102 +1,242 @@
-class Localization {
-  // Set your default language here ('en', 'ru', or 'vi')
-  static String currentLang = 'en';
+import 'package:flutter/widgets.dart';
 
-  // Helper method to get a string
-  static String get(String key) {
-    return strings[currentLang]?[key] ?? strings['en']?[key] ?? key;
+enum AppLanguage {
+  en('en'),
+  ru('ru'),
+  vi('vi');
+
+  const AppLanguage(this.code);
+
+  final String code;
+
+  static AppLanguage fromLocale(Locale locale) {
+    final languageCode = locale.languageCode.toLowerCase();
+    return AppLanguage.values.firstWhere(
+      (language) => language.code == languageCode,
+      orElse: () => AppLanguage.en,
+    );
+  }
+}
+
+class LocalizationController extends ChangeNotifier {
+  LocalizationController([this._language = AppLanguage.en]);
+
+  factory LocalizationController.fromPlatform() {
+    final locale = WidgetsBinding.instance.platformDispatcher.locale;
+    return LocalizationController(AppLanguage.fromLocale(locale));
+  }
+
+  AppLanguage _language;
+
+  AppLanguage get language => _language;
+
+  void setLanguage(AppLanguage language) {
+    if (_language == language) {
+      return;
+    }
+    _language = language;
+    notifyListeners();
+  }
+
+  String t(String key) {
+    return strings[_language.code]?[key] ?? strings['en']?[key] ?? key;
   }
 
   static const Map<String, Map<String, String>> strings = {
-    // ==========================================
-    // ENGLISH
-    // ==========================================
     'en': {
       'brand_title': 'EVIL SPACE',
       'home_subtitle': 'COWORKING',
-
-      // Menu / Navigation
       'menu_feed': 'LIVE FEED',
       'menu_desk': 'DEDICATED DESK',
       'menu_office': 'PRIVATE OFFICE',
       'menu_studio': 'PODCAST/VIDEO STUDIO',
+      'menu_map': 'FLOOR MAP',
+      'menu_gallery': 'PIXEL GALLERY',
       'menu_contact': 'CONTACT US',
-
-      // Desk Page
+      'home_availability': 'DESKS FREE TODAY',
+      'cta_work_here': 'WORK HERE TODAY',
+      'feed_title': 'LIVE FEED',
+      'feed_community': 'PREMIUM COWORKING IN NHA TRANG',
+      'feed_workspace': 'DEDICATED DESKS AND PRIVATE OFFICES',
+      'feed_studio': 'PODCAST/VIDEO STUDIO AVAILABLE',
       'desk_title': 'DEDICATED DESK\nPRICES IN VND',
       'desk_day': 'DAY PASS',
       'desk_week': 'WEEK',
       'desk_hot': 'HOT DESK',
       'desk_private': 'PRIVATE DESK',
-
-      // Office & Studio Pages
+      'pricing_stay': 'HOW LONG ARE YOU STAYING',
+      'pricing_days': 'DAYS',
+      'pricing_best': 'BEST VALUE',
+      'pricing_select': 'SELECT STAY',
       'office_title': 'PRIVATE OFFICE',
-      'studio_title': 'STUDIO RENT',
-      'contact_msg': 'PLEASE CONTACT US\nFOR THE DETAILS',
-
-      // Contact Page
+      'office_message': 'FLEXIBLE PRIVATE SPACE\nCONTACT US FOR DETAILS',
+      'studio_title': 'PODCAST/VIDEO STUDIO',
+      'studio_message': 'PODCAST AND VIDEO STUDIO\nCONTACT US FOR DETAILS',
+      'gallery_title': 'PIXEL ENGINE',
+      'gallery_hint': 'BACKGROUND IMAGES LIVE IN\nASSETS/BACKGROUNDS',
+      'gallery_semantics': 'Evil Space RGB565 pixel image slideshow',
+      'map_title': 'FLOOR MAP',
+      'map_hint': 'SELECT A DESK',
+      'map_window': 'WINDOW SIDE',
+      'map_coffee': 'COFFEE',
+      'map_office': 'PRIVATE OFFICE',
+      'map_studio': 'STUDIO',
+      'map_entrance': 'ENTRANCE',
+      'desk_state_available': 'AVAILABLE TODAY',
+      'desk_state_occupied': 'OCCUPIED',
+      'desk_state_reserved': 'RESERVED',
+      'desk_state_offline': 'OFFLINE',
+      'desk_state_available_short': 'FREE',
+      'desk_state_occupied_short': 'BUSY',
+      'desk_state_reserved_short': 'HOLD',
+      'desk_state_offline_short': 'OFF',
+      'book_title': 'WORK HERE',
+      'book_step_when': 'STEP 1 / 3\nWHEN',
+      'book_today': 'TODAY',
+      'book_tomorrow': 'TOMORROW',
+      'book_other': 'OTHER DATE',
+      'book_step_product': 'STEP 2 / 3\nWHAT',
+      'book_step_contact': 'STEP 3 / 3\nCONTINUE WITH',
+      'book_back': 'BACK',
+      'book_selected_desk': 'SELECTED DESK',
+      'book_request_ready': 'REQUEST READY\nDETAILS COPIED',
       'contact_title': 'CONTACT US',
+      'contact_location': 'NHA TRANG VIETNAM',
+      'contact_instagram': 'INSTAGRAM',
+      'contact_map': 'MAP',
+      'contact_messenger': 'MESSENGER',
+      'contact_zalo': 'ZALO',
+      'contact_phone': 'PHONE',
     },
-
-    // ==========================================
-    // RUSSIAN
-    // ==========================================
     'ru': {
-      'brand_title':
-          'EVIL SPACE', // Usually best to keep brand names in English
+      'brand_title': 'EVIL SPACE',
       'home_subtitle': 'КОВОРКИНГ',
-
-      // Menu / Navigation
       'menu_feed': 'НОВОСТИ',
-      'menu_desk': 'СВОЙ СТОЛ',
+      'menu_desk': 'РАБОЧИЕ МЕСТА',
       'menu_office': 'ЛИЧНЫЙ ОФИС',
-      'menu_studio': 'СТУДИЯ',
+      'menu_studio': 'ПОДКАСТ/ВИДЕО СТУДИЯ',
+      'menu_map': 'КАРТА ЗАЛА',
+      'menu_gallery': 'ПИКСЕЛЬ ГАЛЕРЕЯ',
       'menu_contact': 'КОНТАКТЫ',
-
-      // Desk Page
-      'desk_title': 'СВОЙ СТОЛ\nЦЕНЫ В VND',
+      'home_availability': 'СВОБОДНЫХ СТОЛОВ СЕГОДНЯ',
+      'cta_work_here': 'РАБОТАТЬ ЗДЕСЬ СЕГОДНЯ',
+      'feed_title': 'НОВОСТИ',
+      'feed_community': 'ПРЕМИУМ КОВОРКИНГ В НЯЧАНГЕ',
+      'feed_workspace': 'РАБОЧИЕ МЕСТА И ЛИЧНЫЕ ОФИСЫ',
+      'feed_studio': 'ПОДКАСТ/ВИДЕО СТУДИЯ ДОСТУПНА',
+      'desk_title': 'РАБОЧИЕ МЕСТА\nЦЕНЫ В VND',
       'desk_day': 'ДЕНЬ',
       'desk_week': 'НЕДЕЛЯ',
       'desk_hot': 'ХОТ-ДЕСК',
       'desk_private': 'ЛИЧНЫЙ СТОЛ',
-
-      // Office & Studio Pages
+      'pricing_stay': 'НА СКОЛЬКО ДНЕЙ',
+      'pricing_days': 'ДНЕЙ',
+      'pricing_best': 'ЛУЧШАЯ ЦЕНА',
+      'pricing_select': 'ВЫБЕРИТЕ СРОК',
       'office_title': 'ЛИЧНЫЙ ОФИС',
-      'studio_title': 'АРЕНДА СТУДИИ',
-      'contact_msg': 'СВЯЖИТЕСЬ С НАМИ\nДЛЯ ДЕТАЛЕЙ',
-
-      // Contact Page
+      'office_message': 'ГИБКОЕ ЛИЧНОЕ ПРОСТРАНСТВО\nСВЯЖИТЕСЬ С НАМИ',
+      'studio_title': 'ПОДКАСТ/ВИДЕО СТУДИЯ',
+      'studio_message': 'СТУДИЯ ДЛЯ ПОДКАСТОВ И ВИДЕО\nСВЯЖИТЕСЬ С НАМИ',
+      'gallery_title': 'ПИКСЕЛЬ ДВИЖОК',
+      'gallery_hint': 'ФОТО ФОНА В\nASSETS/BACKGROUNDS',
+      'gallery_semantics': 'RGB565 пиксельное слайд-шоу Evil Space',
+      'map_title': 'КАРТА ЗАЛА',
+      'map_hint': 'ВЫБЕРИТЕ СТОЛ',
+      'map_window': 'У ОКНА',
+      'map_coffee': 'КОФЕ',
+      'map_office': 'ЛИЧНЫЙ ОФИС',
+      'map_studio': 'СТУДИЯ',
+      'map_entrance': 'ВХОД',
+      'desk_state_available': 'СВОБОДЕН СЕГОДНЯ',
+      'desk_state_occupied': 'ЗАНЯТ',
+      'desk_state_reserved': 'БРОНЬ',
+      'desk_state_offline': 'НЕДОСТУПЕН',
+      'desk_state_available_short': 'СВОБ',
+      'desk_state_occupied_short': 'ЗАНЯТ',
+      'desk_state_reserved_short': 'БРОНЬ',
+      'desk_state_offline_short': 'ОФФ',
+      'book_title': 'РАБОТАТЬ ЗДЕСЬ',
+      'book_step_when': 'ШАГ 1 / 3\nКОГДА',
+      'book_today': 'СЕГОДНЯ',
+      'book_tomorrow': 'ЗАВТРА',
+      'book_other': 'ДРУГАЯ ДАТА',
+      'book_step_product': 'ШАГ 2 / 3\nЧТО',
+      'book_step_contact': 'ШАГ 3 / 3\nПРОДОЛЖИТЬ',
+      'book_back': 'НАЗАД',
+      'book_selected_desk': 'ВЫБРАННЫЙ СТОЛ',
+      'book_request_ready': 'ЗАПРОС ГОТОВ\nДЕТАЛИ СКОПИРОВАНЫ',
       'contact_title': 'КОНТАКТЫ',
+      'contact_location': 'НЯЧАНГ ВЬЕТНАМ',
+      'contact_instagram': 'INSTAGRAM',
+      'contact_map': 'КАРТА',
+      'contact_messenger': 'MESSENGER',
+      'contact_zalo': 'ZALO',
+      'contact_phone': 'ТЕЛЕФОН',
     },
-
-    // ==========================================
-    // VIETNAMESE (Optimized for your 5-pixel font)
-    // ==========================================
     'vi': {
       'brand_title': 'EVIL SPACE',
-      'home_subtitle': 'COWORKING',
-
-      // Menu / Navigation
-      'menu_feed': 'TIN TƯC',
-      'menu_desk': 'BAN RIÊNG',
-      'menu_office': 'VĂN PHONG',
-      'menu_studio': 'PHONG STUDIO',
-      'menu_contact': 'LIÊN HÊ',
-
-      // Desk Page
-      'desk_title': 'BAN RIÊNG\nGIA Tinh BĂNG VND',
-      'desk_day': 'THE NGAY',
-      'desk_week': 'TUÂN',
-      'desk_hot': 'BAN CHUNG',
-      'desk_private': 'BAN RIÊNG',
-
-      // Office & Studio Pages
-      'office_title': 'VĂN PHONG',
-      'studio_title': 'THUÊ STUDIO',
-      'contact_msg': 'VUI LONG LIÊN HÊ\nĐÊ BIÊT CHI TIÊT',
-
-      // Contact Page
-      'contact_title': 'LIÊN HÊ',
+      'home_subtitle': 'KHÔNG GIAN LÀM VIỆC',
+      'menu_feed': 'TIN MỚI',
+      'menu_desk': 'BÀN LÀM VIỆC',
+      'menu_office': 'VĂN PHÒNG RIÊNG',
+      'menu_studio': 'STUDIO PODCAST/VIDEO',
+      'menu_map': 'SƠ ĐỒ CHỖ NGỒI',
+      'menu_gallery': 'THƯ VIỆN PIXEL',
+      'menu_contact': 'LIÊN HỆ',
+      'home_availability': 'BÀN TRỐNG HÔM NAY',
+      'cta_work_here': 'LÀM VIỆC Ở ĐÂY HÔM NAY',
+      'feed_title': 'TIN MỚI',
+      'feed_community': 'COWORKING CAO CẤP TẠI NHA TRANG',
+      'feed_workspace': 'BÀN RIÊNG VÀ VĂN PHÒNG RIÊNG',
+      'feed_studio': 'STUDIO PODCAST/VIDEO SẴN SÀNG',
+      'desk_title': 'BÀN LÀM VIỆC\nGIÁ VND',
+      'desk_day': 'VÉ NGÀY',
+      'desk_week': 'THEO TUẦN',
+      'desk_hot': 'BÀN LINH HOẠT',
+      'desk_private': 'BÀN RIÊNG',
+      'pricing_stay': 'BẠN Ở BAO LÂU',
+      'pricing_days': 'NGÀY',
+      'pricing_best': 'GIÁ TỐT NHẤT',
+      'pricing_select': 'CHỌN THỜI GIAN',
+      'office_title': 'VĂN PHÒNG RIÊNG',
+      'office_message': 'KHÔNG GIAN RIÊNG LINH HOẠT\nLIÊN HỆ ĐỂ BIẾT CHI TIẾT',
+      'studio_title': 'STUDIO PODCAST/VIDEO',
+      'studio_message': 'STUDIO PODCAST VÀ VIDEO\nLIÊN HỆ ĐỂ BIẾT CHI TIẾT',
+      'gallery_title': 'BỘ MÁY PIXEL',
+      'gallery_hint': 'ẢNH NỀN NẰM TRONG\nASSETS/BACKGROUNDS',
+      'gallery_semantics': 'Trình chiếu ảnh pixel RGB565 của Evil Space',
+      'map_title': 'SƠ ĐỒ CHỖ NGỒI',
+      'map_hint': 'CHỌN MỘT BÀN',
+      'map_window': 'GẦN CỬA SỔ',
+      'map_coffee': 'CÀ PHÊ',
+      'map_office': 'VĂN PHÒNG RIÊNG',
+      'map_studio': 'STUDIO',
+      'map_entrance': 'LỐI VÀO',
+      'desk_state_available': 'TRỐNG HÔM NAY',
+      'desk_state_occupied': 'ĐANG DÙNG',
+      'desk_state_reserved': 'ĐÃ GIỮ',
+      'desk_state_offline': 'TẠM ĐÓNG',
+      'desk_state_available_short': 'TRỐNG',
+      'desk_state_occupied_short': 'BẬN',
+      'desk_state_reserved_short': 'GIỮ',
+      'desk_state_offline_short': 'ĐÓNG',
+      'book_title': 'LÀM VIỆC Ở ĐÂY',
+      'book_step_when': 'BƯỚC 1 / 3\nKHI NÀO',
+      'book_today': 'HÔM NAY',
+      'book_tomorrow': 'NGÀY MAI',
+      'book_other': 'NGÀY KHÁC',
+      'book_step_product': 'BƯỚC 2 / 3\nCHỌN GÓI',
+      'book_step_contact': 'BƯỚC 3 / 3\nTIẾP TỤC QUA',
+      'book_back': 'QUAY LẠI',
+      'book_selected_desk': 'BÀN ĐÃ CHỌN',
+      'book_request_ready': 'YÊU CẦU ĐÃ SẴN\nCHI TIẾT ĐÃ SAO CHÉP',
+      'contact_title': 'LIÊN HỆ',
+      'contact_location': 'NHA TRANG VIỆT NAM',
+      'contact_instagram': 'INSTAGRAM',
+      'contact_map': 'BẢN ĐỒ',
+      'contact_messenger': 'MESSENGER',
+      'contact_zalo': 'ZALO',
+      'contact_phone': 'ĐIỆN THOẠI',
     },
   };
 }

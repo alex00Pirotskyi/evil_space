@@ -1,41 +1,115 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
   <base href="$FLUTTER_BASE_HREF">
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  >
   <meta name="theme-color" content="#222222">
+  <meta name="color-scheme" content="dark">
+  <meta
+    name="description"
+    content="Evil Space is a pixel-styled coworking space in Nha Trang, Vietnam with dedicated desks, private offices, and podcast/video studio rental."
+  >
+  <meta
+    name="keywords"
+    content="coworking Nha Trang, coworking Vietnam, dedicated desk Nha Trang, private office Nha Trang, podcast studio Nha Trang, video studio Nha Trang"
+  >
+  <meta name="robots" content="index,follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Evil Space Coworking — Nha Trang">
+  <meta
+    property="og:description"
+    content="Dedicated desks, private offices, and podcast/video studio rental in Nha Trang, Vietnam."
+  >
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ru_RU">
+  <meta property="og:locale:alternate" content="vi_VN">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Evil Space Coworking — Nha Trang">
+  <meta
+    name="twitter:description"
+    content="Dedicated desks, private offices, and podcast/video studio rental in Nha Trang, Vietnam."
+  >
+
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Evil Space</title>
+  <meta name="apple-mobile-web-app-title" content="Evil Space">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.json">
+
+  <title>Evil Space Coworking — Nha Trang</title>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Evil Space",
+    "description": "Coworking space with dedicated desks, private offices, and podcast/video studio rental in Nha Trang, Vietnam.",
+    "telephone": "+84 56 5056 748",
+    "currenciesAccepted": "VND",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Nha Trang",
+      "addressRegion": "Khánh Hòa",
+      "addressCountry": "VN"
+    },
+    "areaServed": {
+      "@type": "City",
+      "name": "Nha Trang"
+    },
+    "sameAs": [
+      "https://www.instagram.com/evil_space_coworking"
+    ]
+  }
+  </script>
 
   <style>
-    /* THIS IS THE MAGIC: It runs BEFORE Flutter */
+    :root {
+      --evil-bg: #222222;
+      --evil-grid: #000000;
+      --evil-grid-size: clamp(3px, calc(100vw / 110), 8px);
+    }
+
+    html,
     body {
-      /* 1. Base dark color */
-      background-color: #222222;
-
-      /* 2. Pure CSS infinite black grid (Matches gridSize: 10.0) */
-      background-image:
-        linear-gradient(to right, #000000 1px, transparent 1px),
-        linear-gradient(to bottom, #000000 1px, transparent 1px);
-      background-size: 10px 10px;
-
+      width: 100%;
+      height: 100%;
       margin: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+      background-color: var(--evil-bg);
+    }
+
+    body {
+      min-height: 100dvh;
       overflow: hidden;
+      background-image:
+        linear-gradient(to right, var(--evil-grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--evil-grid) 1px, transparent 1px);
+      background-size: var(--evil-grid-size) var(--evil-grid-size);
+    }
+
+    noscript {
+      display: block;
+      max-width: 720px;
+      margin: 48px auto;
+      padding: 24px;
+      color: #dddddd;
+      font: 16px/1.5 monospace;
     }
   </style>
 </head>
 
 <body>
+  <noscript>
+    Evil Space Coworking in Nha Trang offers dedicated desks, private offices,
+    and podcast/video studio rental. JavaScript is required to open the
+    interactive pixel website.
+  </noscript>
   <script src="flutter_bootstrap.js" async></script>
 </body>
-
 </html>
