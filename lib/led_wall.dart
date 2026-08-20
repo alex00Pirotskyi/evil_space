@@ -37,13 +37,13 @@ class LedWallGeometry {
     required double cellWidth,
     required double cellHeight,
   }) {
-    final pitch = math.min(cellWidth, cellHeight);
+    final pitch = math.min(cellWidth, cellHeight).toDouble();
     final gap = inset(pitch);
     return Rect.fromLTWH(
       (column * cellWidth) + gap,
       (row * cellHeight) + gap,
-      math.max(0.5, cellWidth - (gap * 2)),
-      math.max(0.5, cellHeight - (gap * 2)),
+      math.max(0.5, cellWidth - (gap * 2)).toDouble(),
+      math.max(0.5, cellHeight - (gap * 2)).toDouble(),
     );
   }
 
