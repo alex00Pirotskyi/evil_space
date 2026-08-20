@@ -111,8 +111,11 @@ class ChunkedEInkAssetBundle extends CachingAssetBundle {
     var bitOffset = 0;
     final inputMax = (1 << bits) - 1;
     for (var pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++) {
-      final value = _readBits(packedInput, bitOffset, bits);
+      final value = bits == 2
+          ? (packedInput[pixelIndex >> 2] >> (6 - ((pixelIndex & 3) * 2))) & 0x03
+          : _readLittleEndianBits(packedInput, bitOffset, bits);
       bitOffset += bits;
+
       final expanded = ((value * 15) / inputMax).round().clamp(0, 15);
       final outputIndex = pixelIndex >> 1;
       if (pixelIndex.isEven) {
@@ -139,7 +142,7 @@ class ChunkedEInkAssetBundle extends CachingAssetBundle {
     return ByteData.sublistView(result);
   }
 
-  int _readBits(Uint8List bytes, int bitOffset, int bitCount) {
+  int _readLittleEndianBits(Uint8List bytes, int bitOffset, int bitCount) {
     final byteIndex = bitOffset >> 3;
     final bitIndex = bitOffset & 7;
     final mask = (1 << bitCount) - 1;
