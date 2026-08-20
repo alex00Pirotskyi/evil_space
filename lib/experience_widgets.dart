@@ -1,31 +1,35 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'package:evil_space/led_wall.dart';
 import 'package:evil_space/pixel_emoji.dart';
 
-class ReadablePixelText extends StatefulWidget {
-  const ReadablePixelText({
+class LedMatrixText extends StatefulWidget {
+  const LedMatrixText({
     super.key,
     required this.text,
     required this.maxWidth,
-    this.fontSize = 22,
-    this.pixelSize = 2,
-    this.color = Colors.white,
+    required this.ledPitch,
+    this.fontSize = 24,
+    this.color = const Color(0xFFE8E8E8),
     this.hoverColor = Colors.white,
-    this.fontWeight = FontWeight.w700,
+    this.fontWeight = FontWeight.w800,
     this.textAlign = TextAlign.left,
     this.maxLines,
     this.letterSpacing = 1.0,
     this.onTap,
     this.semanticLabel,
     this.header = false,
+    this.glowOnHover = true,
   });
 
   final String text;
   final double maxWidth;
+  final double ledPitch;
   final double fontSize;
-  final double pixelSize;
   final Color color;
   final Color hoverColor;
   final FontWeight fontWeight;
@@ -35,13 +39,14 @@ class ReadablePixelText extends StatefulWidget {
   final VoidCallback? onTap;
   final String? semanticLabel;
   final bool header;
+  final bool glowOnHover;
 
   @override
-  State<ReadablePixelText> createState() => _ReadablePixelTextState();
+  State<LedMatrixText> createState() => _LedMatrixTextState();
 }
 
-class _ReadablePixelTextState extends State<ReadablePixelText> {
-  _RasterizedPixelText? _raster;
+class _LedMatrixTextState extends State<LedMatrixText> {
+  _LedTextMask? _mask;
   int _generation = 0;
   bool _hovered = false;
   bool _focused = false;
@@ -52,40 +57,39 @@ class _ReadablePixelTextState extends State<ReadablePixelText> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _requestRaster();
+    _requestMask();
   }
 
   @override
-  void didUpdateWidget(covariant ReadablePixelText oldWidget) {
+  void didUpdateWidget(covariant LedMatrixText oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.text != widget.text ||
         oldWidget.maxWidth != widget.maxWidth ||
+        oldWidget.ledPitch != widget.ledPitch ||
         oldWidget.fontSize != widget.fontSize ||
-        oldWidget.pixelSize != widget.pixelSize ||
         oldWidget.fontWeight != widget.fontWeight ||
         oldWidget.textAlign != widget.textAlign ||
         oldWidget.maxLines != widget.maxLines ||
         oldWidget.letterSpacing != widget.letterSpacing) {
-      _requestRaster();
+      _requestMask();
     }
   }
 
   @override
   void dispose() {
     _generation++;
-    _raster?.image.dispose();
     super.dispose();
   }
 
-  Future<void> _requestRaster() async {
+  Future<void> _requestMask() async {
     final generation = ++_generation;
     final direction = Directionality.of(context);
     final scaledFontSize = MediaQuery.textScalerOf(context).scale(widget.fontSize);
-    final raster = await _PixelTextRasterizer.rasterize(
+    final mask = await LedTextMaskBuilder.build(
       text: widget.text,
       maxWidth: widget.maxWidth,
       fontSize: scaledFontSize,
-      pixelSize: widget.pixelSize,
+      ledPitch: widget.ledPitch,
       fontWeight: widget.fontWeight,
       textAlign: widget.textAlign,
       maxLines: widget.maxLines,
@@ -94,13 +98,9 @@ class _ReadablePixelTextState extends State<ReadablePixelText> {
     );
 
     if (!mounted || generation != _generation) {
-      raster.image.dispose();
       return;
     }
-
-    final previous = _raster;
-    setState(() => _raster = raster);
-    previous?.image.dispose();
+    setState(() => _mask = mask);
   }
 
   void _setInteraction({
@@ -120,37 +120,25 @@ class _ReadablePixelTextState extends State<ReadablePixelText> {
 
   @override
   Widget build(BuildContext context) {
-    final color = _highlighted ? widget.hoverColor : widget.color;
-    final raster = _raster;
+    final mask = _mask;
+    final activeColor = _highlighted ? widget.hoverColor : widget.color;
 
     Widget child;
-    if (raster == null) {
-      child = ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: widget.maxWidth),
-        child: Text(
-          widget.text,
-          maxLines: widget.maxLines,
-          textAlign: widget.textAlign,
-          style: TextStyle(
-            color: color,
-            fontFamily: 'monospace',
-            fontWeight: widget.fontWeight,
-            fontSize: widget.fontSize,
-            letterSpacing: widget.letterSpacing,
-            height: 1.15,
-          ),
-        ),
+    if (mask == null) {
+      child = SizedBox(
+        width: math.min(widget.maxWidth, widget.fontSize * widget.text.length),
+        height: widget.fontSize * 1.35,
       );
     } else {
       child = SizedBox(
-        width: raster.size.width,
-        height: raster.size.height,
+        width: mask.size.width,
+        height: mask.size.height,
         child: RepaintBoundary(
           child: CustomPaint(
-            painter: _RasterPixelTextPainter(
-              image: raster.image,
-              color: color,
-              pixelSize: widget.pixelSize,
+            painter: _LedTextPainter(
+              mask: mask,
+              color: activeColor,
+              glow: _highlighted && widget.glowOnHover,
             ),
           ),
         ),
@@ -163,7 +151,12 @@ class _ReadablePixelTextState extends State<ReadablePixelText> {
           minHeight: kMinInteractiveDimension,
           minWidth: kMinInteractiveDimension,
         ),
-        child: Align(alignment: Alignment.centerLeft, child: child),
+        child: Align(
+          alignment: widget.textAlign == TextAlign.right
+              ? Alignment.centerRight
+              : Alignment.centerLeft,
+          child: child,
+        ),
       );
       child = InkWell(
         onTap: widget.onTap,
@@ -187,23 +180,22 @@ class _ReadablePixelTextState extends State<ReadablePixelText> {
   }
 }
 
-class _PixelTextRasterizer {
-  _PixelTextRasterizer._();
+class LedTextMaskBuilder {
+  LedTextMaskBuilder._();
 
-  static Future<_RasterizedPixelText> rasterize({
+  static Future<_LedTextMask> build({
     required String text,
     required double maxWidth,
     required double fontSize,
-    required double pixelSize,
+    required double ledPitch,
     required FontWeight fontWeight,
     required TextAlign textAlign,
     required int? maxLines,
     required double letterSpacing,
     required TextDirection textDirection,
   }) async {
-    final safePixelSize = pixelSize.clamp(1.0, 4.0).toDouble();
-    final lowFontSize = fontSize / safePixelSize;
-    final lowMaxWidth = (maxWidth / safePixelSize) - 4;
+    final pitch = LedWallGeometry.safePitch(ledPitch);
+    final safeWidth = maxWidth.clamp(pitch, 4096.0).toDouble();
 
     final painter = TextPainter(
       text: TextSpan(
@@ -213,126 +205,159 @@ class _PixelTextRasterizer {
           fontFamily: 'monospace',
           fontFamilyFallback: const ['Arial', 'sans-serif'],
           fontWeight: fontWeight,
-          fontSize: lowFontSize,
-          letterSpacing: letterSpacing / safePixelSize,
-          height: 1.15,
+          fontSize: fontSize,
+          letterSpacing: letterSpacing,
+          height: 1.08,
         ),
       ),
       textAlign: textAlign,
       textDirection: textDirection,
       maxLines: maxLines,
-      textWidthBasis: TextWidthBasis.longestLine,
-    )..layout(maxWidth: lowMaxWidth.clamp(1.0, double.infinity).toDouble());
+      textWidthBasis: TextWidthBasis.parent,
+    )..layout(maxWidth: safeWidth);
 
-    const padding = 2.0;
-    final imageWidth = (painter.width + (padding * 2))
-        .ceil()
-        .clamp(1, 4096)
-        .toInt();
-    final imageHeight = (painter.height + (padding * 2))
-        .ceil()
-        .clamp(1, 4096)
-        .toInt();
-
+    final imageWidth = math.max(1, painter.width.ceil()).toInt();
+    final imageHeight = math.max(1, painter.height.ceil()).toInt();
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    painter.paint(canvas, const Offset(padding, padding));
+    painter.paint(canvas, Offset.zero);
     final picture = recorder.endRecording();
     final image = await picture.toImage(imageWidth, imageHeight);
     picture.dispose();
 
-    return _RasterizedPixelText(
-      image: image,
-      size: Size(
-        imageWidth * safePixelSize,
-        imageHeight * safePixelSize,
-      ),
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    image.dispose();
+    if (data == null) {
+      throw StateError('Could not rasterize LED glyph mask');
+    }
+
+    final rgba = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    final columns = math.max(1, (imageWidth / pitch).ceil()).toInt();
+    final rows = math.max(1, (imageHeight / pitch).ceil()).toInt();
+    final cells = Uint8List(columns * rows);
+
+    for (int row = 0; row < rows; row++) {
+      final y0 = (row * pitch).floor().clamp(0, imageHeight - 1);
+      final y1 = math.min(imageHeight, ((row + 1) * pitch).ceil());
+      for (int column = 0; column < columns; column++) {
+        final x0 = (column * pitch).floor().clamp(0, imageWidth - 1);
+        final x1 = math.min(imageWidth, ((column + 1) * pitch).ceil());
+
+        int alphaTotal = 0;
+        int alphaPeak = 0;
+        int samples = 0;
+        for (int y = y0; y < y1; y++) {
+          for (int x = x0; x < x1; x++) {
+            final alpha = rgba[((y * imageWidth) + x) * 4 + 3];
+            alphaTotal += alpha;
+            alphaPeak = math.max(alphaPeak, alpha);
+            samples++;
+          }
+        }
+
+        final average = samples == 0 ? 0 : alphaTotal ~/ samples;
+        final active = alphaPeak >= 180 || average >= 42;
+        cells[(row * columns) + column] = active ? 1 : 0;
+      }
+    }
+
+    return _LedTextMask(
+      columns: columns,
+      rows: rows,
+      pitch: pitch,
+      cells: cells,
     );
   }
 }
 
-class _RasterizedPixelText {
-  const _RasterizedPixelText({
-    required this.image,
-    required this.size,
+class _LedTextMask {
+  const _LedTextMask({
+    required this.columns,
+    required this.rows,
+    required this.pitch,
+    required this.cells,
   });
 
-  final ui.Image image;
-  final Size size;
+  final int columns;
+  final int rows;
+  final double pitch;
+  final Uint8List cells;
+
+  Size get size => Size(columns * pitch, rows * pitch);
 }
 
-class _RasterPixelTextPainter extends CustomPainter {
-  const _RasterPixelTextPainter({
-    required this.image,
+class _LedTextPainter extends CustomPainter {
+  const _LedTextPainter({
+    required this.mask,
     required this.color,
-    required this.pixelSize,
+    required this.glow,
   });
 
-  final ui.Image image;
+  final _LedTextMask mask;
   final Color color;
-  final double pixelSize;
+  final bool glow;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final source = Rect.fromLTWH(
-      0,
-      0,
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
-    final destination = Offset.zero & size;
+    for (int row = 0; row < mask.rows; row++) {
+      for (int column = 0; column < mask.columns; column++) {
+        if (mask.cells[(row * mask.columns) + column] == 0) {
+          continue;
+        }
 
-    final shadowPaint = Paint()
-      ..isAntiAlias = false
-      ..filterQuality = FilterQuality.none
-      ..colorFilter = const ColorFilter.mode(
-        Color(0xCC000000),
-        BlendMode.srcIn,
-      );
-    canvas.drawImageRect(
-      image,
-      source,
-      destination.shift(Offset(pixelSize, pixelSize)),
-      shadowPaint,
-    );
+        final rect = LedWallGeometry.ledRect(
+          column: column,
+          row: row,
+          cellWidth: mask.pitch,
+          cellHeight: mask.pitch,
+        );
 
-    final paint = Paint()
-      ..isAntiAlias = false
-      ..filterQuality = FilterQuality.none
-      ..colorFilter = ColorFilter.mode(color, BlendMode.srcIn);
-    canvas.drawImageRect(image, source, destination, paint);
+        LedWallPainter.drawLed(
+          canvas,
+          rect,
+          color,
+          glow: glow,
+          glowSigma: mask.pitch * 0.65,
+        );
+      }
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _RasterPixelTextPainter oldDelegate) {
-    return oldDelegate.image != image ||
+  bool shouldRepaint(covariant _LedTextPainter oldDelegate) {
+    return oldDelegate.mask != mask ||
         oldDelegate.color != color ||
-        oldDelegate.pixelSize != pixelSize;
+        oldDelegate.glow != glow;
   }
 }
 
-class PixelDevilLogo extends StatefulWidget {
-  const PixelDevilLogo({
+class LedDevilLogo extends StatefulWidget {
+  const LedDevilLogo({
     super.key,
-    required this.pixelSize,
+    required this.ledPitch,
     required this.onTap,
   });
 
-  final double pixelSize;
+  final double ledPitch;
   final VoidCallback onTap;
 
   @override
-  State<PixelDevilLogo> createState() => _PixelDevilLogoState();
+  State<LedDevilLogo> createState() => _LedDevilLogoState();
 }
 
-class _PixelDevilLogoState extends State<PixelDevilLogo> {
+class _LedDevilLogoState extends State<LedDevilLogo> {
   bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  bool get _highlighted => _hovered || _focused || _pressed;
 
   @override
   Widget build(BuildContext context) {
     final matrix = Pixelemoji.devilUnframed;
-    final width = matrix.first.length * widget.pixelSize;
-    final height = matrix.length * widget.pixelSize;
+    final pitch = LedWallGeometry.safePitch(widget.ledPitch);
+    final width = matrix.first.length * pitch;
+    final height = matrix.length * pitch;
 
     return Semantics(
       button: true,
@@ -340,8 +365,11 @@ class _PixelDevilLogoState extends State<PixelDevilLogo> {
       child: InkWell(
         onTap: widget.onTap,
         onHover: (value) => setState(() => _hovered = value),
+        onFocusChange: (value) => setState(() => _focused = value),
+        onHighlightChanged: (value) => setState(() => _pressed = value),
         splashFactory: NoSplash.splashFactory,
         hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         highlightColor: Colors.transparent,
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -352,10 +380,13 @@ class _PixelDevilLogoState extends State<PixelDevilLogo> {
             alignment: Alignment.centerLeft,
             child: CustomPaint(
               size: Size(width, height),
-              painter: _PixelMatrixPainter(
+              painter: _LedMatrixPainter(
                 matrix: matrix,
-                pixelSize: widget.pixelSize,
-                color: _hovered ? Colors.white : const Color(0xFFE8E8E8),
+                pitch: pitch,
+                color: _highlighted
+                    ? Colors.white
+                    : const Color(0xFFE5E5E5),
+                glow: _highlighted,
               ),
             ),
           ),
@@ -365,43 +396,48 @@ class _PixelDevilLogoState extends State<PixelDevilLogo> {
   }
 }
 
-class _PixelMatrixPainter extends CustomPainter {
-  const _PixelMatrixPainter({
+class _LedMatrixPainter extends CustomPainter {
+  const _LedMatrixPainter({
     required this.matrix,
-    required this.pixelSize,
+    required this.pitch,
     required this.color,
+    required this.glow,
   });
 
   final List<List<int>> matrix;
-  final double pixelSize;
+  final double pitch;
   final Color color;
+  final bool glow;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..isAntiAlias = false;
     for (int row = 0; row < matrix.length; row++) {
       for (int column = 0; column < matrix[row].length; column++) {
-        if (matrix[row][column] == 1) {
-          canvas.drawRect(
-            Rect.fromLTWH(
-              column * pixelSize,
-              row * pixelSize,
-              pixelSize,
-              pixelSize,
-            ),
-            paint,
-          );
+        if (matrix[row][column] == 0) {
+          continue;
         }
+        final rect = LedWallGeometry.ledRect(
+          column: column,
+          row: row,
+          cellWidth: pitch,
+          cellHeight: pitch,
+        );
+        LedWallPainter.drawLed(
+          canvas,
+          rect,
+          color,
+          glow: glow,
+          glowSigma: pitch * 0.65,
+        );
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _PixelMatrixPainter oldDelegate) {
+  bool shouldRepaint(covariant _LedMatrixPainter oldDelegate) {
     return oldDelegate.matrix != matrix ||
-        oldDelegate.pixelSize != pixelSize ||
-        oldDelegate.color != color;
+        oldDelegate.pitch != pitch ||
+        oldDelegate.color != color ||
+        oldDelegate.glow != glow;
   }
 }
