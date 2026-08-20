@@ -7,15 +7,15 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, viewport-fit=cover"
   >
-  <meta name="theme-color" content="#222222">
-  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#F2F0E8">
+  <meta name="color-scheme" content="light">
   <meta
     name="description"
-    content="Evil Space is a pixel-styled coworking space in Nha Trang, Vietnam with dedicated desks, private offices, and podcast/video studio rental."
+    content="Evil Space is a coworking space in Nha Trang, Vietnam. See the space, today's occupancy, prices, announcements, and contact details."
   >
   <meta
     name="keywords"
-    content="coworking Nha Trang, coworking Vietnam, dedicated desk Nha Trang, private office Nha Trang, podcast studio Nha Trang, video studio Nha Trang"
+    content="coworking Nha Trang, coworking Vietnam, dedicated desk Nha Trang, private desk Nha Trang, coworking prices Nha Trang"
   >
   <meta name="robots" content="index,follow">
 
@@ -23,7 +23,7 @@
   <meta property="og:title" content="Evil Space Coworking — Nha Trang">
   <meta
     property="og:description"
-    content="Dedicated desks, private offices, and podcast/video studio rental in Nha Trang, Vietnam."
+    content="Coworking in Nha Trang. See real photos, today's occupancy, prices, announcements, and contact details."
   >
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="ru_RU">
@@ -33,11 +33,11 @@
   <meta name="twitter:title" content="Evil Space Coworking — Nha Trang">
   <meta
     name="twitter:description"
-    content="Dedicated desks, private offices, and podcast/video studio rental in Nha Trang, Vietnam."
+    content="Real photos, today's occupancy, prices, announcements, and contact details for Evil Space in Nha Trang."
   >
 
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Evil Space">
 
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -50,7 +50,7 @@
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "Evil Space",
-    "description": "Coworking space with dedicated desks, private offices, and podcast/video studio rental in Nha Trang, Vietnam.",
+    "description": "Coworking space in Nha Trang, Vietnam.",
     "telephone": "+84 56 5056 748",
     "currenciesAccepted": "VND",
     "address": {
@@ -71,9 +71,8 @@
 
   <style>
     :root {
-      --evil-bg: #222222;
-      --evil-grid: #000000;
-      --evil-grid-size: clamp(3px, calc(100vw / 110), 8px);
+      --paper: #F2F0E8;
+      --ink: #171715;
     }
 
     html,
@@ -81,16 +80,17 @@
       width: 100%;
       height: 100%;
       margin: 0;
-      background-color: var(--evil-bg);
+      background: var(--paper);
+      color: var(--ink);
     }
 
     body {
       min-height: 100dvh;
       overflow: hidden;
       background-image:
-        linear-gradient(to right, var(--evil-grid) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--evil-grid) 1px, transparent 1px);
-      background-size: var(--evil-grid-size) var(--evil-grid-size);
+        radial-gradient(circle at 17px 13px, rgba(23, 23, 21, 0.025) 0 0.7px, transparent 0.8px),
+        radial-gradient(circle at 7px 29px, rgba(23, 23, 21, 0.018) 0 0.6px, transparent 0.7px);
+      background-size: 31px 37px, 43px 41px;
     }
 
     noscript {
@@ -98,17 +98,19 @@
       max-width: 720px;
       margin: 48px auto;
       padding: 24px;
-      color: #dddddd;
-      font: 16px/1.5 monospace;
+      color: var(--ink);
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      font: 16px/1.55 Georgia, "Times New Roman", serif;
     }
   </style>
 </head>
 
 <body>
   <noscript>
-    Evil Space Coworking in Nha Trang offers dedicated desks, private offices,
-    and podcast/video studio rental. JavaScript is required to open the
-    interactive pixel website.
+    Evil Space Coworking in Nha Trang. See real photos, today's occupancy,
+    prices, announcements, and contact details. JavaScript is required to open
+    the electronic-paper edition.
   </noscript>
   <script src="flutter_bootstrap.js" async></script>
 </body>
