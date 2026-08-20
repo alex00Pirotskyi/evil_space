@@ -46,7 +46,7 @@ class LedMatrixText extends StatefulWidget {
 }
 
 class _LedMatrixTextState extends State<LedMatrixText> {
-  _LedTextMask? _mask;
+  LedTextMask? _mask;
   int _generation = 0;
   bool _hovered = false;
   bool _focused = false;
@@ -183,7 +183,7 @@ class _LedMatrixTextState extends State<LedMatrixText> {
 class LedTextMaskBuilder {
   LedTextMaskBuilder._();
 
-  static Future<_LedTextMask> build({
+  static Future<LedTextMask> build({
     required String text,
     required double maxWidth,
     required double fontSize,
@@ -237,11 +237,11 @@ class LedTextMaskBuilder {
     final cells = Uint8List(columns * rows);
 
     for (int row = 0; row < rows; row++) {
-      final y0 = (row * pitch).floor().clamp(0, imageHeight - 1);
-      final y1 = math.min(imageHeight, ((row + 1) * pitch).ceil());
+      final y0 = (row * pitch).floor().clamp(0, imageHeight - 1).toInt();
+      final y1 = math.min(imageHeight, ((row + 1) * pitch).ceil()).toInt();
       for (int column = 0; column < columns; column++) {
-        final x0 = (column * pitch).floor().clamp(0, imageWidth - 1);
-        final x1 = math.min(imageWidth, ((column + 1) * pitch).ceil());
+        final x0 = (column * pitch).floor().clamp(0, imageWidth - 1).toInt();
+        final x1 = math.min(imageWidth, ((column + 1) * pitch).ceil()).toInt();
 
         int alphaTotal = 0;
         int alphaPeak = 0;
@@ -250,7 +250,9 @@ class LedTextMaskBuilder {
           for (int x = x0; x < x1; x++) {
             final alpha = rgba[((y * imageWidth) + x) * 4 + 3];
             alphaTotal += alpha;
-            alphaPeak = math.max(alphaPeak, alpha);
+            if (alpha > alphaPeak) {
+              alphaPeak = alpha;
+            }
             samples++;
           }
         }
@@ -261,7 +263,7 @@ class LedTextMaskBuilder {
       }
     }
 
-    return _LedTextMask(
+    return LedTextMask(
       columns: columns,
       rows: rows,
       pitch: pitch,
@@ -270,8 +272,8 @@ class LedTextMaskBuilder {
   }
 }
 
-class _LedTextMask {
-  const _LedTextMask({
+class LedTextMask {
+  const LedTextMask({
     required this.columns,
     required this.rows,
     required this.pitch,
@@ -284,6 +286,16 @@ class _LedTextMask {
   final Uint8List cells;
 
   Size get size => Size(columns * pitch, rows * pitch);
+
+  int get activeCells {
+    int count = 0;
+    for (final cell in cells) {
+      if (cell != 0) {
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
 class _LedTextPainter extends CustomPainter {
@@ -293,7 +305,7 @@ class _LedTextPainter extends CustomPainter {
     required this.glow,
   });
 
-  final _LedTextMask mask;
+  final LedTextMask mask;
   final Color color;
   final bool glow;
 
