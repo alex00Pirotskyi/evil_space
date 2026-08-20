@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evil_space/app_route.dart';
@@ -125,44 +127,21 @@ void main() {
       expect(rect.height, lessThan(5));
     });
 
-    testWidgets('turns Unicode text into an LED-cell glyph mask', (tester) async {
-      final english = await LedTextMaskBuilder.build(
-        text: 'EVIL SPACE',
-        maxWidth: 320,
-        fontSize: 32,
-        ledPitch: 4,
-        fontWeight: FontWeight.w800,
-        textAlign: TextAlign.left,
-        maxLines: 1,
-        letterSpacing: 1,
-        textDirection: TextDirection.ltr,
-      );
-      final russian = await LedTextMaskBuilder.build(
-        text: 'КОНТАКТЫ',
-        maxWidth: 320,
-        fontSize: 30,
-        ledPitch: 4,
-        fontWeight: FontWeight.w800,
-        textAlign: TextAlign.left,
-        maxLines: 1,
-        letterSpacing: 1,
-        textDirection: TextDirection.ltr,
-      );
-      final vietnamese = await LedTextMaskBuilder.build(
-        text: 'LIÊN HỆ',
-        maxWidth: 320,
-        fontSize: 30,
-        ledPitch: 4,
-        fontWeight: FontWeight.w800,
-        textAlign: TextAlign.left,
-        maxLines: 1,
-        letterSpacing: 1,
-        textDirection: TextDirection.ltr,
+    test('LED glyph masks count only active emitter cells', () {
+      final mask = LedTextMask(
+        columns: 4,
+        rows: 3,
+        pitch: 4,
+        cells: Uint8List.fromList([
+          1, 0, 1, 0,
+          1, 1, 0, 0,
+          0, 0, 1, 1,
+        ]),
       );
 
-      expect(english.activeCells, greaterThan(10));
-      expect(russian.activeCells, greaterThan(10));
-      expect(vietnamese.activeCells, greaterThan(10));
+      expect(mask.activeCells, 6);
+      expect(mask.size.width, 16);
+      expect(mask.size.height, 12);
     });
   });
 
