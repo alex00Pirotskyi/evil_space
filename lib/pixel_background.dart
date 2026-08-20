@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -10,11 +11,12 @@ class LivingPixelBackground extends StatefulWidget {
   const LivingPixelBackground({
     super.key,
     this.assetDirectory = 'assets/slideshow/',
-    this.pixelCellSize = 5,
+    this.pixelCellSize = 8,
     this.holdDuration = const Duration(milliseconds: 6500),
     this.transitionDuration =
         const Duration(milliseconds: slideshowTransitionMs),
-    this.brightness = 0.76,
+    this.brightness = 0.82,
+    this.focusStrength = 0.26,
     this.reducedMotion = false,
   });
 
@@ -23,6 +25,7 @@ class LivingPixelBackground extends StatefulWidget {
   final Duration holdDuration;
   final Duration transitionDuration;
   final double brightness;
+  final double focusStrength;
   final bool reducedMotion;
 
   @override
@@ -205,8 +208,8 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
         }
 
         final pitch = LedWallGeometry.safePitch(widget.pixelCellSize);
-        final columns = LedWallGeometry.columnsFor(width, pitch, minimum: 32);
-        final rows = LedWallGeometry.rowsFor(height, pitch, minimum: 24);
+        final columns = LedWallGeometry.columnsFor(width, pitch, minimum: 24);
+        final rows = LedWallGeometry.rowsFor(height, pitch, minimum: 18);
         _requestSize(columns, rows);
 
         if (_frames.isEmpty ||
@@ -230,6 +233,7 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
                   progress: _transition.value,
                   seed: _transitionSeed,
                   brightness: widget.brightness,
+                  focusStrength: widget.focusStrength,
                   reducedMotion: widget.reducedMotion,
                 ),
               );
@@ -248,6 +252,7 @@ class _LivingPixelPainter extends CustomPainter {
     required this.progress,
     required this.seed,
     required this.brightness,
+    required this.focusStrength,
     required this.reducedMotion,
   });
 
@@ -256,6 +261,7 @@ class _LivingPixelPainter extends CustomPainter {
   final double progress;
   final int seed;
   final double brightness;
+  final double focusStrength;
   final bool reducedMotion;
 
   @override
@@ -266,6 +272,7 @@ class _LivingPixelPainter extends CustomPainter {
     final rows = from.rows;
     final cellWidth = size.width / columns;
     final cellHeight = size.height / rows;
+    final pitch = math.min(cellWidth, cellHeight).toDouble();
 
     for (int y = 0; y < rows; y++) {
       for (int x = 0; x < columns; x++) {
@@ -277,22 +284,41 @@ class _LivingPixelPainter extends CustomPainter {
           localProgress,
         );
 
-        final color = Color.fromARGB(
-          255,
-          (Rgb565.red8(value) * brightness).round().clamp(0, 255),
-          (Rgb565.green8(value) * brightness).round().clamp(0, 255),
-          (Rgb565.blue8(value) * brightness).round().clamp(0, 255),
-        );
+        final nx = columns <= 1 ? 0.5 : x / (columns - 1);
+        final focus = _focusFactor(nx);
+        final level = (brightness * focus).clamp(0.0, 1.0);
 
-        final rect = LedWallGeometry.ledRect(
-          column: x,
-          row: y,
-          cellWidth: cellWidth,
-          cellHeight: cellHeight,
+        final red = (Rgb565.red8(value) * level).round().clamp(0, 255);
+        final green = (Rgb565.green8(value) * level).round().clamp(0, 255);
+        final blue = (Rgb565.blue8(value) * level).round().clamp(0, 255);
+        final color = Color.fromARGB(255, red, green, blue);
+
+        final luma = ((red * 299) + (green * 587) + (blue * 114)) ~/ 1000;
+        LedWallPainter.drawEmitter(
+          canvas,
+          center: LedWallGeometry.cellCenter(
+            column: x,
+            row: y,
+            cellWidth: cellWidth,
+            cellHeight: cellHeight,
+          ),
+          pitch: pitch,
+          color: color,
+          glow: luma > 190,
+          glowStrength: luma > 190 ? 0.13 : 0,
         );
-        LedWallPainter.drawLed(canvas, rect, color);
       }
     }
+  }
+
+  double _focusFactor(double nx) {
+    final strength = focusStrength.clamp(0.0, 0.6);
+    if (strength == 0) {
+      return 1;
+    }
+    final distance = (nx - 0.5) / 0.34;
+    final centerWeight = math.exp(-(distance * distance));
+    return 1 - (strength * centerWeight);
   }
 
   double _pixelProgress(int x, int y, int columns, int rows) {
@@ -305,7 +331,7 @@ class _LivingPixelPainter extends CustomPainter {
 
     final nx = columns <= 1 ? 0.0 : x / (columns - 1);
     final ny = rows <= 1 ? 0.0 : y / (rows - 1);
-    final jitter = _hash01(x, y, seed) * 0.14;
+    final jitter = _hash01(x, y, seed) * 0.12;
     final threshold = (nx * 0.76) + (ny * 0.05) + jitter;
     const feather = 0.30;
     return ((progress - (threshold - feather)) / feather)
@@ -326,6 +352,7 @@ class _LivingPixelPainter extends CustomPainter {
         oldDelegate.progress != progress ||
         oldDelegate.seed != seed ||
         oldDelegate.brightness != brightness ||
+        oldDelegate.focusStrength != focusStrength ||
         oldDelegate.reducedMotion != reducedMotion;
   }
 }
