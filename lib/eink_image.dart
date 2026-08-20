@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 
 class EInkPalette {
   EInkPalette._();
@@ -221,54 +221,32 @@ class EInkFrameDecoder {
   }) async {
     final data = await bundle.load(assetPath);
     final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-
-    ui.Codec? codec;
-    ui.Image? image;
-    try {
-      codec = await ui.instantiateImageCodec(bytes)
-          .timeout(const Duration(seconds: 8));
-      final frameInfo = await codec.getNextFrame()
-          .timeout(const Duration(seconds: 8));
-      image = frameInfo.image;
-
-      final raw = await image
-          .toByteData(format: ui.ImageByteFormat.rawRgba)
-          .timeout(const Duration(seconds: 8));
-      if (raw == null) {
-        throw StateError('Unable to read pixels from $assetPath');
-      }
-
-      final source = raw.buffer.asUint8List(
-        raw.offsetInBytes,
-        raw.lengthInBytes,
-      );
-      final sampled = _sampleCover(
-        source: source,
-        sourceWidth: image.width,
-        sourceHeight: image.height,
-        columns: columns,
-        rows: rows,
-      );
-
-      return EInkProcessor.processRgba(
-        rgba: sampled,
-        columns: columns,
-        rows: rows,
-        source: assetPath,
-      );
-    } finally {
-      image?.dispose();
-      codec?.dispose();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      throw StateError('Unable to decode $assetPath');
     }
+
+    final sampled = _sampleCover(
+      image: decoded,
+      columns: columns,
+      rows: rows,
+    );
+
+    return EInkProcessor.processRgba(
+      rgba: sampled,
+      columns: columns,
+      rows: rows,
+      source: assetPath,
+    );
   }
 
   static Uint8List _sampleCover({
-    required Uint8List source,
-    required int sourceWidth,
-    required int sourceHeight,
+    required img.Image image,
     required int columns,
     required int rows,
   }) {
+    final sourceWidth = image.width;
+    final sourceHeight = image.height;
     final targetAspect = columns / rows;
     final sourceAspect = sourceWidth / sourceHeight;
 
@@ -294,12 +272,12 @@ class EInkFrameDecoder {
         final sx = (cropLeft + ((x + 0.5) / columns) * cropWidth)
             .floor()
             .clamp(0, sourceWidth - 1);
-        final sourceOffset = ((sy * sourceWidth) + sx) * 4;
-        final targetOffset = ((y * columns) + x) * 4;
-        output[targetOffset] = source[sourceOffset];
-        output[targetOffset + 1] = source[sourceOffset + 1];
-        output[targetOffset + 2] = source[sourceOffset + 2];
-        output[targetOffset + 3] = source[sourceOffset + 3];
+        final pixel = image.getPixel(sx, sy);
+        final offset = ((y * columns) + x) * 4;
+        output[offset] = pixel.r.toInt().clamp(0, 255);
+        output[offset + 1] = pixel.g.toInt().clamp(0, 255);
+        output[offset + 2] = pixel.b.toInt().clamp(0, 255);
+        output[offset + 3] = pixel.a.toInt().clamp(0, 255);
       }
     }
     return output;
