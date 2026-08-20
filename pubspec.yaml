@@ -1,8 +1,8 @@
 name: evil_space
-description: "Evil Space coworking web landing page for Nha Trang, Vietnam."
+description: "Evil Space coworking electronic-paper web landing page for Nha Trang, Vietnam."
 publish_to: 'none'
 
-version: 1.3.0+4
+version: 2.0.0+5
 
 environment:
   sdk: ^3.10.4
