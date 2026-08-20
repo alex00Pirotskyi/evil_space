@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:evil_space/app_router.dart';
+import 'package:evil_space/eink_image.dart';
 import 'package:evil_space/localization.dart';
 
 void main() {
@@ -40,9 +41,20 @@ class _EvilSpaceAppState extends State<EvilSpaceApp> {
       debugShowCheckedModeBanner: false,
       title: 'Evil Space Coworking',
       theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF222222),
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: EInkPalette.paper,
+        colorScheme: const ColorScheme.light(
+          surface: EInkPalette.paper,
+          onSurface: EInkPalette.ink,
+          primary: EInkPalette.ink,
+          onPrimary: EInkPalette.paper,
+        ),
         splashFactory: NoSplash.splashFactory,
+        textSelectionTheme: const TextSelectionThemeData(
+          cursorColor: EInkPalette.ink,
+          selectionColor: Color(0x5577736A),
+          selectionHandleColor: EInkPalette.ink,
+        ),
       ),
       routerDelegate: _routerDelegate,
       routeInformationParser: const EvilSpaceRouteParser(),
