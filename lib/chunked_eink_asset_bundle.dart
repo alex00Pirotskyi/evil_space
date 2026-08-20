@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -20,7 +21,7 @@ class ChunkedEInkAssetBundle extends CachingAssetBundle {
       return cached;
     }
 
-    final source = await _loadMasterSource(key);
+    final source = _decodeTransport(await _loadMasterSource(key), key);
     final converted = _expandMaster(source, sourceKey: key);
     _assembled[key] = converted;
     return converted;
@@ -60,13 +61,32 @@ class ChunkedEInkAssetBundle extends CachingAssetBundle {
     return source;
   }
 
+  Uint8List _decodeTransport(Uint8List source, String sourceKey) {
+    if (_hasMagic(source)) {
+      return source;
+    }
+    try {
+      final text = utf8.decode(source).replaceAll(RegExp(r'\s+'), '');
+      final decoded = Uint8List.fromList(base64Decode(text));
+      if (!_hasMagic(decoded)) {
+        throw const FormatException('decoded payload has no EINK magic');
+      }
+      return decoded;
+    } catch (error) {
+      throw FormatException('Invalid e-ink transport for $sourceKey: $error');
+    }
+  }
+
+  bool _hasMagic(Uint8List source) =>
+      source.length >= 4 &&
+      source[0] == 0x45 &&
+      source[1] == 0x49 &&
+      source[2] == 0x4e &&
+      source[3] == 0x4b;
+
   ByteData _expandMaster(Uint8List source, {required String sourceKey}) {
     const headerSize = 16;
-    if (source.length < headerSize ||
-        source[0] != 0x45 ||
-        source[1] != 0x49 ||
-        source[2] != 0x4e ||
-        source[3] != 0x4b) {
+    if (source.length < headerSize || !_hasMagic(source)) {
       throw FormatException('Invalid e-ink master: $sourceKey');
     }
 
