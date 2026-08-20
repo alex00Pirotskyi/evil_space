@@ -1,15 +1,31 @@
 {
-  "updated": "2026-08-19",
-  "desks": [
-    {"id":"d1","label":"D1","zone":"WINDOW","state":"available"},
-    {"id":"d2","label":"D2","zone":"WINDOW","state":"available"},
-    {"id":"d3","label":"D3","zone":"WINDOW","state":"occupied"},
-    {"id":"d4","label":"D4","zone":"WINDOW","state":"available"},
-    {"id":"d5","label":"D5","zone":"CENTER","state":"available"},
-    {"id":"d6","label":"D6","zone":"CENTER","state":"reserved"},
-    {"id":"d7","label":"D7","zone":"CENTER","state":"available"},
-    {"id":"d8","label":"D8","zone":"CENTER","state":"available"},
-    {"id":"d9","label":"D9","zone":"QUIET","state":"occupied"},
-    {"id":"d10","label":"D10","zone":"QUIET","state":"available"}
+  "status": {
+    "updated": "2026-08-20",
+    "total": 10,
+    "occupied": 3
+  },
+  "prices": [
+    {"label_key": "price_day_pass", "price": "250K"},
+    {"label_key": "price_week", "price": "1.0M"},
+    {"label_key": "price_hot_desk", "price": "3.2M"},
+    {"label_key": "price_private_desk", "price": "3.5M"}
+  ],
+  "announcements": [
+    {
+      "date": "20 AUG",
+      "text": {
+        "en": "WELCOME TO EVIL SPACE",
+        "ru": "ДОБРО ПОЖАЛОВАТЬ В EVIL SPACE",
+        "vi": "CHÀO MỪNG ĐẾN EVIL SPACE"
+      }
+    },
+    {
+      "date": "19 AUG",
+      "text": {
+        "en": "NEW PODCAST MICROPHONES ARRIVED",
+        "ru": "ПРИЕХАЛИ НОВЫЕ МИКРОФОНЫ ДЛЯ ПОДКАСТОВ",
+        "vi": "MICRO PODCAST MỚI ĐÃ VỀ"
+      }
+    }
   ]
 }
