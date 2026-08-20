@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 
 class EInkPalette {
   EInkPalette._();
@@ -146,8 +146,7 @@ class EInkProcessor {
         final oldValue = working[index].clamp(0.0, 255.0);
         final quantized = _nearestPaperTone(oldValue);
         levels[index] = quantized.$1;
-        final error = oldValue - quantized.$2;
-        final share = error / 8.0;
+        final share = (oldValue - quantized.$2) / 8.0;
 
         _addError(working, columns, rows, x + 1, y, share);
         _addError(working, columns, rows, x + 2, y, share);
@@ -220,85 +219,68 @@ class EInkFrameDecoder {
     required int columns,
     required int rows,
   }) async {
-    final buffer = await bundle.loadBuffer(assetPath);
-    ui.ImageDescriptor? descriptor;
-    ui.Codec? codec;
-    ui.Image? decodedImage;
-    ui.Image? sampledImage;
-
-    try {
-      descriptor = await ui.ImageDescriptor.encoded(buffer);
-      final coverScale = math.max(
-        columns / descriptor.width,
-        rows / descriptor.height,
-      );
-      final decodeWidth = math.max(columns, (descriptor.width * coverScale).ceil());
-      final decodeHeight = math.max(rows, (descriptor.height * coverScale).ceil());
-
-      codec = await descriptor.instantiateCodec(
-        targetWidth: decodeWidth,
-        targetHeight: decodeHeight,
-      );
-      final frame = await codec.getNextFrame();
-      decodedImage = frame.image;
-
-      final sourceAspect = decodedImage.width / decodedImage.height;
-      final targetAspect = columns / rows;
-      Rect sourceRect;
-      if (sourceAspect > targetAspect) {
-        final sourceWidth = decodedImage.height * targetAspect;
-        final left = (decodedImage.width - sourceWidth) / 2;
-        sourceRect = Rect.fromLTWH(
-          left,
-          0,
-          sourceWidth,
-          decodedImage.height.toDouble(),
-        );
-      } else {
-        final sourceHeight = decodedImage.width / targetAspect;
-        final top = (decodedImage.height - sourceHeight) / 2;
-        sourceRect = Rect.fromLTWH(
-          0,
-          top,
-          decodedImage.width.toDouble(),
-          sourceHeight,
-        );
-      }
-
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      canvas.drawImageRect(
-        decodedImage,
-        sourceRect,
-        Rect.fromLTWH(0, 0, columns.toDouble(), rows.toDouble()),
-        Paint()..filterQuality = FilterQuality.medium,
-      );
-      final picture = recorder.endRecording();
-      sampledImage = await picture.toImage(columns, rows);
-      picture.dispose();
-
-      final byteData = await sampledImage.toByteData(
-        format: ui.ImageByteFormat.rawRgba,
-      );
-      if (byteData == null) {
-        throw StateError('Unable to read pixels from $assetPath');
-      }
-
-      return EInkProcessor.processRgba(
-        rgba: byteData.buffer.asUint8List(
-          byteData.offsetInBytes,
-          byteData.lengthInBytes,
-        ),
-        columns: columns,
-        rows: rows,
-        source: assetPath,
-      );
-    } finally {
-      sampledImage?.dispose();
-      decodedImage?.dispose();
-      codec?.dispose();
-      descriptor?.dispose();
+    final data = await bundle.load(assetPath);
+    final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      throw StateError('Unable to decode $assetPath');
     }
+
+    final sampled = _sampleCover(
+      image: decoded,
+      columns: columns,
+      rows: rows,
+    );
+
+    return EInkProcessor.processRgba(
+      rgba: sampled,
+      columns: columns,
+      rows: rows,
+      source: assetPath,
+    );
+  }
+
+  static Uint8List _sampleCover({
+    required img.Image image,
+    required int columns,
+    required int rows,
+  }) {
+    final sourceWidth = image.width;
+    final sourceHeight = image.height;
+    final targetAspect = columns / rows;
+    final sourceAspect = sourceWidth / sourceHeight;
+
+    double cropLeft = 0;
+    double cropTop = 0;
+    double cropWidth = sourceWidth.toDouble();
+    double cropHeight = sourceHeight.toDouble();
+
+    if (sourceAspect > targetAspect) {
+      cropWidth = sourceHeight * targetAspect;
+      cropLeft = (sourceWidth - cropWidth) / 2;
+    } else if (sourceAspect < targetAspect) {
+      cropHeight = sourceWidth / targetAspect;
+      cropTop = (sourceHeight - cropHeight) / 2;
+    }
+
+    final output = Uint8List(columns * rows * 4);
+    for (int y = 0; y < rows; y++) {
+      final sy = (cropTop + ((y + 0.5) / rows) * cropHeight)
+          .floor()
+          .clamp(0, sourceHeight - 1);
+      for (int x = 0; x < columns; x++) {
+        final sx = (cropLeft + ((x + 0.5) / columns) * cropWidth)
+            .floor()
+            .clamp(0, sourceWidth - 1);
+        final pixel = image.getPixel(sx, sy);
+        final offset = ((y * columns) + x) * 4;
+        output[offset] = pixel.r.toInt().clamp(0, 255);
+        output[offset + 1] = pixel.g.toInt().clamp(0, 255);
+        output[offset + 2] = pixel.b.toInt().clamp(0, 255);
+        output[offset + 3] = pixel.a.toInt().clamp(0, 255);
+      }
+    }
+    return output;
   }
 }
 
@@ -500,7 +482,6 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
       debugPrint('E-ink asset discovery failed: $error');
       assets = const [];
     }
-
     if (!mounted || generation != _generation) {
       return;
     }
@@ -509,16 +490,14 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
     _RenderableEInkFrame? first;
     int firstIndex = 0;
 
-    if (_assets.isNotEmpty) {
-      for (int index = 0; index < _assets.length; index++) {
-        first = await _tryLoadAsset(index, generation);
-        if (!mounted || generation != _generation) {
-          return;
-        }
-        if (first != null) {
-          firstIndex = index;
-          break;
-        }
+    for (int index = 0; index < _assets.length; index++) {
+      first = await _tryLoadAsset(index, generation);
+      if (!mounted || generation != _generation) {
+        return;
+      }
+      if (first != null) {
+        firstIndex = index;
+        break;
       }
     }
 
