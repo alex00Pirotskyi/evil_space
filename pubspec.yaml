@@ -1,8 +1,8 @@
 name: evil_space
-description: "Evil Space coworking web app for Nha Trang, Vietnam."
+description: "Evil Space coworking web landing page for Nha Trang, Vietnam."
 publish_to: 'none'
 
-version: 1.2.0+3
+version: 1.3.0+4
 
 environment:
   sdk: ^3.10.4
@@ -14,9 +14,7 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
   url_launcher: ^6.3.2
-  google_fonts: ^8.0.2
 
 dev_dependencies:
   flutter_test:
@@ -29,10 +27,4 @@ flutter:
 
   assets:
     - assets/slideshow/
-    - assets/backgrounds/home/
-    - assets/backgrounds/feed/
-    - assets/backgrounds/desks/
-    - assets/backgrounds/office/
-    - assets/backgrounds/studio/
-    - assets/backgrounds/contact/
     - assets/content/

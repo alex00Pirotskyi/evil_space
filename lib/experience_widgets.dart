@@ -1,297 +1,407 @@
-import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/pixel_emoji.dart';
-import 'package:evil_space/pixeltools.dart';
 
-enum DevilState {
-  idle,
-  hoverLeft,
-  hoverRight,
-  happy,
-  sleep,
-  success,
-}
-
-class PixelDevilMascot extends StatelessWidget {
-  const PixelDevilMascot({
+class ReadablePixelText extends StatefulWidget {
+  const ReadablePixelText({
     super.key,
-    required this.gridSize,
-    required this.state,
-    required this.onTap,
+    required this.text,
+    required this.maxWidth,
+    this.fontSize = 22,
+    this.pixelSize = 2,
+    this.color = Colors.white,
+    this.hoverColor = Colors.white,
+    this.fontWeight = FontWeight.w700,
+    this.textAlign = TextAlign.left,
+    this.maxLines,
+    this.letterSpacing = 1.0,
+    this.onTap,
+    this.semanticLabel,
+    this.header = false,
   });
 
-  final double gridSize;
-  final DevilState state;
-  final VoidCallback onTap;
+  final String text;
+  final double maxWidth;
+  final double fontSize;
+  final double pixelSize;
+  final Color color;
+  final Color hoverColor;
+  final FontWeight fontWeight;
+  final TextAlign textAlign;
+  final int? maxLines;
+  final double letterSpacing;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+  final bool header;
+
+  @override
+  State<ReadablePixelText> createState() => _ReadablePixelTextState();
+}
+
+class _ReadablePixelTextState extends State<ReadablePixelText> {
+  _RasterizedPixelText? _raster;
+  int _generation = 0;
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  bool get _highlighted => _hovered || _focused || _pressed;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _requestRaster();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReadablePixelText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text ||
+        oldWidget.maxWidth != widget.maxWidth ||
+        oldWidget.fontSize != widget.fontSize ||
+        oldWidget.pixelSize != widget.pixelSize ||
+        oldWidget.fontWeight != widget.fontWeight ||
+        oldWidget.textAlign != widget.textAlign ||
+        oldWidget.maxLines != widget.maxLines ||
+        oldWidget.letterSpacing != widget.letterSpacing) {
+      _requestRaster();
+    }
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _raster?.image.dispose();
+    super.dispose();
+  }
+
+  Future<void> _requestRaster() async {
+    final generation = ++_generation;
+    final direction = Directionality.of(context);
+    final scaledFontSize = MediaQuery.textScalerOf(context).scale(widget.fontSize);
+    final raster = await _PixelTextRasterizer.rasterize(
+      text: widget.text,
+      maxWidth: widget.maxWidth,
+      fontSize: scaledFontSize,
+      pixelSize: widget.pixelSize,
+      fontWeight: widget.fontWeight,
+      textAlign: widget.textAlign,
+      maxLines: widget.maxLines,
+      letterSpacing: widget.letterSpacing,
+      textDirection: direction,
+    );
+
+    if (!mounted || generation != _generation) {
+      raster.image.dispose();
+      return;
+    }
+
+    final previous = _raster;
+    setState(() => _raster = raster);
+    previous?.image.dispose();
+  }
+
+  void _setInteraction({
+    bool? hovered,
+    bool? focused,
+    bool? pressed,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _hovered = hovered ?? _hovered;
+      _focused = focused ?? _focused;
+      _pressed = pressed ?? _pressed;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final offset = switch (state) {
-      DevilState.hoverLeft => const Offset(-0.06, 0),
-      DevilState.hoverRight => const Offset(0.06, 0),
-      DevilState.happy => const Offset(0, -0.05),
-      DevilState.success => const Offset(0, -0.08),
-      DevilState.sleep || DevilState.idle => Offset.zero,
-    };
-    final scale = switch (state) {
-      DevilState.success => 1.08,
-      DevilState.happy => 1.04,
-      DevilState.sleep => 0.96,
-      _ => 1.0,
-    };
-    final color = switch (state) {
-      DevilState.sleep => const Color(0xFF888888),
-      DevilState.success || DevilState.happy => Colors.white,
-      _ => const Color(0xFFEEEEEE),
-    };
+    final color = _highlighted ? widget.hoverColor : widget.color;
+    final raster = _raster;
 
-    return AnimatedSlide(
-      offset: offset,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      child: AnimatedScale(
-        scale: scale,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutBack,
-        child: AnimatedOpacity(
-          opacity: state == DevilState.sleep ? 0.72 : 1,
-          duration: const Duration(milliseconds: 220),
-          child: HoverablePixelBlock(
-            matrix: Pixelemoji.devilUnframed,
-            gridSize: gridSize,
-            semanticLabel: 'Evil Space home',
+    Widget child;
+    if (raster == null) {
+      child = ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: widget.maxWidth),
+        child: Text(
+          widget.text,
+          maxLines: widget.maxLines,
+          textAlign: widget.textAlign,
+          style: TextStyle(
             color: color,
-            onTap: onTap,
+            fontFamily: 'monospace',
+            fontWeight: widget.fontWeight,
+            fontSize: widget.fontSize,
+            letterSpacing: widget.letterSpacing,
+            height: 1.15,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class PixelFloorMap extends StatelessWidget {
-  const PixelFloorMap({
-    super.key,
-    required this.status,
-    required this.gridSize,
-    required this.selectedDeskId,
-    required this.onSelectDesk,
-    required this.onWorkHere,
-    required this.translate,
-  });
-
-  final CoworkingStatus status;
-  final double gridSize;
-  final String? selectedDeskId;
-  final ValueChanged<String> onSelectDesk;
-  final ValueChanged<String> onWorkHere;
-  final String Function(String key) translate;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = status.deskById(selectedDeskId);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _zoneLabel(translate('map_window')),
-        SizedBox(height: gridSize * 2),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final preferredWidth = math.max(96.0, gridSize * 19).toDouble();
-            final columns = math
-                .max(2, (constraints.maxWidth / preferredWidth).floor())
-                .toInt();
-            final tileWidth =
-                (constraints.maxWidth - ((columns - 1) * gridSize * 2)) /
-                    columns;
-
-            return Wrap(
-              spacing: gridSize * 2,
-              runSpacing: gridSize * 2,
-              children: status.desks.map((desk) {
-                return SizedBox(
-                  width: tileWidth,
-                  child: _DeskTile(
-                    desk: desk,
-                    selected: desk.id == selectedDeskId,
-                    gridSize: gridSize,
-                    onTap: () => onSelectDesk(desk.id),
-                    translate: translate,
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-        SizedBox(height: gridSize * 3),
-        Row(
-          children: [
-            Expanded(child: _zoneBox(translate('map_coffee'))),
-            SizedBox(width: gridSize * 2),
-            Expanded(child: _zoneBox(translate('map_office'))),
-          ],
-        ),
-        SizedBox(height: gridSize * 2),
-        Row(
-          children: [
-            Expanded(child: _zoneBox(translate('map_studio'))),
-            SizedBox(width: gridSize * 2),
-            Expanded(child: _zoneBox(translate('map_entrance'))),
-          ],
-        ),
-        if (selected != null) ...[
-          SizedBox(height: gridSize * 5),
-          HoverablePixelString(
-            word: '${selected.label} / ${selected.zone}',
-            gridSize: gridSize,
-            isInstant: true,
-            color: Colors.white,
-          ),
-          SizedBox(height: gridSize * 2),
-          HoverablePixelString(
-            word: translate(_stateKey(selected.state)),
-            gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-            isInstant: true,
-            color: _stateColor(selected.state),
-          ),
-          if (selected.state == DeskState.available) ...[
-            SizedBox(height: gridSize * 3),
-            HoverablePixelString(
-              word: translate('cta_work_here'),
-              gridSize: gridSize,
-              isInstant: true,
-              color: Colors.white,
-              hoverColor: Colors.white,
-              onTap: () => onWorkHere(selected.id),
+      );
+    } else {
+      child = SizedBox(
+        width: raster.size.width,
+        height: raster.size.height,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: _RasterPixelTextPainter(
+              image: raster.image,
+              color: color,
+              pixelSize: widget.pixelSize,
             ),
-          ],
-        ],
-      ],
+          ),
+        ),
+      );
+    }
+
+    if (widget.onTap != null) {
+      child = ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: kMinInteractiveDimension,
+          minWidth: kMinInteractiveDimension,
+        ),
+        child: Align(alignment: Alignment.centerLeft, child: child),
+      );
+      child = InkWell(
+        onTap: widget.onTap,
+        onHover: (value) => _setInteraction(hovered: value),
+        onFocusChange: (value) => _setInteraction(focused: value),
+        onHighlightChanged: (value) => _setInteraction(pressed: value),
+        splashFactory: NoSplash.splashFactory,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: child,
+      );
+    }
+
+    return Semantics(
+      label: widget.semanticLabel ?? widget.text.replaceAll('\n', ' '),
+      button: widget.onTap != null,
+      header: widget.header,
+      child: child,
     );
-  }
-
-  Widget _zoneLabel(String text) {
-    return HoverablePixelString(
-      word: text,
-      gridSize: math.max(3.0, gridSize * 0.75).toDouble(),
-      isInstant: true,
-      color: const Color(0xFFAAAAAA),
-    );
-  }
-
-  Widget _zoneBox(String text) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 64),
-      padding: EdgeInsets.all(gridSize * 2),
-      decoration: BoxDecoration(
-        color: const Color(0x77000000),
-        border: Border.all(color: const Color(0xFF666666)),
-      ),
-      alignment: Alignment.centerLeft,
-      child: HoverablePixelString(
-        word: text,
-        gridSize: math.max(3.0, gridSize * 0.7).toDouble(),
-        isInstant: true,
-        color: const Color(0xFFBDBDBD),
-      ),
-    );
-  }
-
-  static String _stateKey(DeskState state) {
-    return switch (state) {
-      DeskState.available => 'desk_state_available',
-      DeskState.occupied => 'desk_state_occupied',
-      DeskState.reserved => 'desk_state_reserved',
-      DeskState.offline => 'desk_state_offline',
-    };
-  }
-
-  static Color _stateColor(DeskState state) {
-    return switch (state) {
-      DeskState.available => Colors.white,
-      DeskState.reserved => const Color(0xFFB0B0B0),
-      DeskState.occupied => const Color(0xFF777777),
-      DeskState.offline => const Color(0xFF555555),
-    };
   }
 }
 
-class _DeskTile extends StatelessWidget {
-  const _DeskTile({
-    required this.desk,
-    required this.selected,
-    required this.gridSize,
-    required this.onTap,
-    required this.translate,
+class _PixelTextRasterizer {
+  _PixelTextRasterizer._();
+
+  static Future<_RasterizedPixelText> rasterize({
+    required String text,
+    required double maxWidth,
+    required double fontSize,
+    required double pixelSize,
+    required FontWeight fontWeight,
+    required TextAlign textAlign,
+    required int? maxLines,
+    required double letterSpacing,
+    required TextDirection textDirection,
+  }) async {
+    final safePixelSize = pixelSize.clamp(1.0, 4.0).toDouble();
+    final lowFontSize = fontSize / safePixelSize;
+    final lowMaxWidth = (maxWidth / safePixelSize) - 4;
+
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: Colors.white,
+          fontFamily: 'monospace',
+          fontFamilyFallback: const ['Arial', 'sans-serif'],
+          fontWeight: fontWeight,
+          fontSize: lowFontSize,
+          letterSpacing: letterSpacing / safePixelSize,
+          height: 1.15,
+        ),
+      ),
+      textAlign: textAlign,
+      textDirection: textDirection,
+      maxLines: maxLines,
+      textWidthBasis: TextWidthBasis.longestLine,
+    )..layout(maxWidth: lowMaxWidth.clamp(1.0, double.infinity).toDouble());
+
+    const padding = 2.0;
+    final imageWidth = (painter.width + (padding * 2))
+        .ceil()
+        .clamp(1, 4096)
+        .toInt();
+    final imageHeight = (painter.height + (padding * 2))
+        .ceil()
+        .clamp(1, 4096)
+        .toInt();
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    painter.paint(canvas, const Offset(padding, padding));
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(imageWidth, imageHeight);
+    picture.dispose();
+
+    return _RasterizedPixelText(
+      image: image,
+      size: Size(
+        imageWidth * safePixelSize,
+        imageHeight * safePixelSize,
+      ),
+    );
+  }
+}
+
+class _RasterizedPixelText {
+  const _RasterizedPixelText({
+    required this.image,
+    required this.size,
   });
 
-  final DeskInfo desk;
-  final bool selected;
-  final double gridSize;
+  final ui.Image image;
+  final Size size;
+}
+
+class _RasterPixelTextPainter extends CustomPainter {
+  const _RasterPixelTextPainter({
+    required this.image,
+    required this.color,
+    required this.pixelSize,
+  });
+
+  final ui.Image image;
+  final Color color;
+  final double pixelSize;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final source = Rect.fromLTWH(
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
+    final destination = Offset.zero & size;
+
+    final shadowPaint = Paint()
+      ..isAntiAlias = false
+      ..filterQuality = FilterQuality.none
+      ..colorFilter = const ColorFilter.mode(
+        Color(0xCC000000),
+        BlendMode.srcIn,
+      );
+    canvas.drawImageRect(
+      image,
+      source,
+      destination.shift(Offset(pixelSize, pixelSize)),
+      shadowPaint,
+    );
+
+    final paint = Paint()
+      ..isAntiAlias = false
+      ..filterQuality = FilterQuality.none
+      ..colorFilter = ColorFilter.mode(color, BlendMode.srcIn);
+    canvas.drawImageRect(image, source, destination, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RasterPixelTextPainter oldDelegate) {
+    return oldDelegate.image != image ||
+        oldDelegate.color != color ||
+        oldDelegate.pixelSize != pixelSize;
+  }
+}
+
+class PixelDevilLogo extends StatefulWidget {
+  const PixelDevilLogo({
+    super.key,
+    required this.pixelSize,
+    required this.onTap,
+  });
+
+  final double pixelSize;
   final VoidCallback onTap;
-  final String Function(String key) translate;
+
+  @override
+  State<PixelDevilLogo> createState() => _PixelDevilLogoState();
+}
+
+class _PixelDevilLogoState extends State<PixelDevilLogo> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    final stateKey = switch (desk.state) {
-      DeskState.available => 'desk_state_available_short',
-      DeskState.occupied => 'desk_state_occupied_short',
-      DeskState.reserved => 'desk_state_reserved_short',
-      DeskState.offline => 'desk_state_offline_short',
-    };
-    final baseColor = switch (desk.state) {
-      DeskState.available => Colors.white,
-      DeskState.reserved => const Color(0xFFAAAAAA),
-      DeskState.occupied => const Color(0xFF707070),
-      DeskState.offline => const Color(0xFF4D4D4D),
-    };
+    final matrix = Pixelemoji.devilUnframed;
+    final width = matrix.first.length * widget.pixelSize;
+    final height = matrix.length * widget.pixelSize;
 
     return Semantics(
       button: true,
-      label: '${desk.label}, ${translate(stateKey)}',
+      label: 'Evil Space home',
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
+        onHover: (value) => setState(() => _hovered = value),
         splashFactory: NoSplash.splashFactory,
         hoverColor: Colors.transparent,
         highlightColor: Colors.transparent,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          constraints: const BoxConstraints(minHeight: 82),
-          padding: EdgeInsets.all(gridSize * 2),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0x66000000)
-                : const Color(0x44000000),
-            border: Border.all(
-              color: selected ? Colors.white : baseColor,
-              width: selected ? 2 : 1,
-            ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: kMinInteractiveDimension,
+            minHeight: kMinInteractiveDimension,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              HoverablePixelString(
-                word: desk.label,
-                gridSize: gridSize,
-                isInstant: true,
-                color: baseColor,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: CustomPaint(
+              size: Size(width, height),
+              painter: _PixelMatrixPainter(
+                matrix: matrix,
+                pixelSize: widget.pixelSize,
+                color: _hovered ? Colors.white : const Color(0xFFE8E8E8),
               ),
-              SizedBox(height: gridSize),
-              HoverablePixelString(
-                word: translate(stateKey),
-                gridSize: math.max(3.0, gridSize * 0.6).toDouble(),
-                isInstant: true,
-                color: baseColor,
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+}
+
+class _PixelMatrixPainter extends CustomPainter {
+  const _PixelMatrixPainter({
+    required this.matrix,
+    required this.pixelSize,
+    required this.color,
+  });
+
+  final List<List<int>> matrix;
+  final double pixelSize;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..isAntiAlias = false;
+    for (int row = 0; row < matrix.length; row++) {
+      for (int column = 0; column < matrix[row].length; column++) {
+        if (matrix[row][column] == 1) {
+          canvas.drawRect(
+            Rect.fromLTWH(
+              column * pixelSize,
+              row * pixelSize,
+              pixelSize,
+              pixelSize,
+            ),
+            paint,
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PixelMatrixPainter oldDelegate) {
+    return oldDelegate.matrix != matrix ||
+        oldDelegate.pixelSize != pixelSize ||
+        oldDelegate.color != color;
   }
 }

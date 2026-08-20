@@ -1,13 +1,5 @@
 enum AppRoute {
   home('/'),
-  feed('/feed'),
-  desks('/desks'),
-  office('/office'),
-  studio('/studio'),
-  map('/map'),
-  book('/book'),
-  gallery('/gallery'),
-  contact('/contact'),
   qr('/qr');
 
   const AppRoute(this.path);
@@ -18,18 +10,11 @@ enum AppRoute {
     final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
     final normalized = path.isEmpty ? '/' : path;
 
-    return switch (normalized) {
-      '/' => AppRoute.home,
-      '/feed' => AppRoute.feed,
-      '/desk' || '/desks' => AppRoute.desks,
-      '/office' || '/offices' => AppRoute.office,
-      '/studio' => AppRoute.studio,
-      '/map' || '/floor-map' => AppRoute.map,
-      '/book' || '/visit' => AppRoute.book,
-      '/gallery' || '/pixel-gallery' => AppRoute.gallery,
-      '/contact' => AppRoute.contact,
-      '/qr' => AppRoute.qr,
-      _ => AppRoute.home,
-    };
+    if (normalized == '/qr') {
+      return AppRoute.qr;
+    }
+
+    // Legacy deep links intentionally resolve to the one-page landing site.
+    return AppRoute.home;
   }
 }
