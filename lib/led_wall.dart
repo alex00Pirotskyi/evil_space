@@ -93,12 +93,7 @@ class LedWallPainter {
 
     final corePaint = Paint()
       ..isAntiAlias = true
-      ..color = Color.fromARGB(
-        (color.a * 0.22).round(),
-        255,
-        255,
-        255,
-      );
+      ..color = Colors.white.withValues(alpha: 0.22);
     canvas.drawCircle(
       center.translate(-emitterRadius * 0.20, -emitterRadius * 0.20),
       math.max(0.35, emitterRadius * 0.23),
