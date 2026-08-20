@@ -264,6 +264,10 @@ class _LivingPixelPainter extends CustomPainter {
   final double focusStrength;
   final bool reducedMotion;
 
+  bool get _usingDemoFrames =>
+      (from.source?.startsWith('demo:') ?? false) &&
+      (to.source?.startsWith('demo:') ?? false);
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
@@ -284,13 +288,24 @@ class _LivingPixelPainter extends CustomPainter {
           localProgress,
         );
 
+        var red = Rgb565.red8(value);
+        var green = Rgb565.green8(value);
+        var blue = Rgb565.blue8(value);
+
+        if (_usingDemoFrames) {
+          final luma = ((red * 299) + (green * 587) + (blue * 114)) ~/ 1000;
+          red = ((red * 0.34) + (luma * 0.38) + 8).round();
+          green = ((green * 0.42) + (luma * 0.34) + 10).round();
+          blue = ((blue * 0.54) + (luma * 0.32) + 18).round();
+        }
+
         final nx = columns <= 1 ? 0.5 : x / (columns - 1);
         final focus = _focusFactor(nx);
         final level = (brightness * focus).clamp(0.0, 1.0);
 
-        final red = (Rgb565.red8(value) * level).round().clamp(0, 255);
-        final green = (Rgb565.green8(value) * level).round().clamp(0, 255);
-        final blue = (Rgb565.blue8(value) * level).round().clamp(0, 255);
+        red = (red * level).round().clamp(0, 255);
+        green = (green * level).round().clamp(0, 255);
+        blue = (blue * level).round().clamp(0, 255);
         final color = Color.fromARGB(255, red, green, blue);
 
         final luma = ((red * 299) + (green * 587) + (blue * 114)) ~/ 1000;
