@@ -3,62 +3,25 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:evil_space/app_route.dart';
 import 'package:evil_space/config.dart';
 import 'package:evil_space/pixel_image_slideshow.dart';
-
-enum PixelTransitionStyle {
-  runway,
-  diagonal,
-  centerOut,
-}
-
-enum PixelBackgroundScene {
-  home('assets/backgrounds/home/'),
-  feed('assets/backgrounds/feed/'),
-  desks('assets/backgrounds/desks/'),
-  office('assets/backgrounds/office/'),
-  studio('assets/backgrounds/studio/'),
-  contact('assets/backgrounds/contact/');
-
-  const PixelBackgroundScene(this.directory);
-
-  final String directory;
-
-  static PixelBackgroundScene fromRoute(AppRoute route) {
-    return switch (route) {
-      AppRoute.home => PixelBackgroundScene.home,
-      AppRoute.feed => PixelBackgroundScene.feed,
-      AppRoute.desks || AppRoute.map || AppRoute.book =>
-        PixelBackgroundScene.desks,
-      AppRoute.office => PixelBackgroundScene.office,
-      AppRoute.studio => PixelBackgroundScene.studio,
-      AppRoute.contact || AppRoute.qr => PixelBackgroundScene.contact,
-      AppRoute.gallery => PixelBackgroundScene.home,
-    };
-  }
-}
 
 class LivingPixelBackground extends StatefulWidget {
   const LivingPixelBackground({
     super.key,
-    required this.scene,
-    this.fallbackDirectory = 'assets/slideshow/',
-    this.pixelCellSize = 8,
-    this.holdDuration = const Duration(milliseconds: slideshowHoldMs),
+    this.assetDirectory = 'assets/slideshow/',
+    this.pixelCellSize = 5,
+    this.holdDuration = const Duration(milliseconds: 6500),
     this.transitionDuration =
         const Duration(milliseconds: slideshowTransitionMs),
-    this.transitionStyle = PixelTransitionStyle.runway,
-    this.brightness = 0.62,
+    this.brightness = 0.68,
     this.reducedMotion = false,
   });
 
-  final PixelBackgroundScene scene;
-  final String fallbackDirectory;
+  final String assetDirectory;
   final double pixelCellSize;
   final Duration holdDuration;
   final Duration transitionDuration;
-  final PixelTransitionStyle transitionStyle;
   final double brightness;
   final bool reducedMotion;
 
@@ -68,33 +31,29 @@ class LivingPixelBackground extends StatefulWidget {
 
 class _LivingPixelBackgroundState extends State<LivingPixelBackground>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  late final AnimationController _transition;
   Timer? _holdTimer;
 
-  Rgb565Frame? _currentFrame;
-  Rgb565Frame? _nextFrame;
-  List<Rgb565Frame> _sceneFrames = const [];
-  List<Rgb565Frame>? _pendingSceneFrames;
-
-  int _sceneIndex = 0;
-  int _nextSceneIndex = 0;
+  List<Rgb565Frame> _frames = const [];
+  int _currentIndex = 0;
+  int _nextIndex = 0;
+  int _transitionSeed = 0;
   int _loadGeneration = 0;
   int _columns = 0;
   int _rows = 0;
-  int _transitionSeed = 0;
   bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _transition = AnimationController(
       vsync: this,
       duration: _effectiveTransitionDuration,
     )..addStatusListener(_handleTransitionStatus);
   }
 
   Duration get _effectiveTransitionDuration => widget.reducedMotion
-      ? const Duration(milliseconds: 180)
+      ? const Duration(milliseconds: 160)
       : widget.transitionDuration;
 
   @override
@@ -102,38 +61,36 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.transitionDuration != widget.transitionDuration ||
         oldWidget.reducedMotion != widget.reducedMotion) {
-      _controller.duration = _effectiveTransitionDuration;
+      _transition.duration = _effectiveTransitionDuration;
     }
-
-    if (oldWidget.scene != widget.scene ||
-        oldWidget.fallbackDirectory != widget.fallbackDirectory) {
-      _requestSceneReload();
+    if (oldWidget.assetDirectory != widget.assetDirectory) {
+      _reloadCurrentSize();
     }
   }
 
   @override
   void dispose() {
     _holdTimer?.cancel();
-    _controller
+    _transition
       ..removeStatusListener(_handleTransitionStatus)
       ..dispose();
     super.dispose();
   }
 
   void _requestSize(int columns, int rows) {
-    if (columns == _columns && rows == _rows) {
+    if (_columns == columns && _rows == rows) {
       return;
     }
     _columns = columns;
     _rows = rows;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _loadScene(columns, rows, preserveCurrent: false);
+        _loadFrames(columns, rows);
       }
     });
   }
 
-  void _requestSceneReload() {
+  void _reloadCurrentSize() {
     if (_columns <= 0 || _rows <= 0) {
       return;
     }
@@ -141,79 +98,51 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
     final rows = _rows;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _loadScene(columns, rows, preserveCurrent: true);
+        _loadFrames(columns, rows);
       }
     });
   }
 
-  Future<List<String>> _discoverSceneAssets(AssetBundle bundle) async {
-    final sceneAssets = await PixelAssetCatalog.discover(
-      bundle,
-      directory: widget.scene.directory,
-    );
-    if (sceneAssets.isNotEmpty) {
-      return sceneAssets;
-    }
-    return PixelAssetCatalog.discover(
-      bundle,
-      directory: widget.fallbackDirectory,
-    );
-  }
-
-  Future<void> _loadScene(
-    int columns,
-    int rows, {
-    required bool preserveCurrent,
-  }) async {
+  Future<void> _loadFrames(int columns, int rows) async {
     final generation = ++_loadGeneration;
     final bundle = DefaultAssetBundle.of(context);
 
     _holdTimer?.cancel();
-    _controller.stop();
+    _transition.stop();
     _loading = true;
 
-    final assets = await _discoverSceneAssets(bundle);
+    final paths = await PixelAssetCatalog.discover(
+      bundle,
+      directory: widget.assetDirectory,
+    );
     if (!mounted || generation != _loadGeneration) {
       return;
     }
 
-    final frames = <Rgb565Frame>[];
-    for (final asset in assets) {
+    final loaded = <Rgb565Frame>[];
+    for (final path in paths) {
       try {
-        frames.add(
+        loaded.add(
           await PixelFrameDecoder.decodeAsset(
             bundle: bundle,
-            assetPath: asset,
+            assetPath: path,
             columns: columns,
             rows: rows,
           ),
         );
       } catch (error) {
-        debugPrint('Living background skipped $asset: $error');
+        debugPrint('Background skipped $path: $error');
       }
       if (!mounted || generation != _loadGeneration) {
         return;
       }
     }
 
-    if (frames.isEmpty) {
-      final baseVariant = widget.scene.index * 3;
-      frames.addAll([
-        Rgb565Frame.demo(
-          columns: columns,
-          rows: rows,
-          variant: baseVariant,
-        ),
-        Rgb565Frame.demo(
-          columns: columns,
-          rows: rows,
-          variant: baseVariant + 1,
-        ),
-        Rgb565Frame.demo(
-          columns: columns,
-          rows: rows,
-          variant: baseVariant + 2,
-        ),
+    if (loaded.isEmpty) {
+      loaded.addAll([
+        Rgb565Frame.demo(columns: columns, rows: rows, variant: 0),
+        Rgb565Frame.demo(columns: columns, rows: rows, variant: 1),
+        Rgb565Frame.demo(columns: columns, rows: rows, variant: 2),
       ]);
     }
 
@@ -221,79 +150,43 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
       return;
     }
 
-    _loading = false;
-
-    final canMorph = preserveCurrent &&
-        _currentFrame != null &&
-        _currentFrame!.columns == columns &&
-        _currentFrame!.rows == rows;
-
-    if (canMorph) {
-      setState(() {
-        _pendingSceneFrames = frames;
-        _nextFrame = frames.first;
-        _nextSceneIndex = 0;
-        _transitionSeed++;
-      });
-      _controller.forward(from: 0);
-      return;
-    }
-
     setState(() {
-      _sceneFrames = frames;
-      _pendingSceneFrames = null;
-      _sceneIndex = 0;
-      _nextSceneIndex = 0;
-      _currentFrame = frames.first;
-      _nextFrame = null;
-      _controller.reset();
+      _frames = loaded;
+      _currentIndex = 0;
+      _nextIndex = 0;
+      _transitionSeed = 0;
+      _loading = false;
+      _transition.reset();
     });
     _scheduleNext();
   }
 
   void _scheduleNext() {
     _holdTimer?.cancel();
-    if (!mounted || _sceneFrames.length < 2 || _loading) {
+    if (!mounted || _frames.length < 2 || _loading) {
       return;
     }
-    _holdTimer = Timer(widget.holdDuration, _beginSlideshowTransition);
+    _holdTimer = Timer(widget.holdDuration, _beginTransition);
   }
 
-  void _beginSlideshowTransition() {
-    if (!mounted ||
-        _controller.isAnimating ||
-        _sceneFrames.length < 2 ||
-        _pendingSceneFrames != null) {
+  void _beginTransition() {
+    if (!mounted || _transition.isAnimating || _frames.length < 2) {
       return;
     }
-
-    final next = (_sceneIndex + 1) % _sceneFrames.length;
     setState(() {
-      _nextSceneIndex = next;
-      _nextFrame = _sceneFrames[next];
+      _nextIndex = (_currentIndex + 1) % _frames.length;
       _transitionSeed++;
     });
-    _controller.forward(from: 0);
+    _transition.forward(from: 0);
   }
 
   void _handleTransitionStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed || !mounted) {
       return;
     }
-
     setState(() {
-      _currentFrame = _nextFrame ?? _currentFrame;
-      _nextFrame = null;
-
-      if (_pendingSceneFrames != null) {
-        _sceneFrames = _pendingSceneFrames!;
-        _pendingSceneFrames = null;
-        _sceneIndex = 0;
-        _nextSceneIndex = 0;
-      } else {
-        _sceneIndex = _nextSceneIndex;
-      }
-      _controller.reset();
+      _currentIndex = _nextIndex;
+      _transition.reset();
     });
     _scheduleNext();
   }
@@ -311,29 +204,30 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
           return const SizedBox.shrink();
         }
 
-        final cell = math.max(4.0, widget.pixelCellSize);
-        final columns = math.max(24, (width / cell).round()).toInt();
-        final rows = math.max(16, (height / cell).round()).toInt();
+        final cell = widget.pixelCellSize.clamp(3.0, 10.0).toDouble();
+        final columns = math.max(32, (width / cell).round()).toInt();
+        final rows = math.max(24, (height / cell).round()).toInt();
         _requestSize(columns, rows);
 
-        final current = _currentFrame;
-        if (current == null ||
-            current.columns != columns ||
-            current.rows != rows) {
+        if (_frames.isEmpty ||
+            _frames.first.columns != columns ||
+            _frames.first.rows != rows) {
           return const ColoredBox(color: Color(0xFF171717));
         }
 
+        final current = _frames[_currentIndex];
+        final next = _frames[_nextIndex];
+
         return RepaintBoundary(
           child: AnimatedBuilder(
-            animation: _controller,
+            animation: _transition,
             builder: (context, _) {
               return CustomPaint(
                 size: Size(width, height),
-                painter: LivingPixelBackgroundPainter(
+                painter: _LivingPixelPainter(
                   from: current,
-                  to: _nextFrame,
-                  progress: _controller.value,
-                  style: widget.transitionStyle,
+                  to: next,
+                  progress: _transition.value,
                   seed: _transitionSeed,
                   brightness: widget.brightness,
                   reducedMotion: widget.reducedMotion,
@@ -347,21 +241,19 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
   }
 }
 
-class LivingPixelBackgroundPainter extends CustomPainter {
-  LivingPixelBackgroundPainter({
+class _LivingPixelPainter extends CustomPainter {
+  const _LivingPixelPainter({
     required this.from,
     required this.to,
     required this.progress,
-    required this.style,
     required this.seed,
     required this.brightness,
     required this.reducedMotion,
   });
 
   final Rgb565Frame from;
-  final Rgb565Frame? to;
+  final Rgb565Frame to;
   final double progress;
-  final PixelTransitionStyle style;
   final int seed;
   final double brightness;
   final bool reducedMotion;
@@ -372,34 +264,29 @@ class LivingPixelBackgroundPainter extends CustomPainter {
     final rows = from.rows;
     final cellWidth = size.width / columns;
     final cellHeight = size.height / rows;
-    final paint = Paint();
-    final target = to;
+    final paint = Paint()..isAntiAlias = false;
 
     for (int y = 0; y < rows; y++) {
       for (int x = 0; x < columns; x++) {
         final index = (y * columns) + x;
-        final fromValue = from.pixels[index];
-        final toValue = target == null ? fromValue : target.pixels[index];
-        final localProgress = target == null
-            ? 0.0
-            : _pixelProgress(x, y, columns, rows, progress);
-        final value = target == null
-            ? fromValue
-            : Rgb565.lerp(fromValue, toValue, localProgress);
+        final localProgress = _pixelProgress(x, y, columns, rows);
+        final value = Rgb565.lerp(
+          from.pixels[index],
+          to.pixels[index],
+          localProgress,
+        );
 
-        final red = (Rgb565.red8(value) * brightness).round().clamp(0, 255);
-        final green =
-            (Rgb565.green8(value) * brightness).round().clamp(0, 255);
-        final blue =
-            (Rgb565.blue8(value) * brightness).round().clamp(0, 255);
-        paint.color = Color.fromARGB(255, red, green, blue);
+        paint.color = Color.fromARGB(
+          255,
+          (Rgb565.red8(value) * brightness).round().clamp(0, 255),
+          (Rgb565.green8(value) * brightness).round().clamp(0, 255),
+          (Rgb565.blue8(value) * brightness).round().clamp(0, 255),
+        );
 
-        final left = x * cellWidth;
-        final top = y * cellHeight;
         canvas.drawRect(
           Rect.fromLTWH(
-            left,
-            top,
+            x * cellWidth,
+            y * cellHeight,
             cellWidth + 0.35,
             cellHeight + 0.35,
           ),
@@ -409,38 +296,20 @@ class LivingPixelBackgroundPainter extends CustomPainter {
     }
   }
 
-  double _pixelProgress(
-    int x,
-    int y,
-    int columns,
-    int rows,
-    double globalProgress,
-  ) {
+  double _pixelProgress(int x, int y, int columns, int rows) {
+    if (progress <= 0) {
+      return 0;
+    }
     if (reducedMotion) {
-      return globalProgress;
+      return progress;
     }
 
     final nx = columns <= 1 ? 0.0 : x / (columns - 1);
     final ny = rows <= 1 ? 0.0 : y / (rows - 1);
-    final jitter = _hash01(x, y, seed) * 0.16;
-
-    final threshold = switch (style) {
-      PixelTransitionStyle.runway => (nx * 0.72) + (ny * 0.06) + jitter,
-      PixelTransitionStyle.diagonal =>
-        (((nx + ny) * 0.38) + (jitter * 0.9)),
-      PixelTransitionStyle.centerOut =>
-        (_normalizedRadius(nx, ny) * 0.72) + jitter,
-    };
-
-    const feather = 0.28;
-    final start = threshold - feather;
-    return ((globalProgress - start) / feather).clamp(0.0, 1.0);
-  }
-
-  double _normalizedRadius(double nx, double ny) {
-    final dx = nx - 0.5;
-    final dy = ny - 0.5;
-    return (math.sqrt((dx * dx) + (dy * dy)) / math.sqrt(0.5))
+    final jitter = _hash01(x, y, seed) * 0.14;
+    final threshold = (nx * 0.76) + (ny * 0.05) + jitter;
+    const feather = 0.30;
+    return ((progress - (threshold - feather)) / feather)
         .clamp(0.0, 1.0);
   }
 
@@ -452,11 +321,10 @@ class LivingPixelBackgroundPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant LivingPixelBackgroundPainter oldDelegate) {
+  bool shouldRepaint(covariant _LivingPixelPainter oldDelegate) {
     return oldDelegate.from != from ||
         oldDelegate.to != to ||
         oldDelegate.progress != progress ||
-        oldDelegate.style != style ||
         oldDelegate.seed != seed ||
         oldDelegate.brightness != brightness ||
         oldDelegate.reducedMotion != reducedMotion;
