@@ -222,11 +222,17 @@ class _PixelTextRasterizer {
       textDirection: textDirection,
       maxLines: maxLines,
       textWidthBasis: TextWidthBasis.longestLine,
-    )..layout(maxWidth: lowMaxWidth.clamp(1.0, double.infinity));
+    )..layout(maxWidth: lowMaxWidth.clamp(1.0, double.infinity).toDouble());
 
     const padding = 2.0;
-    final imageWidth = (painter.width + (padding * 2)).ceil().clamp(1, 4096);
-    final imageHeight = (painter.height + (padding * 2)).ceil().clamp(1, 4096);
+    final imageWidth = (painter.width + (padding * 2))
+        .ceil()
+        .clamp(1, 4096)
+        .toInt();
+    final imageHeight = (painter.height + (padding * 2))
+        .ceil()
+        .clamp(1, 4096)
+        .toInt();
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
