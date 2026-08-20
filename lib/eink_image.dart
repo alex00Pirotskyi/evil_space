@@ -314,18 +314,20 @@ class EInkAssetCatalog {
     '.bmp',
   };
 
+  static bool isSupportedPath(String path) {
+    final lower = path.toLowerCase();
+    return _extensions.any(lower.endsWith);
+  }
+
   static Future<List<String>> discover(
     AssetBundle bundle, {
     String directory = 'assets/slideshow/',
   }) async {
     final manifest = await AssetManifest.loadFromAssetBundle(bundle);
-    final assets = manifest.listAssets().where((asset) {
-      if (!asset.startsWith(directory)) {
-        return false;
-      }
-      final lower = asset.toLowerCase();
-      return _extensions.any(lower.endsWith);
-    }).toList()
+    final assets = manifest
+        .listAssets()
+        .where((asset) => asset.startsWith(directory) && isSupportedPath(asset))
+        .toList()
       ..sort();
     return assets;
   }
@@ -378,8 +380,10 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   Timer? _holdTimer;
+
   List<String> _assets = const [];
   final Map<int, _RenderableEInkFrame> _cache = {};
+  final Set<int> _failedAssets = {};
 
   _RenderableEInkFrame? _current;
   _RenderableEInkFrame? _next;
@@ -430,7 +434,7 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
   }
 
   void _requestSize(int columns, int rows) {
-    if (columns == _columns && rows == _rows) {
+    if (_columns == columns && _rows == rows) {
       return;
     }
     _columns = columns;
@@ -455,31 +459,82 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
     });
   }
 
+  _RenderableEInkFrame _demoFrame(int variant) {
+    return _RenderableEInkFrame(
+      EInkFrame.demo(
+        columns: _columns,
+        rows: _rows,
+        variant: variant,
+      ),
+    );
+  }
+
   Future<void> _load(int columns, int rows) async {
     final generation = ++_generation;
     _holdTimer?.cancel();
     _controller.stop();
-    _loading = true;
     _cache.clear();
+    _failedAssets.clear();
+
+    final placeholder = _demoFrame(0);
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _current = placeholder;
+        _next = null;
+        _currentIndex = 0;
+        _nextIndex = 0;
+        _initialReveal = false;
+        _controller.reset();
+      });
+    }
 
     final bundle = DefaultAssetBundle.of(context);
-    final assets = await EInkAssetCatalog.discover(
-      bundle,
-      directory: widget.assetDirectory,
-    );
+    List<String> assets;
+    try {
+      assets = await EInkAssetCatalog.discover(
+        bundle,
+        directory: widget.assetDirectory,
+      );
+    } catch (error) {
+      debugPrint('E-ink asset discovery failed: $error');
+      assets = const [];
+    }
+
     if (!mounted || generation != _generation) {
       return;
     }
 
     _assets = assets;
-    final first = await _loadFrame(0, generation);
-    if (!mounted || generation != _generation) {
-      return;
+    _RenderableEInkFrame? first;
+    int firstIndex = 0;
+
+    if (_assets.isNotEmpty) {
+      for (int index = 0; index < _assets.length; index++) {
+        first = await _tryLoadAsset(index, generation);
+        if (!mounted || generation != _generation) {
+          return;
+        }
+        if (first != null) {
+          firstIndex = index;
+          break;
+        }
+      }
+    }
+
+    if (first == null) {
+      if (_assets.isNotEmpty) {
+        debugPrint('E-ink: every slideshow asset failed; using demo fallback.');
+      }
+      _assets = const [];
+      _failedAssets.clear();
+      first = _demoFrame(0);
+      firstIndex = 0;
     }
 
     setState(() {
-      _currentIndex = 0;
-      _nextIndex = 0;
+      _currentIndex = firstIndex;
+      _nextIndex = firstIndex;
       _current = first;
       _next = null;
       _initialReveal = true;
@@ -488,50 +543,82 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
       _controller.reset();
     });
     _controller.forward(from: 0);
-    unawaited(_prefetch((_currentIndex + 1) % _frameCount, generation));
+    unawaited(_prefetchNext(generation));
   }
 
-  Future<_RenderableEInkFrame> _loadFrame(int index, int generation) async {
+  Future<_RenderableEInkFrame?> _tryLoadAsset(
+    int index,
+    int generation,
+  ) async {
     final cached = _cache[index];
     if (cached != null) {
       return cached;
     }
+    if (_failedAssets.contains(index)) {
+      return null;
+    }
 
-    EInkFrame frame;
-    if (_assets.isEmpty) {
-      frame = EInkFrame.demo(
-        columns: _columns,
-        rows: _rows,
-        variant: index,
-      );
-    } else {
-      frame = await EInkFrameDecoder.decodeAsset(
+    try {
+      final frame = await EInkFrameDecoder.decodeAsset(
         bundle: DefaultAssetBundle.of(context),
         assetPath: _assets[index],
         columns: _columns,
         rows: _rows,
       );
+      if (!mounted || generation != _generation) {
+        return null;
+      }
+      final renderable = _RenderableEInkFrame(frame);
+      _cache[index] = renderable;
+      _trimCache({_currentIndex, index});
+      return renderable;
+    } catch (error) {
+      _failedAssets.add(index);
+      debugPrint('E-ink skipped ${_assets[index]}: $error');
+      return null;
     }
+  }
 
-    if (!mounted || generation != _generation) {
-      return _RenderableEInkFrame(frame);
+  Future<_RenderableEInkFrame> _loadDemo(int index) async {
+    final cached = _cache[index];
+    if (cached != null) {
+      return cached;
     }
-
-    final renderable = _RenderableEInkFrame(frame);
+    final renderable = _demoFrame(index % 3);
     _cache[index] = renderable;
-    _trimCache({
-      _currentIndex,
-      index,
-      (index + 1) % _frameCount,
-    });
     return renderable;
   }
 
-  Future<void> _prefetch(int index, int generation) async {
+  Future<(int, _RenderableEInkFrame)?> _findNextFrame(
+    int generation,
+  ) async {
+    if (_assets.isEmpty) {
+      final index = (_currentIndex + 1) % 3;
+      return (index, await _loadDemo(index));
+    }
+
+    if (_assets.length <= 1) {
+      return null;
+    }
+
+    for (int offset = 1; offset < _assets.length; offset++) {
+      final index = (_currentIndex + offset) % _assets.length;
+      final frame = await _tryLoadAsset(index, generation);
+      if (!mounted || generation != _generation) {
+        return null;
+      }
+      if (frame != null) {
+        return (index, frame);
+      }
+    }
+    return null;
+  }
+
+  Future<void> _prefetchNext(int generation) async {
     try {
-      await _loadFrame(index, generation);
+      await _findNextFrame(generation);
     } catch (error) {
-      debugPrint('E-ink prefetch skipped frame $index: $error');
+      debugPrint('E-ink prefetch failed: $error');
     }
   }
 
@@ -560,15 +647,20 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
     if (!mounted || _controller.isAnimating || _loading || _frameCount < 2) {
       return;
     }
-    final nextIndex = (_currentIndex + 1) % _frameCount;
+
     final generation = _generation;
-    final next = await _loadFrame(nextIndex, generation);
+    final candidate = await _findNextFrame(generation);
     if (!mounted || generation != _generation) {
       return;
     }
+    if (candidate == null) {
+      _scheduleNext();
+      return;
+    }
+
     setState(() {
-      _nextIndex = nextIndex;
-      _next = next;
+      _nextIndex = candidate.$1;
+      _next = candidate.$2;
       _transitionSeed++;
     });
     _controller.forward(from: 0);
@@ -595,9 +687,7 @@ class _EInkImageSlideshowState extends State<EInkImageSlideshow>
       _controller.reset();
     });
     _scheduleNext();
-    unawaited(
-      _prefetch((_currentIndex + 1) % _frameCount, _generation),
-    );
+    unawaited(_prefetchNext(_generation));
   }
 
   @override
