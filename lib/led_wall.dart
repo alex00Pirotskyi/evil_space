@@ -5,16 +5,16 @@ import 'package:flutter/material.dart';
 class LedWallGeometry {
   LedWallGeometry._();
 
-  static double safePitch(double pitch) => pitch.clamp(3.0, 10.0).toDouble();
+  static double safePitch(double pitch) => pitch.clamp(2.0, 12.0).toDouble();
 
-  static double inset(double pitch) {
+  static double emitterRadius(double pitch) {
     final safe = safePitch(pitch);
-    return (safe * 0.13).clamp(0.45, 1.15).toDouble();
+    return (safe * 0.34).clamp(0.75, 3.7).toDouble();
   }
 
-  static double radius(double pitch) {
+  static double socketRadius(double pitch) {
     final safe = safePitch(pitch);
-    return (safe * 0.16).clamp(0.45, 1.35).toDouble();
+    return (safe * 0.46).clamp(1.0, 5.0).toDouble();
   }
 
   static int columnsFor(double width, double pitch, {int minimum = 1}) {
@@ -31,19 +31,15 @@ class LedWallGeometry {
     return math.max(minimum, (height / safePitch(pitch)).round()).toInt();
   }
 
-  static Rect ledRect({
+  static Offset cellCenter({
     required int column,
     required int row,
     required double cellWidth,
     required double cellHeight,
   }) {
-    final pitch = math.min(cellWidth, cellHeight).toDouble();
-    final gap = inset(pitch);
-    return Rect.fromLTWH(
-      (column * cellWidth) + gap,
-      (row * cellHeight) + gap,
-      math.max(0.5, cellWidth - (gap * 2)).toDouble(),
-      math.max(0.5, cellHeight - (gap * 2)).toDouble(),
+    return Offset(
+      (column + 0.5) * cellWidth,
+      (row + 0.5) * cellHeight,
     );
   }
 
@@ -56,27 +52,57 @@ class LedWallGeometry {
 class LedWallPainter {
   LedWallPainter._();
 
-  static void drawLed(
-    Canvas canvas,
-    Rect rect,
-    Color color, {
+  static void drawEmitter(
+    Canvas canvas, {
+    required Offset center,
+    required double pitch,
+    required Color color,
+    bool socket = false,
     bool glow = false,
-    double glowSigma = 2.2,
+    double glowStrength = 0.55,
   }) {
-    final radius = Radius.circular(
-      (math.min(rect.width, rect.height) * 0.16).clamp(0.4, 1.4).toDouble(),
-    );
+    final safePitch = LedWallGeometry.safePitch(pitch);
+    final emitterRadius = LedWallGeometry.emitterRadius(safePitch);
+
+    if (socket) {
+      final socketPaint = Paint()
+        ..isAntiAlias = true
+        ..color = const Color(0xF2000000);
+      canvas.drawCircle(
+        center,
+        LedWallGeometry.socketRadius(safePitch),
+        socketPaint,
+      );
+    }
 
     if (glow) {
       final glowPaint = Paint()
-        ..color = color.withValues(alpha: 0.72)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, glowSigma);
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), glowPaint);
+        ..isAntiAlias = true
+        ..color = color.withValues(alpha: glowStrength.clamp(0.0, 1.0))
+        ..maskFilter = MaskFilter.blur(
+          BlurStyle.normal,
+          math.max(1.4, safePitch * 0.72),
+        );
+      canvas.drawCircle(center, emitterRadius * 1.18, glowPaint);
     }
 
-    final paint = Paint()
-      ..isAntiAlias = false
+    final emitterPaint = Paint()
+      ..isAntiAlias = true
       ..color = color;
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), paint);
+    canvas.drawCircle(center, emitterRadius, emitterPaint);
+
+    final corePaint = Paint()
+      ..isAntiAlias = true
+      ..color = Color.fromARGB(
+        (color.a * 0.22).round(),
+        255,
+        255,
+        255,
+      );
+    canvas.drawCircle(
+      center.translate(-emitterRadius * 0.20, -emitterRadius * 0.20),
+      math.max(0.35, emitterRadius * 0.23),
+      corePaint,
+    );
   }
 }
