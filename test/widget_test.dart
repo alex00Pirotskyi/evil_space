@@ -5,134 +5,106 @@ import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
 import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
-import 'package:evil_space/pixel_background.dart';
-import 'package:evil_space/pixel_glyphs.dart';
 import 'package:evil_space/pixel_image_slideshow.dart';
-import 'package:evil_space/pixeltools.dart';
 
 void main() {
   group('routing', () {
     const parser = EvilSpaceRouteParser();
 
-    test('maps public web paths to app routes', () async {
+    test('keeps only home and qr as public experiences', () async {
       expect(AppRoute.fromUri(Uri.parse('/')), AppRoute.home);
-      expect(AppRoute.fromUri(Uri.parse('/feed')), AppRoute.feed);
-      expect(AppRoute.fromUri(Uri.parse('/desk')), AppRoute.desks);
-      expect(AppRoute.fromUri(Uri.parse('/desks/')), AppRoute.desks);
-      expect(AppRoute.fromUri(Uri.parse('/office')), AppRoute.office);
-      expect(AppRoute.fromUri(Uri.parse('/studio')), AppRoute.studio);
-      expect(AppRoute.fromUri(Uri.parse('/map')), AppRoute.map);
-      expect(AppRoute.fromUri(Uri.parse('/floor-map')), AppRoute.map);
-      expect(AppRoute.fromUri(Uri.parse('/book')), AppRoute.book);
-      expect(AppRoute.fromUri(Uri.parse('/visit')), AppRoute.book);
-      expect(AppRoute.fromUri(Uri.parse('/gallery')), AppRoute.gallery);
-      expect(AppRoute.fromUri(Uri.parse('/contact')), AppRoute.contact);
       expect(AppRoute.fromUri(Uri.parse('/qr')), AppRoute.qr);
-      expect(AppRoute.fromUri(Uri.parse('/unknown')), AppRoute.home);
+
+      for (final legacyPath in [
+        '/feed',
+        '/desks',
+        '/office',
+        '/studio',
+        '/map',
+        '/book',
+        '/gallery',
+        '/contact',
+        '/anything',
+      ]) {
+        expect(AppRoute.fromUri(Uri.parse(legacyPath)), AppRoute.home);
+      }
 
       final parsed = await parser.parseRouteInformation(
-        RouteInformation(uri: Uri.parse('/map')),
+        RouteInformation(uri: Uri.parse('/qr')),
       );
-      expect(parsed, AppRoute.map);
+      expect(parsed, AppRoute.qr);
     });
 
     test('restores canonical browser paths', () {
       expect(
-        parser.restoreRouteInformation(AppRoute.desks).uri.path,
-        '/desks',
+        parser.restoreRouteInformation(AppRoute.home).uri.path,
+        '/',
       );
       expect(
-        parser.restoreRouteInformation(AppRoute.map).uri.path,
-        '/map',
-      );
-      expect(
-        parser.restoreRouteInformation(AppRoute.book).uri.path,
-        '/book',
+        parser.restoreRouteInformation(AppRoute.qr).uri.path,
+        '/qr',
       );
     });
   });
 
   group('localization', () {
-    test('contains Russian and Vietnamese product translations', () {
+    test('contains readable Russian and Vietnamese landing copy', () {
       final localization = LocalizationController(AppLanguage.ru);
-      expect(localization.t('menu_contact'), 'КОНТАКТЫ');
-      expect(localization.t('menu_map'), 'КАРТА ЗАЛА');
+      expect(localization.t('nav_contact'), 'КОНТАКТЫ');
+      expect(localization.t('occupied'), 'СТОЛОВ ЗАНЯТО');
 
       localization.setLanguage(AppLanguage.vi);
-      expect(localization.t('menu_contact'), 'LIÊN HỆ');
-      expect(localization.t('desk_day'), 'VÉ NGÀY');
-      expect(localization.t('cta_work_here'), 'LÀM VIỆC Ở ĐÂY HÔM NAY');
+      expect(localization.t('nav_contact'), 'LIÊN HỆ');
+      expect(localization.t('price_day_pass'), 'VÉ NGÀY');
+      expect(localization.t('occupied'), 'BÀN ĐANG ĐƯỢC DÙNG');
 
       localization.dispose();
     });
 
     test('falls back to the key when no translation exists', () {
       final localization = LocalizationController();
-      expect(localization.t('menu_gallery'), 'PIXEL GALLERY');
+      expect(localization.t('prices_title'), 'PRICES');
       expect(localization.t('missing_key'), 'missing_key');
       localization.dispose();
     });
   });
 
-  group('coworking model', () {
-    test('parses live desk availability', () {
-      final status = CoworkingStatus.fromJson({
-        'updated': 'NOW',
-        'desks': [
-          {'id': 'a', 'label': 'A', 'zone': 'WINDOW', 'state': 'available'},
-          {'id': 'b', 'label': 'B', 'zone': 'QUIET', 'state': 'occupied'},
+  group('site content', () {
+    test('parses occupancy, prices, and multilingual announcements', () {
+      final content = SiteContent.fromJson({
+        'status': {
+          'updated': 'NOW',
+          'total': 12,
+          'occupied': 5,
+        },
+        'prices': [
+          {'label_key': 'price_day_pass', 'price': '250K'},
+        ],
+        'announcements': [
+          {
+            'date': '20 AUG',
+            'text': {
+              'en': 'HELLO',
+              'ru': 'ПРИВЕТ',
+              'vi': 'XIN CHÀO',
+            },
+          },
         ],
       });
 
-      expect(status.total, 2);
-      expect(status.available, 1);
-      expect(status.deskById('a')?.state, DeskState.available);
+      expect(content.status.total, 12);
+      expect(content.status.occupied, 5);
+      expect(content.status.free, 7);
+      expect(content.prices.single.price, '250K');
+      expect(content.announcements.single.textFor('ru'), 'ПРИВЕТ');
+      expect(content.announcements.single.textFor('vi'), 'XIN CHÀO');
     });
 
-    test('pricing calculator chooses the cheapest useful product', () {
-      expect(PricingCalculator.forDays(1).bestKey, 'desk_day');
-      expect(PricingCalculator.forDays(5).bestKey, 'desk_week');
-      expect(PricingCalculator.forDays(30).bestKey, 'desk_hot');
-      expect(PricingCalculator.compactVnd(3200000), '3.2M');
-    });
-  });
-
-  group('background scenes', () {
-    test('maps business routes to page-aware photo pools', () {
-      expect(
-        PixelBackgroundScene.fromRoute(AppRoute.desks),
-        PixelBackgroundScene.desks,
-      );
-      expect(
-        PixelBackgroundScene.fromRoute(AppRoute.map),
-        PixelBackgroundScene.desks,
-      );
-      expect(
-        PixelBackgroundScene.fromRoute(AppRoute.book),
-        PixelBackgroundScene.desks,
-      );
-      expect(
-        PixelBackgroundScene.fromRoute(AppRoute.contact),
-        PixelBackgroundScene.contact,
-      );
-    });
-  });
-
-  group('pixel text', () {
-    test('supports Vietnamese tone glyphs', () {
-      final glyph = PixelGlyphResolver.resolve('Ắ');
-      expect(glyph, isNotNull);
-      expect(glyph!.tone, PixelTone.acute);
-      expect(glyph.width, greaterThan(0));
-    });
-
-    test('wraps long pixel text to a measured width', () {
-      final wrapped = PixelTextLayout.wrapToWidth(
-        text: 'DEDICATED DESKS AND PRIVATE OFFICES',
-        maxWidth: 120,
-        gridSize: 4,
-      );
-      expect(wrapped.contains('\n'), isTrue);
+    test('uses safe demo data when sections are empty', () {
+      final content = SiteContent.fromJson(const {});
+      expect(content.status.total, greaterThan(0));
+      expect(content.prices, isNotEmpty);
+      expect(content.announcements, isNotEmpty);
     });
   });
 
