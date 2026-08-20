@@ -40,19 +40,13 @@ void main() {
     });
 
     test('restores canonical browser paths', () {
-      expect(
-        parser.restoreRouteInformation(AppRoute.home).uri.path,
-        '/',
-      );
-      expect(
-        parser.restoreRouteInformation(AppRoute.qr).uri.path,
-        '/qr',
-      );
+      expect(parser.restoreRouteInformation(AppRoute.home).uri.path, '/');
+      expect(parser.restoreRouteInformation(AppRoute.qr).uri.path, '/qr');
     });
   });
 
   group('localization', () {
-    test('contains readable Russian and Vietnamese landing copy', () {
+    test('contains Russian and Vietnamese landing copy', () {
       final localization = LocalizationController(AppLanguage.ru);
       expect(localization.t('nav_contact'), 'КОНТАКТЫ');
       expect(localization.t('occupied'), 'СТОЛОВ ЗАНЯТО');
@@ -112,26 +106,28 @@ void main() {
     });
   });
 
-  group('RGB LED wall', () {
-    test('keeps a visible black gap around each LED package', () {
-      final rect = LedWallGeometry.ledRect(
-        column: 2,
-        row: 3,
-        cellWidth: 5,
-        cellHeight: 5,
-      );
+  group('RGB LED sign geometry', () {
+    test('supports coarse photo LEDs and fine text LEDs', () {
+      expect(LedWallGeometry.safePitch(8), 8);
+      expect(LedWallGeometry.safePitch(2.2), 2.2);
+      expect(LedWallGeometry.safePitch(1), 2);
+      expect(LedWallGeometry.safePitch(20), 12);
+    });
 
-      expect(rect.left, greaterThan(10));
-      expect(rect.top, greaterThan(15));
-      expect(rect.width, lessThan(5));
-      expect(rect.height, lessThan(5));
+    test('LED emitters leave visible black substrate between cells', () {
+      final emitter = LedWallGeometry.emitterRadius(8);
+      final socket = LedWallGeometry.socketRadius(8);
+
+      expect(emitter * 2, lessThan(8));
+      expect(socket * 2, lessThan(8));
+      expect(socket, greaterThan(emitter));
     });
 
     test('LED glyph masks count only active emitter cells', () {
       final mask = LedTextMask(
         columns: 4,
         rows: 3,
-        pitch: 4,
+        pitch: 2.5,
         cells: Uint8List.fromList([
           1, 0, 1, 0,
           1, 1, 0, 0,
@@ -140,8 +136,13 @@ void main() {
       );
 
       expect(mask.activeCells, 6);
-      expect(mask.size.width, 16);
-      expect(mask.size.height, 12);
+      expect(mask.size.width, 10);
+      expect(mask.size.height, 7.5);
+    });
+
+    test('background grid uses fewer cells at a calmer pitch', () {
+      expect(LedWallGeometry.columnsFor(1600, 8), 200);
+      expect(LedWallGeometry.rowsFor(900, 8), 113);
     });
   });
 
