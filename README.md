@@ -1,10 +1,76 @@
 # Evil Space
 
-Web-first Flutter site for Evil Space coworking in Nha Trang.
+A web-first Flutter landing page for Evil Space coworking in Nha Trang.
 
-The UI intentionally uses a custom pixel renderer instead of normal text for the
-brand experience. The web app still exposes semantic labels for accessibility,
-real browser routes, and static SEO metadata in `web/index.html`.
+The product is intentionally small. A visitor should be able to open the site on
+a phone and quickly answer five questions:
+
+1. What does Evil Space look like?
+2. How many tables are occupied today?
+3. What are the prices?
+4. What is new today?
+5. How do I contact Evil Space?
+
+## Experience
+
+The page is one vertically scrollable landing experience. The background is a
+continuous slideshow of real Evil Space photos rendered as a higher-resolution
+RGB565 pixel field. Foreground text uses a separate high-resolution pixel-text
+renderer so the typography remains readable on small screens.
+
+The only foreground sections are:
+
+- hero + today's occupancy
+- prices
+- announcements
+- contact
+
+Header links simply scroll to those sections. `/qr` opens the same page and
+scrolls to contact. Legacy URLs resolve to the main landing page rather than
+exposing the retired floor-map, booking, gallery, office, or studio workflows.
+
+## Photos
+
+Put real Evil Space images in:
+
+```text
+assets/slideshow/
+```
+
+Supported image formats are discovered through Flutter's `AssetManifest`. At
+runtime each image is cover-cropped to the viewport grid, converted to RGB565,
+and rendered with crisp small pixel cells. Images transition with one restrained
+runway pixel morph.
+
+Use alphabetical filenames to control order:
+
+```text
+01_front.jpg
+02_workspace.jpg
+03_desks.jpg
+04_studio.jpg
+05_evening.jpg
+```
+
+If there are no photos yet, the app shows generated demo RGB565 frames instead
+of a broken background.
+
+## Content
+
+Daily content is intentionally kept in one small file:
+
+```text
+assets/content/status.json
+```
+
+It contains:
+
+- total tables
+- occupied tables
+- static prices
+- multilingual announcements (EN/RU/VI)
+
+This keeps normal website updates out of the Dart UI code.
 
 ## Local development
 
@@ -21,59 +87,11 @@ Production build:
 flutter build web --release
 ```
 
-Cloudflare assets are served from `build/web` using `wrangler.toml`.
-
-## Routes
-
-- `/`
-- `/feed`
-- `/desks`
-- `/office`
-- `/studio`
-- `/gallery`
-- `/contact`
-- `/qr`
-
-Browser back/forward and deep links are handled by Flutter's Router API with path
-URL strategy.
-
-## Localization
-
-The pixel UI supports English, Russian, and Vietnamese. The default language is
-selected from the browser locale, with an EN / RU / VI switcher in the header.
-
-Vietnamese tone marks are composed by the pixel glyph renderer, so translated
-strings can use proper Vietnamese spelling rather than ASCII approximations.
-
-## RGB565 pixel slideshow
-
-Put images directly in:
-
-```text
-assets/slideshow/
-```
-
-The directory is declared once in `pubspec.yaml`; the app discovers supported
-image files through Flutter's `AssetManifest`.
-
-For each screen size the slideshow:
-
-1. calculates a pixel grid from the viewport;
-2. decodes and cover-crops each source image;
-3. converts the sampled pixels to 16-bit RGB565;
-4. renders the frame as crisp pixel cells;
-5. transitions to the next frame with a directional runway plus deterministic
-   pixel jitter.
-
-If the directory has no images, a generated RGB565 demo sequence is shown so the
-gallery remains functional.
-
-Images are ordered alphabetically. Use filenames such as `01_front.jpg`,
-`02_desks.jpg`, and `03_studio.jpg` to control the sequence.
+Cloudflare serves `build/web` using `wrangler.toml`.
 
 ## CI
 
-`.github/workflows/web-ci.yml` runs on pushes and pull requests and requires:
+`.github/workflows/web-ci.yml` requires:
 
 - `flutter analyze`
 - `flutter test`
