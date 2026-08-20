@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:evil_space/config.dart';
+import 'package:evil_space/led_wall.dart';
 import 'package:evil_space/pixel_image_slideshow.dart';
 
 class LivingPixelBackground extends StatefulWidget {
@@ -14,7 +15,7 @@ class LivingPixelBackground extends StatefulWidget {
     this.holdDuration = const Duration(milliseconds: 6500),
     this.transitionDuration =
         const Duration(milliseconds: slideshowTransitionMs),
-    this.brightness = 0.68,
+    this.brightness = 0.76,
     this.reducedMotion = false,
   });
 
@@ -204,15 +205,15 @@ class _LivingPixelBackgroundState extends State<LivingPixelBackground>
           return const SizedBox.shrink();
         }
 
-        final cell = widget.pixelCellSize.clamp(3.0, 10.0).toDouble();
-        final columns = math.max(32, (width / cell).round()).toInt();
-        final rows = math.max(24, (height / cell).round()).toInt();
+        final pitch = LedWallGeometry.safePitch(widget.pixelCellSize);
+        final columns = LedWallGeometry.columnsFor(width, pitch, minimum: 32);
+        final rows = LedWallGeometry.rowsFor(height, pitch, minimum: 24);
         _requestSize(columns, rows);
 
         if (_frames.isEmpty ||
             _frames.first.columns != columns ||
             _frames.first.rows != rows) {
-          return const ColoredBox(color: Color(0xFF171717));
+          return const ColoredBox(color: Colors.black);
         }
 
         final current = _frames[_currentIndex];
@@ -260,11 +261,12 @@ class _LivingPixelPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
+
     final columns = from.columns;
     final rows = from.rows;
     final cellWidth = size.width / columns;
     final cellHeight = size.height / rows;
-    final paint = Paint()..isAntiAlias = false;
 
     for (int y = 0; y < rows; y++) {
       for (int x = 0; x < columns; x++) {
@@ -276,22 +278,20 @@ class _LivingPixelPainter extends CustomPainter {
           localProgress,
         );
 
-        paint.color = Color.fromARGB(
+        final color = Color.fromARGB(
           255,
           (Rgb565.red8(value) * brightness).round().clamp(0, 255),
           (Rgb565.green8(value) * brightness).round().clamp(0, 255),
           (Rgb565.blue8(value) * brightness).round().clamp(0, 255),
         );
 
-        canvas.drawRect(
-          Rect.fromLTWH(
-            x * cellWidth,
-            y * cellHeight,
-            cellWidth + 0.35,
-            cellHeight + 0.35,
-          ),
-          paint,
+        final rect = LedWallGeometry.ledRect(
+          column: x,
+          row: y,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight,
         );
+        LedWallPainter.drawLed(canvas, rect, color);
       }
     }
   }
