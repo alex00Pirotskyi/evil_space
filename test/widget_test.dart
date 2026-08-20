@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
 import 'package:evil_space/coworking_model.dart';
+import 'package:evil_space/experience_widgets.dart';
+import 'package:evil_space/led_wall.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/pixel_image_slideshow.dart';
 
@@ -105,6 +109,39 @@ void main() {
       expect(content.status.total, greaterThan(0));
       expect(content.prices, isNotEmpty);
       expect(content.announcements, isNotEmpty);
+    });
+  });
+
+  group('RGB LED wall', () {
+    test('keeps a visible black gap around each LED package', () {
+      final rect = LedWallGeometry.ledRect(
+        column: 2,
+        row: 3,
+        cellWidth: 5,
+        cellHeight: 5,
+      );
+
+      expect(rect.left, greaterThan(10));
+      expect(rect.top, greaterThan(15));
+      expect(rect.width, lessThan(5));
+      expect(rect.height, lessThan(5));
+    });
+
+    test('LED glyph masks count only active emitter cells', () {
+      final mask = LedTextMask(
+        columns: 4,
+        rows: 3,
+        pitch: 4,
+        cells: Uint8List.fromList([
+          1, 0, 1, 0,
+          1, 1, 0, 0,
+          0, 0, 1, 1,
+        ]),
+      );
+
+      expect(mask.activeCells, 6);
+      expect(mask.size.width, 16);
+      expect(mask.size.height, 12);
     });
   });
 
