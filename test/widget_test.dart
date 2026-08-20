@@ -6,10 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
 import 'package:evil_space/coworking_model.dart';
-import 'package:evil_space/experience_widgets.dart';
-import 'package:evil_space/led_wall.dart';
+import 'package:evil_space/eink_image.dart';
 import 'package:evil_space/localization.dart';
-import 'package:evil_space/pixel_image_slideshow.dart';
 
 void main() {
   group('routing', () {
@@ -46,13 +44,13 @@ void main() {
   });
 
   group('localization', () {
-    test('contains Russian and Vietnamese landing copy', () {
+    test('contains Russian and Vietnamese e-paper landing copy', () {
       final localization = LocalizationController(AppLanguage.ru);
-      expect(localization.t('nav_contact'), 'КОНТАКТЫ');
+      expect(localization.t('nav_photos'), 'ФОТО');
       expect(localization.t('occupied'), 'СТОЛОВ ЗАНЯТО');
 
       localization.setLanguage(AppLanguage.vi);
-      expect(localization.t('nav_contact'), 'LIÊN HỆ');
+      expect(localization.t('nav_photos'), 'HÌNH ẢNH');
       expect(localization.t('price_day_pass'), 'VÉ NGÀY');
       expect(localization.t('occupied'), 'BÀN ĐANG ĐƯỢC DÙNG');
 
@@ -106,67 +104,75 @@ void main() {
     });
   });
 
-  group('RGB LED sign geometry', () {
-    test('supports coarse photo LEDs and fine text LEDs', () {
-      expect(LedWallGeometry.safePitch(8), 8);
-      expect(LedWallGeometry.safePitch(2.2), 2.2);
-      expect(LedWallGeometry.safePitch(1), 2);
-      expect(LedWallGeometry.safePitch(20), 12);
-    });
+  group('e-ink image pipeline', () {
+    test('converts a contrast image into a bounded four-tone frame', () {
+      const columns = 8;
+      const rows = 4;
+      final rgba = Uint8List(columns * rows * 4);
 
-    test('LED emitters leave visible black substrate between cells', () {
-      final emitter = LedWallGeometry.emitterRadius(8);
-      final socket = LedWallGeometry.socketRadius(8);
+      for (int y = 0; y < rows; y++) {
+        for (int x = 0; x < columns; x++) {
+          final offset = ((y * columns) + x) * 4;
+          final value = x < 2
+              ? 5
+              : x < 4
+                  ? 85
+                  : x < 6
+                      ? 175
+                      : 250;
+          rgba[offset] = value;
+          rgba[offset + 1] = value;
+          rgba[offset + 2] = value;
+          rgba[offset + 3] = 255;
+        }
+      }
 
-      expect(emitter * 2, lessThan(8));
-      expect(socket * 2, lessThan(8));
-      expect(socket, greaterThan(emitter));
-    });
-
-    test('LED glyph masks count only active emitter cells', () {
-      final mask = LedTextMask(
-        columns: 4,
-        rows: 3,
-        pitch: 2.5,
-        cells: Uint8List.fromList([
-          1, 0, 1, 0,
-          1, 1, 0, 0,
-          0, 0, 1, 1,
-        ]),
+      final frame = EInkProcessor.processRgba(
+        rgba: rgba,
+        columns: columns,
+        rows: rows,
       );
 
-      expect(mask.activeCells, 6);
-      expect(mask.size.width, 10);
-      expect(mask.size.height, 7.5);
+      expect(frame.columns, columns);
+      expect(frame.rows, rows);
+      expect(frame.levels.length, columns * rows);
+      expect(frame.levels.every((level) => level <= 3), isTrue);
+      expect(frame.levels.contains(0), isTrue);
+      expect(frame.levels.contains(3), isTrue);
     });
 
-    test('background grid uses fewer cells at a calmer pitch', () {
-      expect(LedWallGeometry.columnsFor(1600, 8), 200);
-      expect(LedWallGeometry.rowsFor(900, 8), 113);
+    test('Atkinson diffusion creates intermediate ink structure', () {
+      const columns = 12;
+      const rows = 8;
+      final rgba = Uint8List(columns * rows * 4);
+
+      for (int y = 0; y < rows; y++) {
+        for (int x = 0; x < columns; x++) {
+          final offset = ((y * columns) + x) * 4;
+          final value = ((x / (columns - 1)) * 255).round();
+          rgba[offset] = value;
+          rgba[offset + 1] = value;
+          rgba[offset + 2] = value;
+          rgba[offset + 3] = 255;
+        }
+      }
+
+      final frame = EInkProcessor.processRgba(
+        rgba: rgba,
+        columns: columns,
+        rows: rows,
+      );
+      final distinct = frame.levels.toSet();
+
+      expect(distinct.length, greaterThanOrEqualTo(3));
+      expect(distinct.contains(0), isTrue);
+      expect(distinct.contains(3), isTrue);
     });
-  });
 
-  group('RGB565', () {
-    test('packs and expands 16-bit RGB channels', () {
-      final red = Rgb565.pack(255, 0, 0);
-      expect(Rgb565.red8(red), 255);
-      expect(Rgb565.green8(red), 0);
-      expect(Rgb565.blue8(red), 0);
-
-      final white = Rgb565.pack(255, 255, 255);
-      expect(Rgb565.red8(white), 255);
-      expect(Rgb565.green8(white), 255);
-      expect(Rgb565.blue8(white), 255);
-    });
-
-    test('interpolates between RGB565 colors', () {
-      final black = Rgb565.pack(0, 0, 0);
-      final white = Rgb565.pack(255, 255, 255);
-      final middle = Rgb565.lerp(black, white, 0.5);
-
-      expect(Rgb565.red8(middle), inInclusiveRange(120, 136));
-      expect(Rgb565.green8(middle), inInclusiveRange(120, 136));
-      expect(Rgb565.blue8(middle), inInclusiveRange(120, 136));
+    test('demo fallback remains monochrome and four-level', () {
+      final frame = EInkFrame.demo(columns: 40, rows: 24, variant: 1);
+      expect(frame.levels.every((level) => level <= 3), isTrue);
+      expect(frame.levels.toSet().length, greaterThan(1));
     });
   });
 }
