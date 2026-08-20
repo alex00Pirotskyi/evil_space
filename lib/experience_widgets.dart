@@ -14,15 +14,16 @@ class LedMatrixText extends StatefulWidget {
     required this.maxWidth,
     required this.ledPitch,
     this.fontSize = 24,
-    this.color = const Color(0xFFE8E8E8),
+    this.color = const Color(0xFFE6E6E6),
     this.hoverColor = Colors.white,
-    this.fontWeight = FontWeight.w800,
+    this.fontWeight = FontWeight.w700,
     this.textAlign = TextAlign.left,
     this.maxLines,
-    this.letterSpacing = 1.0,
+    this.letterSpacing = 0.7,
     this.onTap,
     this.semanticLabel,
     this.header = false,
+    this.glow = false,
     this.glowOnHover = true,
   });
 
@@ -39,6 +40,7 @@ class LedMatrixText extends StatefulWidget {
   final VoidCallback? onTap;
   final String? semanticLabel;
   final bool header;
+  final bool glow;
   final bool glowOnHover;
 
   @override
@@ -122,12 +124,13 @@ class _LedMatrixTextState extends State<LedMatrixText> {
   Widget build(BuildContext context) {
     final mask = _mask;
     final activeColor = _highlighted ? widget.hoverColor : widget.color;
+    final useGlow = widget.glow || (_highlighted && widget.glowOnHover);
 
     Widget child;
     if (mask == null) {
       child = SizedBox(
-        width: math.min(widget.maxWidth, widget.fontSize * widget.text.length),
-        height: widget.fontSize * 1.35,
+        width: math.min(widget.maxWidth, math.max(1, widget.fontSize * 5)),
+        height: widget.fontSize * 1.2,
       );
     } else {
       child = SizedBox(
@@ -138,7 +141,7 @@ class _LedMatrixTextState extends State<LedMatrixText> {
             painter: _LedTextPainter(
               mask: mask,
               color: activeColor,
-              glow: _highlighted && widget.glowOnHover,
+              glow: useGlow,
             ),
           ),
         ),
@@ -195,7 +198,8 @@ class LedTextMaskBuilder {
     required TextDirection textDirection,
   }) async {
     final pitch = LedWallGeometry.safePitch(ledPitch);
-    final safeWidth = maxWidth.clamp(pitch, 4096.0).toDouble();
+    final safeWidth = maxWidth.clamp(pitch * 6, 4096.0).toDouble();
+    final padding = math.max(3.0, pitch * 1.4).toDouble();
 
     final painter = TextPainter(
       text: TextSpan(
@@ -207,20 +211,20 @@ class LedTextMaskBuilder {
           fontWeight: fontWeight,
           fontSize: fontSize,
           letterSpacing: letterSpacing,
-          height: 1.08,
+          height: 1.06,
         ),
       ),
       textAlign: textAlign,
       textDirection: textDirection,
       maxLines: maxLines,
-      textWidthBasis: TextWidthBasis.parent,
+      textWidthBasis: TextWidthBasis.longestLine,
     )..layout(maxWidth: safeWidth);
 
-    final imageWidth = math.max(1, painter.width.ceil()).toInt();
-    final imageHeight = math.max(1, painter.height.ceil()).toInt();
+    final imageWidth = math.max(1, (painter.width + (padding * 2)).ceil()).toInt();
+    final imageHeight = math.max(1, (painter.height + (padding * 2)).ceil()).toInt();
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    painter.paint(canvas, Offset.zero);
+    painter.paint(canvas, Offset(padding, padding));
     final picture = recorder.endRecording();
     final image = await picture.toImage(imageWidth, imageHeight);
     picture.dispose();
@@ -234,7 +238,12 @@ class LedTextMaskBuilder {
     final rgba = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
     final columns = math.max(1, (imageWidth / pitch).ceil()).toInt();
     final rows = math.max(1, (imageHeight / pitch).ceil()).toInt();
-    final cells = Uint8List(columns * rows);
+    final rawCells = Uint8List(columns * rows);
+
+    int minColumn = columns;
+    int minRow = rows;
+    int maxColumn = -1;
+    int maxRow = -1;
 
     for (int row = 0; row < rows; row++) {
       final y0 = (row * pitch).floor().clamp(0, imageHeight - 1).toInt();
@@ -250,22 +259,53 @@ class LedTextMaskBuilder {
           for (int x = x0; x < x1; x++) {
             final alpha = rgba[((y * imageWidth) + x) * 4 + 3];
             alphaTotal += alpha;
-            if (alpha > alphaPeak) {
-              alphaPeak = alpha;
-            }
+            alphaPeak = math.max(alphaPeak, alpha);
             samples++;
           }
         }
 
         final average = samples == 0 ? 0 : alphaTotal ~/ samples;
-        final active = alphaPeak >= 180 || average >= 42;
-        cells[(row * columns) + column] = active ? 1 : 0;
+        final active = alphaPeak >= 210 || average >= 58;
+        if (!active) {
+          continue;
+        }
+
+        rawCells[(row * columns) + column] = 1;
+        minColumn = math.min(minColumn, column);
+        minRow = math.min(minRow, row);
+        maxColumn = math.max(maxColumn, column);
+        maxRow = math.max(maxRow, row);
+      }
+    }
+
+    if (maxColumn < minColumn || maxRow < minRow) {
+      return LedTextMask(
+        columns: 1,
+        rows: 1,
+        pitch: pitch,
+        cells: Uint8List(1),
+      );
+    }
+
+    minColumn = math.max(0, minColumn - 1);
+    minRow = math.max(0, minRow - 1);
+    maxColumn = math.min(columns - 1, maxColumn + 1);
+    maxRow = math.min(rows - 1, maxRow + 1);
+
+    final trimmedColumns = (maxColumn - minColumn) + 1;
+    final trimmedRows = (maxRow - minRow) + 1;
+    final cells = Uint8List(trimmedColumns * trimmedRows);
+
+    for (int row = 0; row < trimmedRows; row++) {
+      for (int column = 0; column < trimmedColumns; column++) {
+        cells[(row * trimmedColumns) + column] = rawCells[
+            ((row + minRow) * columns) + (column + minColumn)];
       }
     }
 
     return LedTextMask(
-      columns: columns,
-      rows: rows,
+      columns: trimmedColumns,
+      rows: trimmedRows,
       pitch: pitch,
       cells: cells,
     );
@@ -311,37 +351,26 @@ class _LedTextPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final substratePaint = Paint()
-      ..isAntiAlias = false
-      ..color = Colors.black;
-
     for (int row = 0; row < mask.rows; row++) {
       for (int column = 0; column < mask.columns; column++) {
         if (mask.cells[(row * mask.columns) + column] == 0) {
           continue;
         }
 
-        final cellRect = Rect.fromLTWH(
-          column * mask.pitch,
-          row * mask.pitch,
-          mask.pitch,
-          mask.pitch,
-        );
-        canvas.drawRect(cellRect, substratePaint);
-
-        final ledRect = LedWallGeometry.ledRect(
+        final center = LedWallGeometry.cellCenter(
           column: column,
           row: row,
           cellWidth: mask.pitch,
           cellHeight: mask.pitch,
         );
-
-        LedWallPainter.drawLed(
+        LedWallPainter.drawEmitter(
           canvas,
-          ledRect,
-          color,
+          center: center,
+          pitch: mask.pitch,
+          color: color,
+          socket: true,
           glow: glow,
-          glowSigma: mask.pitch * 0.65,
+          glowStrength: glow ? 0.72 : 0,
         );
       }
     }
@@ -409,7 +438,7 @@ class _LedDevilLogoState extends State<LedDevilLogo> {
                 pitch: pitch,
                 color: _highlighted
                     ? Colors.white
-                    : const Color(0xFFE5E5E5),
+                    : const Color(0xFFE6E6E6),
                 glow: _highlighted,
               ),
             ),
@@ -435,38 +464,25 @@ class _LedMatrixPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final substratePaint = Paint()
-      ..isAntiAlias = false
-      ..color = Colors.black;
-
     for (int row = 0; row < matrix.length; row++) {
       for (int column = 0; column < matrix[row].length; column++) {
         if (matrix[row][column] == 0) {
           continue;
         }
 
-        canvas.drawRect(
-          Rect.fromLTWH(
-            column * pitch,
-            row * pitch,
-            pitch,
-            pitch,
-          ),
-          substratePaint,
-        );
-
-        final ledRect = LedWallGeometry.ledRect(
-          column: column,
-          row: row,
-          cellWidth: pitch,
-          cellHeight: pitch,
-        );
-        LedWallPainter.drawLed(
+        LedWallPainter.drawEmitter(
           canvas,
-          ledRect,
-          color,
+          center: LedWallGeometry.cellCenter(
+            column: column,
+            row: row,
+            cellWidth: pitch,
+            cellHeight: pitch,
+          ),
+          pitch: pitch,
+          color: color,
+          socket: true,
           glow: glow,
-          glowSigma: pitch * 0.65,
+          glowStrength: 0.76,
         );
       }
     }
@@ -478,5 +494,77 @@ class _LedMatrixPainter extends CustomPainter {
         oldDelegate.pitch != pitch ||
         oldDelegate.color != color ||
         oldDelegate.glow != glow;
+  }
+}
+
+class LedOccupancyStrip extends StatelessWidget {
+  const LedOccupancyStrip({
+    super.key,
+    required this.total,
+    required this.occupied,
+    required this.pitch,
+  });
+
+  final int total;
+  final int occupied;
+  final double pitch;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeTotal = total.clamp(1, 30);
+    final safeOccupied = occupied.clamp(0, safeTotal);
+    final cellPitch = LedWallGeometry.safePitch(pitch);
+
+    return Semantics(
+      label: '$safeOccupied of $safeTotal occupied',
+      child: SizedBox(
+        width: safeTotal * cellPitch,
+        height: cellPitch * 1.3,
+        child: CustomPaint(
+          painter: _LedOccupancyPainter(
+            total: safeTotal,
+            occupied: safeOccupied,
+            pitch: cellPitch,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LedOccupancyPainter extends CustomPainter {
+  const _LedOccupancyPainter({
+    required this.total,
+    required this.occupied,
+    required this.pitch,
+  });
+
+  final int total;
+  final int occupied;
+  final double pitch;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (int index = 0; index < total; index++) {
+      final isOccupied = index < occupied;
+      LedWallPainter.drawEmitter(
+        canvas,
+        center: Offset((index + 0.5) * pitch, pitch * 0.65),
+        pitch: pitch,
+        color: isOccupied
+            ? Colors.white
+            : const Color(0xFF545454),
+        socket: true,
+        glow: isOccupied,
+        glowStrength: isOccupied ? 0.34 : 0,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LedOccupancyPainter oldDelegate) {
+    return oldDelegate.total != total ||
+        oldDelegate.occupied != occupied ||
+        oldDelegate.pitch != pitch;
   }
 }
