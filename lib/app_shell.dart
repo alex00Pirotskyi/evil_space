@@ -1,18 +1,12 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:evil_space/app_route.dart';
-import 'package:evil_space/config.dart';
 import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/experience_widgets.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/pixel_background.dart';
-import 'package:evil_space/pixel_image_slideshow.dart';
-import 'package:evil_space/pixeltools.dart';
 
 typedef AppRouteCallback = void Function(AppRoute route);
 
@@ -33,133 +27,101 @@ class MatrixScreen extends StatefulWidget {
 }
 
 class _MatrixScreenState extends State<MatrixScreen> {
-  Timer? _bootTimer;
-  Timer? _devilIdleTimer;
-  bool _isInitialLoad = true;
-  bool _bookingRequestReady = false;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _pricesKey = GlobalKey();
+  final GlobalKey _nowKey = GlobalKey();
+  final GlobalKey _contactKey = GlobalKey();
 
-  CoworkingStatus _status = CoworkingStatus.demo;
-  AppRoute? _previewRoute;
-  DevilState _devilState = DevilState.idle;
-  int _stayDays = 1;
-  String? _selectedDeskId;
-  int _bookingStep = 0;
-  String _bookingWhenKey = 'book_today';
-  String _bookingProductKey = 'desk_day';
-
-  static const List<String> _feedKeys = [
-    'feed_community',
-    'feed_workspace',
-    'feed_studio',
-  ];
+  SiteContent _content = SiteContent.demo;
+  bool _qrScrollScheduled = false;
 
   static const List<_ContactLink> _contactLinks = [
     _ContactLink(
-      labelKey: 'contact_instagram',
-      url: 'https://www.instagram.com/evil_space_coworking',
-    ),
-    _ContactLink(
-      labelKey: 'contact_map',
-      url: 'https://maps.app.goo.gl/5AFFB2AzszcsFvSz5?g_st=ic',
-    ),
-    _ContactLink(
-      labelKey: 'contact_messenger',
-      url: 'https://m.me/61585941012998?hash=AbbCb0BDEsCMHEqJ&source_id=8585216',
-    ),
-    _ContactLink(
       labelKey: 'contact_zalo',
+      detail: '+84 56 5056 748',
       url: 'https://zalo.me/84565056748',
     ),
     _ContactLink(
+      labelKey: 'contact_instagram',
+      detail: '@evil_space_coworking',
+      url: 'https://www.instagram.com/evil_space_coworking',
+    ),
+    _ContactLink(
+      labelKey: 'contact_messenger',
+      detail: 'EVIL SPACE',
+      url: 'https://m.me/61585941012998?hash=AbbCb0BDEsCMHEqJ&source_id=8585216',
+    ),
+    _ContactLink(
       labelKey: 'contact_phone',
+      detail: '+84 56 5056 748',
       url: 'tel:+84565056748',
+    ),
+    _ContactLink(
+      labelKey: 'contact_map',
+      detail: 'NHA TRANG',
+      url: 'https://maps.app.goo.gl/5AFFB2AzszcsFvSz5?g_st=ic',
     ),
   ];
 
   @override
   void initState() {
     super.initState();
-    _bootTimer = Timer(const Duration(milliseconds: 1600), () {
-      if (mounted) {
-        setState(() => _isInitialLoad = false);
-      }
-    });
-    _loadStatus();
-    _scheduleDevilSleep();
+    _loadContent();
+    _scheduleQrScrollIfNeeded();
   }
 
   @override
   void didUpdateWidget(covariant MatrixScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentRoute != widget.currentRoute) {
-      _previewRoute = null;
-      _wakeDevil(DevilState.happy);
+      _qrScrollScheduled = false;
+      _scheduleQrScrollIfNeeded();
     }
   }
 
   @override
   void dispose() {
-    _bootTimer?.cancel();
-    _devilIdleTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadStatus() async {
-    final status = await CoworkingStatusRepository.load(rootBundle);
+  Future<void> _loadContent() async {
+    final content = await SiteContentRepository.load(rootBundle);
     if (mounted) {
-      setState(() => _status = status);
+      setState(() => _content = content);
     }
   }
 
-  void _scheduleDevilSleep() {
-    _devilIdleTimer?.cancel();
-    _devilIdleTimer = Timer(const Duration(seconds: 28), () {
-      if (mounted && _previewRoute == null) {
-        setState(() => _devilState = DevilState.sleep);
+  void _scheduleQrScrollIfNeeded() {
+    if (widget.currentRoute != AppRoute.qr || _qrScrollScheduled) {
+      return;
+    }
+    _qrScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _scrollTo(_contactKey);
       }
     });
   }
 
-  void _wakeDevil([DevilState state = DevilState.idle]) {
-    _devilIdleTimer?.cancel();
-    if (mounted && _devilState != state) {
-      setState(() => _devilState = state);
-    }
-    _scheduleDevilSleep();
-  }
-
-  void _setPreview(AppRoute? route) {
-    if (_previewRoute == route) {
+  Future<void> _scrollTo(GlobalKey key) async {
+    final target = key.currentContext;
+    if (target == null) {
       return;
     }
-    setState(() {
-      _previewRoute = route;
-      _devilState = route == null ? DevilState.idle : DevilState.hoverRight;
-    });
-    _scheduleDevilSleep();
-  }
-
-  void _navigate(AppRoute route) {
-    _setPreview(null);
-    _wakeDevil(DevilState.happy);
-    widget.onNavigate(route);
-  }
-
-  void _startBooking({String? deskId, String? productKey}) {
-    setState(() {
-      _selectedDeskId = deskId ?? _selectedDeskId;
-      _bookingProductKey = productKey ?? 'desk_day';
-      _bookingWhenKey = 'book_today';
-      _bookingStep = 0;
-      _bookingRequestReady = false;
-      _devilState = DevilState.happy;
-    });
-    widget.onNavigate(AppRoute.book);
-    _scheduleDevilSleep();
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    await Scrollable.ensureVisible(
+      target,
+      duration: reducedMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      alignment: 0.05,
+    );
   }
 
   Future<void> _launchExternal(String urlString) async {
-    _wakeDevil(DevilState.happy);
     final uri = Uri.parse(urlString);
     final launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
     if (!launched) {
@@ -167,40 +129,24 @@ class _MatrixScreenState extends State<MatrixScreen> {
     }
   }
 
-  Future<void> _completeBooking(_ContactLink contact) async {
-    final selectedDesk = _status.deskById(_selectedDeskId);
-    final summary = <String>[
-      'EVIL SPACE',
-      'WHEN: ${widget.localization.t(_bookingWhenKey)}',
-      'PRODUCT: ${widget.localization.t(_bookingProductKey)}',
-      if (selectedDesk != null) 'DESK: ${selectedDesk.label}',
-    ].join('\n');
-
-    await Clipboard.setData(ClipboardData(text: summary));
-    if (mounted) {
-      setState(() {
-        _bookingRequestReady = true;
-        _devilState = DevilState.success;
-      });
-    }
-    await _launchExternal(contact.url);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF171717),
       body: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final gridSize =
-              (screenWidth / 110.0).clamp(3.0, 8.0).toDouble();
-          final isMobile = screenWidth < 700;
-          final horizontalPadding = gridSize * (isMobile ? 4 : 7);
-          final verticalPadding = gridSize * (isMobile ? 4 : 6);
-          final effectiveRoute = _previewRoute ?? widget.currentRoute;
+        builder: (context, viewport) {
+          final width = viewport.maxWidth;
+          final height = viewport.maxHeight;
+          final isPhone = width < 620;
+          final isCompact = width < 900;
           final reducedMotion =
               MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+          final backgroundPixelSize = isPhone ? 4.0 : (isCompact ? 5.0 : 6.0);
+          final horizontalPadding = isPhone ? 16.0 : (isCompact ? 28.0 : 44.0);
+          final verticalPadding = isPhone ? 18.0 : 28.0;
+          final contentWidth = (width - (horizontalPadding * 2))
+              .clamp(1.0, 920.0)
+              .toDouble();
 
           return Stack(
             children: [
@@ -208,69 +154,80 @@ class _MatrixScreenState extends State<MatrixScreen> {
                 child: ExcludeSemantics(
                   child: IgnorePointer(
                     child: LivingPixelBackground(
-                      scene: PixelBackgroundScene.fromRoute(effectiveRoute),
-                      pixelCellSize: math.max(5.5, gridSize * 1.3),
-                      transitionStyle: PixelTransitionStyle.runway,
-                      brightness: isMobile ? 0.54 : 0.60,
+                      pixelCellSize: backgroundPixelSize,
+                      brightness: isPhone ? 0.62 : 0.69,
                       reducedMotion: reducedMotion,
                     ),
                   ),
                 ),
               ),
-              const Positioned.fill(
+              Positioned.fill(
                 child: IgnorePointer(
-                  child: ColoredBox(color: Color(0x33000000)),
+                  child: ColoredBox(
+                    color: isPhone
+                        ? const Color(0x52000000)
+                        : const Color(0x3D000000),
+                  ),
                 ),
               ),
               SafeArea(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: horizontalPadding,
-                    vertical: verticalPadding,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1200),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildHeader(
-                            gridSize: gridSize,
-                            isMobile: isMobile,
-                          ),
-                          SizedBox(height: gridSize * 8),
-                          LayoutBuilder(
-                            builder: (context, pageConstraints) {
-                              return AnimatedSwitcher(
-                                duration: Duration(
-                                  milliseconds:
-                                      reducedMotion ? 120 : pageTransitionMs,
-                                ),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                layoutBuilder:
-                                    (currentChild, previousChildren) {
-                                  return Stack(
-                                    alignment: Alignment.topLeft,
-                                    children: [
-                                      ...previousChildren,
-                                      ?currentChild,
-                                    ],
-                                  );
-                                },
-                                child: KeyedSubtree(
-                                  key: ValueKey(widget.currentRoute),
-                                  child: _buildPage(
-                                    route: widget.currentRoute,
-                                    gridSize: gridSize,
-                                    maxWidth: pageConstraints.maxWidth,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          SizedBox(height: gridSize * 12),
-                        ],
+                child: Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: !isPhone,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      verticalPadding,
+                      horizontalPadding,
+                      isPhone ? 44 : 72,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: 920,
+                          minHeight: height - (verticalPadding * 2),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildHeader(
+                              maxWidth: contentWidth,
+                              isPhone: isPhone,
+                            ),
+                            SizedBox(height: isPhone ? 38 : 68),
+                            _buildHero(
+                              maxWidth: contentWidth,
+                              isPhone: isPhone,
+                            ),
+                            SizedBox(height: isPhone ? 64 : 104),
+                            KeyedSubtree(
+                              key: _pricesKey,
+                              child: _buildPrices(
+                                maxWidth: contentWidth,
+                                isPhone: isPhone,
+                              ),
+                            ),
+                            SizedBox(height: isPhone ? 58 : 92),
+                            KeyedSubtree(
+                              key: _nowKey,
+                              child: _buildAnnouncements(
+                                maxWidth: contentWidth,
+                                isPhone: isPhone,
+                              ),
+                            ),
+                            SizedBox(height: isPhone ? 58 : 92),
+                            KeyedSubtree(
+                              key: _contactKey,
+                              child: _buildContact(
+                                maxWidth: contentWidth,
+                                isPhone: isPhone,
+                              ),
+                            ),
+                            SizedBox(height: isPhone ? 46 : 72),
+                            _buildFooter(contentWidth),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -284,320 +241,267 @@ class _MatrixScreenState extends State<MatrixScreen> {
   }
 
   Widget _buildHeader({
-    required double gridSize,
-    required bool isMobile,
+    required double maxWidth,
+    required bool isPhone,
   }) {
     final brand = Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        PixelDevilMascot(
-          gridSize: gridSize,
-          state: _devilState,
+        PixelDevilLogo(
+          pixelSize: isPhone ? 2.0 : 2.3,
           onTap: () {
-            _wakeDevil(DevilState.success);
-            _navigate(AppRoute.home);
+            widget.onNavigate(AppRoute.home);
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+              );
+            }
           },
         ),
-        SizedBox(width: gridSize * 3),
-        HoverablePixelString(
-          key: const ValueKey('header_title'),
-          word: widget.localization.t('brand_title'),
-          gridSize: gridSize,
-          bootDelay: const Duration(milliseconds: 350),
-          isInstant: !_isInitialLoad,
-          semanticLabel: 'Evil Space home',
-          color: Colors.white,
-          onTap: () => _navigate(AppRoute.home),
+        const SizedBox(width: 12),
+        Flexible(
+          child: ReadablePixelText(
+            text: widget.localization.t('brand_title'),
+            maxWidth: isPhone ? 210 : 270,
+            fontSize: isPhone ? 22 : 26,
+            pixelSize: 1.7,
+            letterSpacing: 1.8,
+            maxLines: 1,
+            header: true,
+            onTap: () => widget.onNavigate(AppRoute.home),
+          ),
         ),
       ],
     );
 
-    final languages = _buildLanguageSelector(gridSize);
+    final languageSelector = _buildLanguageSelector(isPhone);
+    final navigation = _buildNavigation(isPhone);
 
-    if (isMobile) {
+    if (isPhone) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          brand,
-          SizedBox(height: gridSize * 3),
-          languages,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: brand),
+              languageSelector,
+            ],
+          ),
+          const SizedBox(height: 14),
+          navigation,
         ],
       );
     }
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        brand,
-        const Spacer(),
-        languages,
+        Expanded(child: brand),
+        navigation,
+        const SizedBox(width: 28),
+        languageSelector,
       ],
     );
   }
 
-  Widget _buildLanguageSelector(double gridSize) {
+  Widget _buildLanguageSelector(bool isPhone) {
     return Wrap(
-      spacing: gridSize * 2,
-      runSpacing: gridSize,
+      spacing: isPhone ? 10 : 14,
       children: AppLanguage.values.map((language) {
         final selected = widget.localization.language == language;
-        final semanticLabel = switch (language) {
-          AppLanguage.en => 'English',
-          AppLanguage.ru => 'Russian',
-          AppLanguage.vi => 'Vietnamese',
-        };
-
-        return HoverablePixelString(
-          key: ValueKey('language_${language.code}'),
-          word: language.code.toUpperCase(),
-          gridSize: math.max(3.0, gridSize * 0.8).toDouble(),
-          isInstant: true,
-          semanticLabel: semanticLabel,
-          color: selected ? Colors.white : const Color(0xFF999999),
+        return ReadablePixelText(
+          text: language.code.toUpperCase(),
+          maxWidth: 36,
+          fontSize: isPhone ? 13 : 14,
+          pixelSize: 1.35,
+          maxLines: 1,
+          color: selected ? Colors.white : const Color(0xFF9E9E9E),
           hoverColor: Colors.white,
-          onTap: () {
-            _wakeDevil(DevilState.happy);
-            widget.localization.setLanguage(language);
-          },
+          semanticLabel: language.code,
+          onTap: () => widget.localization.setLanguage(language),
         );
       }).toList(),
     );
   }
 
-  Widget _buildPage({
-    required AppRoute route,
-    required double gridSize,
-    required double maxWidth,
-  }) {
-    return switch (route) {
-      AppRoute.home => _buildHomePage(gridSize, maxWidth),
-      AppRoute.feed => _buildFeedPage(gridSize, maxWidth),
-      AppRoute.desks => _buildDeskPage(gridSize, maxWidth),
-      AppRoute.office => _buildSimplePage(
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          titleKey: 'office_title',
-          messageKey: 'office_message',
-        ),
-      AppRoute.studio => _buildSimplePage(
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          titleKey: 'studio_title',
-          messageKey: 'studio_message',
-        ),
-      AppRoute.map => _buildMapPage(gridSize, maxWidth),
-      AppRoute.book => _buildBookingPage(gridSize, maxWidth),
-      AppRoute.gallery => _buildGalleryPage(gridSize, maxWidth),
-      AppRoute.contact || AppRoute.qr =>
-        _buildContactPage(gridSize, maxWidth),
-    };
-  }
-
-  Widget _buildHomePage(double gridSize, double maxWidth) {
+  Widget _buildNavigation(bool isPhone) {
     final items = [
-      ('menu_feed', AppRoute.feed),
-      ('menu_desk', AppRoute.desks),
-      ('menu_office', AppRoute.office),
-      ('menu_studio', AppRoute.studio),
-      ('menu_map', AppRoute.map),
-      ('menu_contact', AppRoute.contact),
+      (widget.localization.t('nav_prices'), _pricesKey),
+      (widget.localization.t('nav_now'), _nowKey),
+      (widget.localization.t('nav_contact'), _contactKey),
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pixelText(
-          text: widget.localization.t('home_subtitle'),
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          bootDelay: const Duration(milliseconds: 450),
-          color: Colors.white,
-        ),
-        SizedBox(height: gridSize * 4),
-        _availabilityLine(gridSize, maxWidth),
-        SizedBox(height: gridSize * 3),
-        _pixelText(
-          text: widget.localization.t('cta_work_here'),
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: Colors.white,
-          onTap: _startBooking,
-          onHover: (hovered) => _setPreview(hovered ? AppRoute.desks : null),
-        ),
-        SizedBox(height: gridSize * 6),
-        for (int index = 0; index < items.length; index++) ...[
-          _pixelText(
-            text: widget.localization.t(items[index].$1),
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            bootDelay: Duration(
-              milliseconds: 550 + (index * cascadeDelayMs),
-            ),
-            onTap: () => _navigate(items[index].$2),
-            onHover: (hovered) =>
-                _setPreview(hovered ? items[index].$2 : null),
-          ),
-          SizedBox(height: gridSize),
-        ],
-      ],
+    return Wrap(
+      spacing: isPhone ? 18 : 24,
+      runSpacing: 4,
+      children: items.map((item) {
+        return ReadablePixelText(
+          text: item.$1,
+          maxWidth: isPhone ? 92 : 120,
+          fontSize: isPhone ? 14 : 15,
+          pixelSize: 1.4,
+          maxLines: 1,
+          color: const Color(0xFFD8D8D8),
+          onTap: () => _scrollTo(item.$2),
+        );
+      }).toList(),
     );
   }
 
-  Widget _availabilityLine(double gridSize, double maxWidth) {
-    return _pixelText(
-      text:
-          '${_status.available} / ${_status.total} ${widget.localization.t('home_availability')}',
-      gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-      maxWidth: maxWidth,
-      isInstant: true,
-      color: const Color(0xFFD0D0D0),
-      onTap: () => _navigate(AppRoute.map),
-      onHover: (hovered) => _setPreview(hovered ? AppRoute.map : null),
-    );
-  }
-
-  Widget _buildFeedPage(double gridSize, double maxWidth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle('feed_title', gridSize, maxWidth),
-        SizedBox(height: gridSize * 5),
-        for (int index = 0; index < _feedKeys.length; index++) ...[
-          _pixelText(
-            text: '- ${widget.localization.t(_feedKeys[index])}',
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            bootDelay: Duration(
-              milliseconds: 120 + (index * cascadeDelayMs),
-            ),
-          ),
-          SizedBox(height: gridSize * 3),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildDeskPage(double gridSize, double maxWidth) {
-    final quote = PricingCalculator.forDays(_stayDays);
-    const stayOptions = [1, 3, 5, 10, 30];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle('desk_title', gridSize, maxWidth),
-        SizedBox(height: gridSize * 3),
-        _availabilityLine(gridSize, maxWidth),
-        SizedBox(height: gridSize * 6),
-        _pixelText(
-          text: widget.localization.t('pricing_stay'),
-          gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFCFCFCF),
-        ),
-        SizedBox(height: gridSize * 2),
-        Wrap(
-          spacing: gridSize * 4,
-          runSpacing: gridSize * 2,
-          children: stayOptions.map((days) {
-            final selected = days == _stayDays;
-            return HoverablePixelString(
-              word: '$days',
-              gridSize: gridSize,
-              isInstant: true,
-              semanticLabel:
-                  '$days ${widget.localization.t('pricing_days')}',
-              color: selected ? Colors.white : const Color(0xFF999999),
-              hoverColor: Colors.white,
-              onTap: () {
-                _wakeDevil(DevilState.happy);
-                setState(() => _stayDays = days);
-              },
-            );
-          }).toList(),
-        ),
-        SizedBox(height: gridSize * 5),
-        for (final option in quote.options) ...[
-          _pricingRow(
-            option: option,
-            best: option.key == quote.bestKey,
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-          ),
-          SizedBox(height: gridSize * 2),
-        ],
-        SizedBox(height: gridSize * 3),
-        _pixelText(
-          text:
-              '${widget.localization.t('pricing_best')} / ${widget.localization.t(quote.bestKey)}',
-          gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: Colors.white,
-        ),
-        SizedBox(height: gridSize * 4),
-        _pixelText(
-          text: widget.localization.t('cta_work_here'),
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: Colors.white,
-          onTap: () => _startBooking(productKey: quote.bestKey),
-        ),
-        SizedBox(height: gridSize * 3),
-        _pixelText(
-          text: widget.localization.t('menu_map'),
-          gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFC0C0C0),
-          onTap: () => _navigate(AppRoute.map),
-        ),
-      ],
-    );
-  }
-
-  Widget _pricingRow({
-    required PricingOption option,
-    required bool best,
-    required double gridSize,
+  Widget _buildHero({
     required double maxWidth,
+    required bool isPhone,
   }) {
-    final price = PricingCalculator.compactVnd(option.priceVnd);
-    final color = best ? Colors.white : const Color(0xFFB0B0B0);
+    final status = _content.status;
+    return _ReadabilityScrim(
+      strong: true,
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 18 : 28,
+        vertical: isPhone ? 26 : 38,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ReadablePixelText(
+            text: widget.localization.t('hero_title'),
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 42 : 62,
+            pixelSize: 2.0,
+            letterSpacing: 1.4,
+            header: true,
+          ),
+          const SizedBox(height: 8),
+          ReadablePixelText(
+            text: widget.localization.t('hero_city'),
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 22 : 28,
+            pixelSize: 1.6,
+            color: const Color(0xFFD0D0D0),
+            letterSpacing: 1.8,
+            maxLines: 1,
+          ),
+          SizedBox(height: isPhone ? 34 : 46),
+          ReadablePixelText(
+            text: widget.localization.t('today'),
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 15 : 17,
+            pixelSize: 1.4,
+            color: const Color(0xFFBDBDBD),
+            letterSpacing: 1.6,
+            maxLines: 1,
+          ),
+          const SizedBox(height: 6),
+          ReadablePixelText(
+            text: '${status.occupied} / ${status.total}',
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 44 : 56,
+            pixelSize: 1.8,
+            letterSpacing: 2.0,
+            maxLines: 1,
+          ),
+          const SizedBox(height: 4),
+          ReadablePixelText(
+            text: widget.localization.t('occupied'),
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 20 : 24,
+            pixelSize: 1.55,
+            color: const Color(0xFFF0F0F0),
+          ),
+          const SizedBox(height: 8),
+          ReadablePixelText(
+            text: '${status.free} ${widget.localization.t('free')}',
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 16 : 18,
+            pixelSize: 1.4,
+            color: const Color(0xFFC5C5C5),
+            maxLines: 1,
+          ),
+          SizedBox(height: isPhone ? 24 : 30),
+          ReadablePixelText(
+            text: widget.localization.t('photos_note'),
+            maxWidth: maxWidth - (isPhone ? 36 : 56),
+            fontSize: isPhone ? 12 : 13,
+            pixelSize: 1.25,
+            color: const Color(0xFFAAAAAA),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildPrices({
+    required double maxWidth,
+    required bool isPhone,
+  }) {
+    return _ReadabilityScrim(
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 18 : 28,
+        vertical: isPhone ? 24 : 32,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            widget.localization.t('prices_title'),
+            maxWidth - (isPhone ? 36 : 56),
+            isPhone,
+          ),
+          const SizedBox(height: 6),
+          ReadablePixelText(
+            text: widget.localization.t('prices_currency'),
+            maxWidth: 80,
+            fontSize: 12,
+            pixelSize: 1.25,
+            maxLines: 1,
+            color: const Color(0xFF9E9E9E),
+          ),
+          SizedBox(height: isPhone ? 22 : 28),
+          for (final price in _content.prices) ...[
+            _priceRow(
+              price: price,
+              maxWidth: maxWidth - (isPhone ? 36 : 56),
+              isPhone: isPhone,
+            ),
+            SizedBox(height: isPhone ? 14 : 16),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _priceRow({
+    required SitePrice price,
+    required double maxWidth,
+    required bool isPhone,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final priceWidth = PixelTextLayout.measureLineCells(price) * gridSize;
-        final gap = gridSize * 5;
-        final labelWidth = math
-            .max(gridSize * 12, constraints.maxWidth - priceWidth - gap)
-            .toDouble();
-        final label = PixelTextLayout.wrapToWidth(
-          text: widget.localization.t(option.key),
-          maxWidth: labelWidth,
-          gridSize: gridSize,
-        );
-
+        final available = constraints.maxWidth;
+        final priceWidth = isPhone ? 78.0 : 104.0;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: HoverablePixelString(
-                word: label,
-                gridSize: gridSize,
-                isInstant: true,
-                color: color,
+              child: ReadablePixelText(
+                text: widget.localization.t(price.labelKey),
+                maxWidth: (available - priceWidth - 12).clamp(1, available),
+                fontSize: isPhone ? 18 : 21,
+                pixelSize: 1.5,
+                color: const Color(0xFFF2F2F2),
               ),
             ),
-            SizedBox(width: gap),
-            HoverablePixelString(
-              word: price,
-              gridSize: gridSize,
-              isInstant: true,
-              color: color,
+            const SizedBox(width: 12),
+            ReadablePixelText(
+              text: price.price,
+              maxWidth: priceWidth,
+              fontSize: isPhone ? 18 : 21,
+              pixelSize: 1.5,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              color: Colors.white,
             ),
           ],
         );
@@ -605,353 +509,166 @@ class _MatrixScreenState extends State<MatrixScreen> {
     );
   }
 
-  Widget _buildSimplePage({
-    required double gridSize,
+  Widget _buildAnnouncements({
     required double maxWidth,
-    required String titleKey,
-    required String messageKey,
+    required bool isPhone,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle(titleKey, gridSize, maxWidth),
-        SizedBox(height: gridSize * 5),
-        _pixelText(
-          text: widget.localization.t(messageKey),
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: Colors.white,
-          onTap: () => _navigate(AppRoute.contact),
-        ),
-        SizedBox(height: gridSize * 5),
-        _pixelText(
-          text: widget.localization.t('cta_work_here'),
-          gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFD0D0D0),
-          onTap: _startBooking,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMapPage(double gridSize, double maxWidth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle('map_title', gridSize, maxWidth),
-        SizedBox(height: gridSize * 2),
-        _availabilityLine(gridSize, maxWidth),
-        SizedBox(height: gridSize * 2),
-        _pixelText(
-          text: widget.localization.t('map_hint'),
-          gridSize: math.max(3.0, gridSize * 0.8).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFBBBBBB),
-        ),
-        SizedBox(height: gridSize * 4),
-        PixelFloorMap(
-          status: _status,
-          gridSize: gridSize,
-          selectedDeskId: _selectedDeskId,
-          translate: widget.localization.t,
-          onSelectDesk: (deskId) {
-            _wakeDevil(DevilState.happy);
-            setState(() => _selectedDeskId = deskId);
-          },
-          onWorkHere: (deskId) => _startBooking(deskId: deskId),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBookingPage(double gridSize, double maxWidth) {
-    final selectedDesk = _status.deskById(_selectedDeskId);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle('book_title', gridSize, maxWidth),
-        if (selectedDesk != null) ...[
-          SizedBox(height: gridSize * 2),
-          _pixelText(
-            text:
-                '${widget.localization.t('book_selected_desk')} / ${selectedDesk.label}',
-            gridSize: math.max(3.0, gridSize * 0.8).toDouble(),
-            maxWidth: maxWidth,
-            isInstant: true,
-            color: const Color(0xFFCCCCCC),
+    final innerWidth = maxWidth - (isPhone ? 36 : 56);
+    return _ReadabilityScrim(
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 18 : 28,
+        vertical: isPhone ? 24 : 32,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            widget.localization.t('now_title'),
+            innerWidth,
+            isPhone,
           ),
-        ],
-        if (_bookingRequestReady) ...[
-          SizedBox(height: gridSize * 3),
-          _pixelText(
-            text: widget.localization.t('book_request_ready'),
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            isInstant: true,
-            color: Colors.white,
-          ),
-        ],
-        SizedBox(height: gridSize * 5),
-        if (_bookingStep == 0)
-          _bookingChoiceStep(
-            titleKey: 'book_step_when',
-            choiceKeys: const ['book_today', 'book_tomorrow', 'book_other'],
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            selectedKey: _bookingWhenKey,
-            onChoose: (key) {
-              _wakeDevil(DevilState.happy);
-              setState(() {
-                _bookingWhenKey = key;
-                _bookingStep = 1;
-              });
-            },
-          )
-        else if (_bookingStep == 1)
-          _bookingChoiceStep(
-            titleKey: 'book_step_product',
-            choiceKeys: const [
-              'desk_day',
-              'desk_week',
-              'desk_hot',
-              'desk_private',
-            ],
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            selectedKey: _bookingProductKey,
-            onChoose: (key) {
-              _wakeDevil(DevilState.happy);
-              setState(() {
-                _bookingProductKey = key;
-                _bookingStep = 2;
-              });
-            },
-          )
-        else
-          _buildContactChoiceStep(gridSize, maxWidth),
-        if (_bookingStep > 0) ...[
-          SizedBox(height: gridSize * 5),
-          _pixelText(
-            text: widget.localization.t('book_back'),
-            gridSize: math.max(3.0, gridSize * 0.8).toDouble(),
-            maxWidth: maxWidth,
-            isInstant: true,
-            color: const Color(0xFFAAAAAA),
-            onTap: () {
-              _wakeDevil();
-              setState(() {
-                _bookingStep = math.max(0, _bookingStep - 1);
-                _bookingRequestReady = false;
-              });
-            },
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _bookingChoiceStep({
-    required String titleKey,
-    required List<String> choiceKeys,
-    required double gridSize,
-    required double maxWidth,
-    required String selectedKey,
-    required ValueChanged<String> onChoose,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pixelText(
-          text: widget.localization.t(titleKey),
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: Colors.white,
-        ),
-        SizedBox(height: gridSize * 4),
-        for (final key in choiceKeys) ...[
-          _pixelText(
-            text: widget.localization.t(key),
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            isInstant: true,
-            color: key == selectedKey
-                ? Colors.white
-                : const Color(0xFFC0C0C0),
-            onTap: () => onChoose(key),
-          ),
-          SizedBox(height: gridSize * 2),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildContactChoiceStep(double gridSize, double maxWidth) {
-    final bookingContacts = _contactLinks.where(
-      (contact) =>
-          contact.labelKey == 'contact_zalo' ||
-          contact.labelKey == 'contact_messenger' ||
-          contact.labelKey == 'contact_phone',
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pixelText(
-          text: widget.localization.t('book_step_contact'),
-          gridSize: gridSize,
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: Colors.white,
-        ),
-        SizedBox(height: gridSize * 3),
-        _pixelText(
-          text:
-              '${widget.localization.t(_bookingWhenKey)} / ${widget.localization.t(_bookingProductKey)}',
-          gridSize: math.max(3.0, gridSize * 0.8).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFC0C0C0),
-        ),
-        SizedBox(height: gridSize * 4),
-        for (final contact in bookingContacts) ...[
-          _pixelText(
-            text: widget.localization.t(contact.labelKey),
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            isInstant: true,
-            color: Colors.white,
-            onTap: () => _completeBooking(contact),
-          ),
-          SizedBox(height: gridSize * 2),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildGalleryPage(double gridSize, double maxWidth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle('gallery_title', gridSize, maxWidth),
-        SizedBox(height: gridSize * 4),
-        _pixelText(
-          text: widget.localization.t('gallery_hint'),
-          gridSize: math.max(3.0, gridSize * 0.8).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFBBBBBB),
-        ),
-        SizedBox(height: gridSize * 5),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.white24),
-          ),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: PixelAssetSlideshow(
-              pixelCellSize: gridSize * slideshowPixelCellMultiplier,
-              semanticsLabel: widget.localization.t('gallery_semantics'),
+          SizedBox(height: isPhone ? 22 : 28),
+          for (int index = 0;
+              index < _content.announcements.length;
+              index++) ...[
+            ReadablePixelText(
+              text: _content.announcements[index].date,
+              maxWidth: innerWidth,
+              fontSize: isPhone ? 13 : 14,
+              pixelSize: 1.3,
+              color: const Color(0xFFAAAAAA),
+              maxLines: 1,
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContactPage(double gridSize, double maxWidth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _pageTitle('contact_title', gridSize, maxWidth),
-        SizedBox(height: gridSize * 4),
-        _pixelText(
-          text: widget.localization.t('contact_location'),
-          gridSize: math.max(3.0, gridSize * 0.85).toDouble(),
-          maxWidth: maxWidth,
-          isInstant: true,
-          color: const Color(0xFFC0C0C0),
-        ),
-        SizedBox(height: gridSize * 4),
-        for (int index = 0; index < _contactLinks.length; index++) ...[
-          _pixelText(
-            text: widget.localization.t(_contactLinks[index].labelKey),
-            gridSize: gridSize,
-            maxWidth: maxWidth,
-            bootDelay: Duration(
-              milliseconds: 100 + (index * cascadeDelayMs),
+            const SizedBox(height: 5),
+            ReadablePixelText(
+              text: _content.announcements[index]
+                  .textFor(widget.localization.language.code),
+              maxWidth: innerWidth,
+              fontSize: isPhone ? 18 : 21,
+              pixelSize: 1.5,
+              color: const Color(0xFFF2F2F2),
             ),
-            onTap: () => _launchExternal(_contactLinks[index].url),
-          ),
-          SizedBox(height: gridSize),
+            if (index < _content.announcements.length - 1)
+              SizedBox(height: isPhone ? 22 : 26),
+          ],
         ],
-      ],
+      ),
     );
   }
 
-  Widget _pageTitle(
-    String key,
-    double gridSize,
-    double maxWidth,
-  ) {
-    return _pixelText(
-      text: widget.localization.t(key),
-      gridSize: gridSize,
-      maxWidth: maxWidth,
-      isInstant: !_isInitialLoad,
-      color: Colors.white,
-    );
-  }
-
-  Widget _pixelText({
-    required String text,
-    required double gridSize,
+  Widget _buildContact({
     required double maxWidth,
-    Duration bootDelay = Duration.zero,
-    bool? isInstant,
-    VoidCallback? onTap,
-    ValueChanged<bool>? onHover,
-    Color color = const Color(0xFFF0F0F0),
+    required bool isPhone,
   }) {
-    final wrapped = PixelTextLayout.wrapToWidth(
+    final innerWidth = maxWidth - (isPhone ? 36 : 56);
+    return _ReadabilityScrim(
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 18 : 28,
+        vertical: isPhone ? 24 : 32,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            widget.localization.t('contact_title'),
+            innerWidth,
+            isPhone,
+          ),
+          const SizedBox(height: 8),
+          ReadablePixelText(
+            text: widget.localization.t('contact_location'),
+            maxWidth: innerWidth,
+            fontSize: isPhone ? 15 : 17,
+            pixelSize: 1.4,
+            color: const Color(0xFFB8B8B8),
+          ),
+          SizedBox(height: isPhone ? 24 : 30),
+          for (final contact in _contactLinks) ...[
+            ReadablePixelText(
+              text:
+                  '${widget.localization.t(contact.labelKey)}  /  ${contact.detail}',
+              maxWidth: innerWidth,
+              fontSize: isPhone ? 18 : 21,
+              pixelSize: 1.5,
+              color: const Color(0xFFF2F2F2),
+              hoverColor: Colors.white,
+              onTap: () => _launchExternal(contact.url),
+            ),
+            SizedBox(height: isPhone ? 8 : 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text, double maxWidth, bool isPhone) {
+    return ReadablePixelText(
       text: text,
       maxWidth: maxWidth,
-      gridSize: gridSize,
+      fontSize: isPhone ? 28 : 34,
+      pixelSize: 1.7,
+      letterSpacing: 1.6,
+      header: true,
     );
+  }
 
-    Widget result = HoverablePixelString(
-      word: wrapped,
-      gridSize: gridSize,
-      bootDelay: bootDelay,
-      isInstant: isInstant ?? !_isInitialLoad,
-      onTap: onTap,
-      semanticLabel: text.replaceAll('\n', ' '),
-      color: color,
-      hoverColor: Colors.white,
+  Widget _buildFooter(double maxWidth) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ReadablePixelText(
+        text: 'EVIL SPACE / NHA TRANG',
+        maxWidth: maxWidth,
+        fontSize: 11,
+        pixelSize: 1.2,
+        color: const Color(0xFF8E8E8E),
+        maxLines: 1,
+      ),
     );
+  }
+}
 
-    if (onHover != null) {
-      result = MouseRegion(
-        onEnter: (_) => onHover(true),
-        onExit: (_) => onHover(false),
-        child: result,
-      );
-    }
-    return result;
+class _ReadabilityScrim extends StatelessWidget {
+  const _ReadabilityScrim({
+    required this.child,
+    required this.padding,
+    this.strong = false,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Color(strong ? 0xD9000000 : 0xC4000000),
+            Color(strong ? 0xB8000000 : 0xA3000000),
+            const Color(0x44000000),
+          ],
+          stops: const [0, 0.68, 1],
+        ),
+        border: const Border(
+          left: BorderSide(color: Color(0x44FFFFFF)),
+        ),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
   }
 }
 
 class _ContactLink {
   const _ContactLink({
     required this.labelKey,
+    required this.detail,
     required this.url,
   });
 
   final String labelKey;
+  final String detail;
   final String url;
 }
