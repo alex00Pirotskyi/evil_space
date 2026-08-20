@@ -115,9 +115,25 @@ class _MatrixScreenState extends State<MatrixScreen> {
       target,
       duration: reducedMotion
           ? Duration.zero
-          : const Duration(milliseconds: 340),
+          : const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
       alignment: 0.04,
+    );
+  }
+
+  Future<void> _scrollHome() async {
+    widget.onNavigate(AppRoute.home);
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    await _scrollController.animateTo(
+      0,
+      duration: reducedMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -138,15 +154,16 @@ class _MatrixScreenState extends State<MatrixScreen> {
           final width = viewport.maxWidth;
           final height = viewport.maxHeight;
           final isPhone = width < 620;
-          final isCompact = width < 900;
+          final isCompact = width < 980;
           final reducedMotion =
               MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-          final ledPitch = isPhone ? 4.0 : (isCompact ? 4.5 : 5.0);
-          final horizontalPadding = ledPitch * (isPhone ? 4 : (isCompact ? 6 : 8));
-          final verticalPadding = ledPitch * (isPhone ? 4 : 5);
-          final contentWidth = (width - (horizontalPadding * 2))
-              .clamp(1.0, 920.0)
-              .toDouble();
+
+          final backgroundPitch = isPhone ? 6.0 : (isCompact ? 7.0 : 8.0);
+          final textPitch = isPhone ? 2.2 : (isCompact ? 2.4 : 2.6);
+          final horizontalPadding = isPhone ? 18.0 : (isCompact ? 28.0 : 36.0);
+          final verticalPadding = isPhone ? 18.0 : 26.0;
+          final availableWidth = width - (horizontalPadding * 2);
+          final contentWidth = availableWidth.clamp(1.0, 760.0).toDouble();
 
           return Stack(
             children: [
@@ -154,8 +171,9 @@ class _MatrixScreenState extends State<MatrixScreen> {
                 child: ExcludeSemantics(
                   child: IgnorePointer(
                     child: LivingPixelBackground(
-                      pixelCellSize: ledPitch,
-                      brightness: isPhone ? 0.69 : 0.76,
+                      pixelCellSize: backgroundPitch,
+                      brightness: isPhone ? 0.72 : 0.82,
+                      focusStrength: isPhone ? 0.16 : 0.27,
                       reducedMotion: reducedMotion,
                     ),
                   ),
@@ -167,16 +185,19 @@ class _MatrixScreenState extends State<MatrixScreen> {
                   thumbVisibility: !isPhone,
                   child: SingleChildScrollView(
                     controller: _scrollController,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
                       verticalPadding,
                       horizontalPadding,
-                      ledPitch * (isPhone ? 12 : 16),
+                      isPhone ? 60 : 86,
                     ),
                     child: Center(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxWidth: 920,
+                          maxWidth: 760,
                           minHeight: height - (verticalPadding * 2),
                         ),
                         child: Column(
@@ -185,43 +206,43 @@ class _MatrixScreenState extends State<MatrixScreen> {
                             _buildHeader(
                               maxWidth: contentWidth,
                               isPhone: isPhone,
-                              ledPitch: ledPitch,
+                              textPitch: textPitch,
                             ),
-                            SizedBox(height: ledPitch * (isPhone ? 10 : 15)),
+                            SizedBox(height: isPhone ? 46 : 76),
                             _buildHero(
                               maxWidth: contentWidth,
                               isPhone: isPhone,
-                              ledPitch: ledPitch,
+                              textPitch: textPitch,
                             ),
-                            SizedBox(height: ledPitch * (isPhone ? 17 : 24)),
+                            SizedBox(height: isPhone ? 82 : 132),
                             KeyedSubtree(
                               key: _pricesKey,
                               child: _buildPrices(
                                 maxWidth: contentWidth,
                                 isPhone: isPhone,
-                                ledPitch: ledPitch,
+                                textPitch: textPitch,
                               ),
                             ),
-                            SizedBox(height: ledPitch * (isPhone ? 15 : 21)),
+                            SizedBox(height: isPhone ? 76 : 116),
                             KeyedSubtree(
                               key: _nowKey,
                               child: _buildAnnouncements(
                                 maxWidth: contentWidth,
                                 isPhone: isPhone,
-                                ledPitch: ledPitch,
+                                textPitch: textPitch,
                               ),
                             ),
-                            SizedBox(height: ledPitch * (isPhone ? 15 : 21)),
+                            SizedBox(height: isPhone ? 76 : 116),
                             KeyedSubtree(
                               key: _contactKey,
                               child: _buildContact(
                                 maxWidth: contentWidth,
                                 isPhone: isPhone,
-                                ledPitch: ledPitch,
+                                textPitch: textPitch,
                               ),
                             ),
-                            SizedBox(height: ledPitch * (isPhone ? 12 : 16)),
-                            _buildFooter(contentWidth, ledPitch),
+                            SizedBox(height: isPhone ? 58 : 84),
+                            _buildFooter(contentWidth, textPitch),
                           ],
                         ),
                       ),
@@ -239,57 +260,50 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Widget _buildHeader({
     required double maxWidth,
     required bool isPhone,
-    required double ledPitch,
+    required double textPitch,
   }) {
     final brand = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         LedDevilLogo(
-          ledPitch: ledPitch * (isPhone ? 0.64 : 0.72),
-          onTap: () {
-            widget.onNavigate(AppRoute.home);
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                0,
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-              );
-            }
-          },
+          ledPitch: textPitch * 1.35,
+          onTap: _scrollHome,
         ),
-        SizedBox(width: ledPitch * 3),
+        const SizedBox(width: 14),
         Flexible(
           child: LedMatrixText(
             text: widget.localization.t('brand_title'),
-            maxWidth: isPhone ? 205 : 270,
-            ledPitch: ledPitch,
-            fontSize: isPhone ? 25 : 31,
-            letterSpacing: 1.2,
+            maxWidth: isPhone ? 210 : 280,
+            ledPitch: textPitch,
+            fontSize: isPhone ? 26 : 31,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.9,
             maxLines: 1,
             header: true,
-            onTap: () => widget.onNavigate(AppRoute.home),
+            color: const Color(0xFFE9E9E9),
+            hoverColor: Colors.white,
+            onTap: _scrollHome,
           ),
         ),
       ],
     );
 
-    final languageSelector = _buildLanguageSelector(isPhone, ledPitch);
-    final navigation = _buildNavigation(isPhone, ledPitch);
+    final languageSelector = _buildLanguageSelector(isPhone, textPitch);
+    final navigation = _buildNavigation(isPhone, textPitch);
 
     if (isPhone) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          brand,
-          SizedBox(height: ledPitch * 3),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(child: navigation),
-              SizedBox(width: ledPitch * 3),
+              Expanded(child: brand),
               languageSelector,
             ],
           ),
+          const SizedBox(height: 18),
+          navigation,
         ],
       );
     }
@@ -299,25 +313,26 @@ class _MatrixScreenState extends State<MatrixScreen> {
       children: [
         Expanded(child: brand),
         navigation,
-        SizedBox(width: ledPitch * 6),
+        const SizedBox(width: 28),
         languageSelector,
       ],
     );
   }
 
-  Widget _buildLanguageSelector(bool isPhone, double ledPitch) {
+  Widget _buildLanguageSelector(bool isPhone, double textPitch) {
     return Wrap(
-      spacing: ledPitch * 2,
-      runSpacing: ledPitch,
+      spacing: 12,
+      runSpacing: 8,
       children: AppLanguage.values.map((language) {
         final selected = widget.localization.language == language;
         return LedMatrixText(
           text: language.code.toUpperCase(),
-          maxWidth: ledPitch * 11,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 16 : 18,
+          maxWidth: 54,
+          ledPitch: textPitch,
+          fontSize: isPhone ? 15 : 17,
+          fontWeight: FontWeight.w800,
           maxLines: 1,
-          color: selected ? Colors.white : const Color(0xFFA8A8A8),
+          color: selected ? Colors.white : const Color(0xFF8A8A8A),
           hoverColor: Colors.white,
           semanticLabel: language.code,
           onTap: () => widget.localization.setLanguage(language),
@@ -326,7 +341,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
     );
   }
 
-  Widget _buildNavigation(bool isPhone, double ledPitch) {
+  Widget _buildNavigation(bool isPhone, double textPitch) {
     final items = [
       (widget.localization.t('nav_prices'), _pricesKey),
       (widget.localization.t('nav_now'), _nowKey),
@@ -334,16 +349,17 @@ class _MatrixScreenState extends State<MatrixScreen> {
     ];
 
     return Wrap(
-      spacing: ledPitch * 4,
-      runSpacing: ledPitch,
+      spacing: isPhone ? 20 : 24,
+      runSpacing: 12,
       children: items.map((item) {
         return LedMatrixText(
           text: item.$1,
-          maxWidth: isPhone ? ledPitch * 25 : ledPitch * 30,
-          ledPitch: ledPitch,
+          maxWidth: isPhone ? 118 : 142,
+          ledPitch: textPitch,
           fontSize: isPhone ? 17 : 19,
+          fontWeight: FontWeight.w800,
           maxLines: 1,
-          color: const Color(0xFFD0D0D0),
+          color: const Color(0xFFC4C4C4),
           hoverColor: Colors.white,
           onTap: () => _scrollTo(item.$2),
         );
@@ -354,147 +370,251 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Widget _buildHero({
     required double maxWidth,
     required bool isPhone,
-    required double ledPitch,
+    required double textPitch,
   }) {
     final status = _content.status;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         LedMatrixText(
           text: widget.localization.t('hero_title'),
           maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 48 : 68,
-          letterSpacing: 1.0,
+          ledPitch: textPitch,
+          fontSize: isPhone ? 42 : 66,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.6,
           header: true,
+          glow: true,
+          color: Colors.white,
+          maxLines: isPhone ? 2 : 1,
         ),
-        SizedBox(height: ledPitch * 2),
+        const SizedBox(height: 10),
         LedMatrixText(
           text: widget.localization.t('hero_city'),
           maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 26 : 32,
-          color: const Color(0xFFD2D2D2),
-          letterSpacing: 1.2,
-          maxLines: 1,
-        ),
-        SizedBox(height: ledPitch * (isPhone ? 9 : 12)),
-        LedMatrixText(
-          text: widget.localization.t('today'),
-          maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 19 : 21,
-          color: const Color(0xFFB8B8B8),
+          ledPitch: textPitch,
+          fontSize: isPhone ? 22 : 27,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFFCACACA),
           letterSpacing: 1.0,
           maxLines: 1,
         ),
-        SizedBox(height: ledPitch),
+        SizedBox(height: isPhone ? 54 : 72),
+        LedMatrixText(
+          text: widget.localization.t('today'),
+          maxWidth: 160,
+          ledPitch: textPitch,
+          fontSize: isPhone ? 16 : 18,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF9B9B9B),
+          letterSpacing: 1.2,
+          maxLines: 1,
+        ),
+        const SizedBox(height: 12),
+        if (isPhone)
+          _buildMobileOccupancy(status, maxWidth, textPitch)
+        else
+          _buildDesktopOccupancy(status, maxWidth, textPitch),
+      ],
+    );
+  }
+
+  Widget _buildMobileOccupancy(
+    SiteStatus status,
+    double maxWidth,
+    double textPitch,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         LedMatrixText(
           text: '${status.occupied} / ${status.total}',
           maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 50 : 64,
-          letterSpacing: 1.5,
+          ledPitch: textPitch,
+          fontSize: 48,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.0,
           maxLines: 1,
+          color: Colors.white,
         ),
-        SizedBox(height: ledPitch),
+        const SizedBox(height: 10),
         LedMatrixText(
           text: widget.localization.t('occupied'),
           maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 24 : 28,
-          color: const Color(0xFFE8E8E8),
+          ledPitch: textPitch,
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFFE0E0E0),
+          maxLines: 2,
         ),
-        SizedBox(height: ledPitch * 2),
+        const SizedBox(height: 14),
+        LedOccupancyStrip(
+          total: status.total,
+          occupied: status.occupied,
+          pitch: textPitch * 2.5,
+        ),
+        const SizedBox(height: 12),
         LedMatrixText(
           text: '${status.free} ${widget.localization.t('free')}',
           maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 20 : 22,
-          color: const Color(0xFFC8C8C8),
+          ledPitch: textPitch,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFFB4B4B4),
           maxLines: 1,
         ),
-        SizedBox(height: ledPitch * 6),
-        LedMatrixText(
-          text: widget.localization.t('photos_note'),
-          maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 16 : 18,
-          color: const Color(0xFFA8A8A8),
-        ),
       ],
+    );
+  }
+
+  Widget _buildDesktopOccupancy(
+    SiteStatus status,
+    double maxWidth,
+    double textPitch,
+  ) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 640),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          LedMatrixText(
+            text: '${status.occupied} / ${status.total}',
+            maxWidth: 230,
+            ledPitch: textPitch,
+            fontSize: 60,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.1,
+            maxLines: 1,
+            color: Colors.white,
+          ),
+          const SizedBox(width: 36),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LedMatrixText(
+                  text: widget.localization.t('occupied'),
+                  maxWidth: 360,
+                  ledPitch: textPitch,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFFE1E1E1),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                LedOccupancyStrip(
+                  total: status.total,
+                  occupied: status.occupied,
+                  pitch: textPitch * 2.6,
+                ),
+                const SizedBox(height: 10),
+                LedMatrixText(
+                  text: '${status.free} ${widget.localization.t('free')}',
+                  maxWidth: 280,
+                  ledPitch: textPitch,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFFAFAFAF),
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildPrices({
     required double maxWidth,
     required bool isPhone,
-    required double ledPitch,
+    required double textPitch,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle(
-          widget.localization.t('prices_title'),
-          maxWidth,
-          isPhone,
-          ledPitch,
+    final sectionWidth = isPhone ? maxWidth : maxWidth.clamp(1, 610).toDouble();
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: sectionWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle(
+              widget.localization.t('prices_title'),
+              sectionWidth,
+              isPhone,
+              textPitch,
+            ),
+            const SizedBox(height: 8),
+            LedMatrixText(
+              text: widget.localization.t('prices_currency'),
+              maxWidth: 90,
+              ledPitch: textPitch,
+              fontSize: isPhone ? 14 : 16,
+              fontWeight: FontWeight.w800,
+              maxLines: 1,
+              color: const Color(0xFF8D8D8D),
+            ),
+            SizedBox(height: isPhone ? 28 : 34),
+            for (final price in _content.prices) ...[
+              _priceRow(
+                price: price,
+                isPhone: isPhone,
+                textPitch: textPitch,
+              ),
+              SizedBox(height: isPhone ? 17 : 20),
+            ],
+          ],
         ),
-        SizedBox(height: ledPitch * 2),
-        LedMatrixText(
-          text: widget.localization.t('prices_currency'),
-          maxWidth: ledPitch * 22,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 16 : 18,
-          maxLines: 1,
-          color: const Color(0xFFA0A0A0),
-        ),
-        SizedBox(height: ledPitch * 6),
-        for (final price in _content.prices) ...[
-          _priceRow(
-            price: price,
-            maxWidth: maxWidth,
-            isPhone: isPhone,
-            ledPitch: ledPitch,
-          ),
-          SizedBox(height: ledPitch * 3),
-        ],
-      ],
+      ),
     );
   }
 
   Widget _priceRow({
     required SitePrice price,
-    required double maxWidth,
     required bool isPhone,
-    required double ledPitch,
+    required double textPitch,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final available = constraints.maxWidth;
-        final priceWidth = isPhone ? ledPitch * 21 : ledPitch * 25;
+        final valueWidth = isPhone ? 86.0 : 108.0;
+        final gap = isPhone ? 16.0 : 24.0;
+        final labelWidth = _maxDouble(
+          120,
+          constraints.maxWidth - valueWidth - gap,
+        );
+
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: LedMatrixText(
                 text: widget.localization.t(price.labelKey),
-                maxWidth: (available - priceWidth - (ledPitch * 3))
-                    .clamp(ledPitch, available),
-                ledPitch: ledPitch,
-                fontSize: isPhone ? 22 : 25,
-                color: const Color(0xFFE2E2E2),
+                maxWidth: labelWidth,
+                ledPitch: textPitch,
+                fontSize: isPhone ? 20 : 23,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFFDADADA),
+                maxLines: 2,
               ),
             ),
-            SizedBox(width: ledPitch * 3),
-            LedMatrixText(
-              text: price.price,
-              maxWidth: priceWidth,
-              ledPitch: ledPitch,
-              fontSize: isPhone ? 22 : 25,
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              color: Colors.white,
+            SizedBox(width: gap),
+            SizedBox(
+              width: valueWidth,
+              child: Align(
+                alignment: Alignment.topRight,
+                child: LedMatrixText(
+                  text: price.price,
+                  maxWidth: valueWidth,
+                  ledPitch: textPitch,
+                  fontSize: isPhone ? 20 : 23,
+                  fontWeight: FontWeight.w900,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ],
         );
@@ -505,41 +625,85 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Widget _buildAnnouncements({
     required double maxWidth,
     required bool isPhone,
-    required double ledPitch,
+    required double textPitch,
   }) {
-    return Column(
+    final sectionWidth = isPhone ? maxWidth : maxWidth.clamp(1, 680).toDouble();
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: sectionWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle(
+              widget.localization.t('now_title'),
+              sectionWidth,
+              isPhone,
+              textPitch,
+            ),
+            SizedBox(height: isPhone ? 26 : 32),
+            for (int index = 0;
+                index < _content.announcements.length;
+                index++) ...[
+              _announcementRow(
+                announcement: _content.announcements[index],
+                sectionWidth: sectionWidth,
+                isPhone: isPhone,
+                textPitch: textPitch,
+              ),
+              if (index < _content.announcements.length - 1)
+                SizedBox(height: isPhone ? 28 : 30),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _announcementRow({
+    required SiteAnnouncement announcement,
+    required double sectionWidth,
+    required bool isPhone,
+    required double textPitch,
+  }) {
+    final date = LedMatrixText(
+      text: announcement.date,
+      maxWidth: 100,
+      ledPitch: textPitch,
+      fontSize: isPhone ? 14 : 16,
+      fontWeight: FontWeight.w800,
+      color: const Color(0xFF8D8D8D),
+      maxLines: 1,
+    );
+
+    final text = LedMatrixText(
+      text: announcement.textFor(widget.localization.language.code),
+      maxWidth: isPhone ? sectionWidth : sectionWidth - 126,
+      ledPitch: textPitch,
+      fontSize: isPhone ? 20 : 22,
+      fontWeight: FontWeight.w800,
+      color: const Color(0xFFDEDEDE),
+      maxLines: 3,
+    );
+
+    if (isPhone) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          date,
+          const SizedBox(height: 8),
+          text,
+        ],
+      );
+    }
+
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle(
-          widget.localization.t('now_title'),
-          maxWidth,
-          isPhone,
-          ledPitch,
-        ),
-        SizedBox(height: ledPitch * 6),
-        for (int index = 0;
-            index < _content.announcements.length;
-            index++) ...[
-          LedMatrixText(
-            text: _content.announcements[index].date,
-            maxWidth: maxWidth,
-            ledPitch: ledPitch,
-            fontSize: isPhone ? 17 : 19,
-            color: const Color(0xFFA8A8A8),
-            maxLines: 1,
-          ),
-          SizedBox(height: ledPitch),
-          LedMatrixText(
-            text: _content.announcements[index]
-                .textFor(widget.localization.language.code),
-            maxWidth: maxWidth,
-            ledPitch: ledPitch,
-            fontSize: isPhone ? 22 : 25,
-            color: const Color(0xFFE2E2E2),
-          ),
-          if (index < _content.announcements.length - 1)
-            SizedBox(height: ledPitch * 6),
-        ],
+        SizedBox(width: 102, child: date),
+        const SizedBox(width: 24),
+        Expanded(child: text),
       ],
     );
   }
@@ -547,7 +711,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Widget _buildContact({
     required double maxWidth,
     required bool isPhone,
-    required double ledPitch,
+    required double textPitch,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,30 +720,51 @@ class _MatrixScreenState extends State<MatrixScreen> {
           widget.localization.t('contact_title'),
           maxWidth,
           isPhone,
-          ledPitch,
+          textPitch,
         ),
-        SizedBox(height: ledPitch * 2),
+        const SizedBox(height: 10),
         LedMatrixText(
           text: widget.localization.t('contact_location'),
           maxWidth: maxWidth,
-          ledPitch: ledPitch,
-          fontSize: isPhone ? 19 : 21,
-          color: const Color(0xFFB8B8B8),
+          ledPitch: textPitch,
+          fontSize: isPhone ? 16 : 18,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF999999),
+          maxLines: 2,
         ),
-        SizedBox(height: ledPitch * 6),
-        for (final contact in _contactLinks) ...[
-          LedMatrixText(
-            text:
-                '${widget.localization.t(contact.labelKey)}  /  ${contact.detail}',
-            maxWidth: maxWidth,
-            ledPitch: ledPitch,
-            fontSize: isPhone ? 21 : 24,
-            color: const Color(0xFFD8D8D8),
-            hoverColor: Colors.white,
-            onTap: () => _launchExternal(contact.url),
-          ),
-          SizedBox(height: ledPitch * 2),
-        ],
+        SizedBox(height: isPhone ? 28 : 34),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = isPhone ? 1 : 2;
+            final spacing = isPhone ? 0.0 : 34.0;
+            final itemWidth = columns == 1
+                ? constraints.maxWidth
+                : (constraints.maxWidth - spacing) / 2;
+
+            return Wrap(
+              spacing: spacing,
+              runSpacing: isPhone ? 16 : 20,
+              children: _contactLinks.map((contact) {
+                final text =
+                    '${widget.localization.t(contact.labelKey)}  /  ${contact.detail}';
+                return SizedBox(
+                  width: itemWidth,
+                  child: LedMatrixText(
+                    text: text,
+                    maxWidth: itemWidth,
+                    ledPitch: textPitch,
+                    fontSize: isPhone ? 19 : 20,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFD7D7D7),
+                    hoverColor: Colors.white,
+                    maxLines: 2,
+                    onTap: () => _launchExternal(contact.url),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
       ],
     );
   }
@@ -588,32 +773,39 @@ class _MatrixScreenState extends State<MatrixScreen> {
     String text,
     double maxWidth,
     bool isPhone,
-    double ledPitch,
+    double textPitch,
   ) {
     return LedMatrixText(
       text: text,
       maxWidth: maxWidth,
-      ledPitch: ledPitch,
-      fontSize: isPhone ? 34 : 42,
-      letterSpacing: 1.1,
+      ledPitch: textPitch,
+      fontSize: isPhone ? 30 : 38,
+      fontWeight: FontWeight.w900,
+      letterSpacing: 0.8,
       header: true,
+      color: Colors.white,
+      glow: true,
+      maxLines: 2,
     );
   }
 
-  Widget _buildFooter(double maxWidth, double ledPitch) {
+  Widget _buildFooter(double maxWidth, double textPitch) {
     return Align(
       alignment: Alignment.centerLeft,
       child: LedMatrixText(
         text: 'EVIL SPACE / NHA TRANG',
         maxWidth: maxWidth,
-        ledPitch: ledPitch,
-        fontSize: 16,
-        color: const Color(0xFF929292),
+        ledPitch: textPitch,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF6E6E6E),
         maxLines: 1,
       ),
     );
   }
 }
+
+double _maxDouble(double a, double b) => a > b ? a : b;
 
 class _ContactLink {
   const _ContactLink({
