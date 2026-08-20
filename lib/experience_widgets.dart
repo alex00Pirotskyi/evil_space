@@ -311,13 +311,25 @@ class _LedTextPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final substratePaint = Paint()
+      ..isAntiAlias = false
+      ..color = Colors.black;
+
     for (int row = 0; row < mask.rows; row++) {
       for (int column = 0; column < mask.columns; column++) {
         if (mask.cells[(row * mask.columns) + column] == 0) {
           continue;
         }
 
-        final rect = LedWallGeometry.ledRect(
+        final cellRect = Rect.fromLTWH(
+          column * mask.pitch,
+          row * mask.pitch,
+          mask.pitch,
+          mask.pitch,
+        );
+        canvas.drawRect(cellRect, substratePaint);
+
+        final ledRect = LedWallGeometry.ledRect(
           column: column,
           row: row,
           cellWidth: mask.pitch,
@@ -326,7 +338,7 @@ class _LedTextPainter extends CustomPainter {
 
         LedWallPainter.drawLed(
           canvas,
-          rect,
+          ledRect,
           color,
           glow: glow,
           glowSigma: mask.pitch * 0.65,
@@ -423,12 +435,27 @@ class _LedMatrixPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final substratePaint = Paint()
+      ..isAntiAlias = false
+      ..color = Colors.black;
+
     for (int row = 0; row < matrix.length; row++) {
       for (int column = 0; column < matrix[row].length; column++) {
         if (matrix[row][column] == 0) {
           continue;
         }
-        final rect = LedWallGeometry.ledRect(
+
+        canvas.drawRect(
+          Rect.fromLTWH(
+            column * pitch,
+            row * pitch,
+            pitch,
+            pitch,
+          ),
+          substratePaint,
+        );
+
+        final ledRect = LedWallGeometry.ledRect(
           column: column,
           row: row,
           cellWidth: pitch,
@@ -436,7 +463,7 @@ class _LedMatrixPainter extends CustomPainter {
         );
         LedWallPainter.drawLed(
           canvas,
-          rect,
+          ledRect,
           color,
           glow: glow,
           glowSigma: pitch * 0.65,
