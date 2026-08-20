@@ -1,9 +1,11 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
 import 'package:evil_space/coworking_model.dart';
+import 'package:evil_space/experience_widgets.dart';
+import 'package:evil_space/led_wall.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/pixel_image_slideshow.dart';
 
@@ -105,6 +107,62 @@ void main() {
       expect(content.status.total, greaterThan(0));
       expect(content.prices, isNotEmpty);
       expect(content.announcements, isNotEmpty);
+    });
+  });
+
+  group('RGB LED wall', () {
+    test('keeps a visible black gap around each LED package', () {
+      final rect = LedWallGeometry.ledRect(
+        column: 2,
+        row: 3,
+        cellWidth: 5,
+        cellHeight: 5,
+      );
+
+      expect(rect.left, greaterThan(10));
+      expect(rect.top, greaterThan(15));
+      expect(rect.width, lessThan(5));
+      expect(rect.height, lessThan(5));
+    });
+
+    testWidgets('turns Unicode text into an LED-cell glyph mask', (tester) async {
+      final english = await LedTextMaskBuilder.build(
+        text: 'EVIL SPACE',
+        maxWidth: 320,
+        fontSize: 32,
+        ledPitch: 4,
+        fontWeight: FontWeight.w800,
+        textAlign: TextAlign.left,
+        maxLines: 1,
+        letterSpacing: 1,
+        textDirection: TextDirection.ltr,
+      );
+      final russian = await LedTextMaskBuilder.build(
+        text: 'КОНТАКТЫ',
+        maxWidth: 320,
+        fontSize: 30,
+        ledPitch: 4,
+        fontWeight: FontWeight.w800,
+        textAlign: TextAlign.left,
+        maxLines: 1,
+        letterSpacing: 1,
+        textDirection: TextDirection.ltr,
+      );
+      final vietnamese = await LedTextMaskBuilder.build(
+        text: 'LIÊN HỆ',
+        maxWidth: 320,
+        fontSize: 30,
+        ledPitch: 4,
+        fontWeight: FontWeight.w800,
+        textAlign: TextAlign.left,
+        maxLines: 1,
+        letterSpacing: 1,
+        textDirection: TextDirection.ltr,
+      );
+
+      expect(english.activeCells, greaterThan(10));
+      expect(russian.activeCells, greaterThan(10));
+      expect(vietnamese.activeCells, greaterThan(10));
     });
   });
 
