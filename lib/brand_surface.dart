@@ -21,11 +21,19 @@ class BrandPaper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: CustomPaint(
-        painter: const BrandPaperPainter(),
-        child: child,
-      ),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: const BrandPaperPainter(),
+              ),
+            ),
+          ),
+        ),
+        child,
+      ],
     );
   }
 }
@@ -35,12 +43,9 @@ class BrandPaperPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) {
-      return;
-    }
+    if (size.isEmpty) return;
 
     final rect = Offset.zero & size;
-
     final basePaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topLeft,
@@ -57,7 +62,6 @@ class BrandPaperPainter extends CustomPainter {
 
     _paintBloom(
       canvas,
-      size,
       center: Offset(size.width * 0.84, size.height * 0.10),
       radius: size.width * 0.72,
       inner: const Color(0x2A4A372D),
@@ -65,7 +69,6 @@ class BrandPaperPainter extends CustomPainter {
     );
     _paintBloom(
       canvas,
-      size,
       center: Offset(size.width * 0.10, size.height * 0.42),
       radius: size.width * 0.90,
       inner: const Color(0x18241613),
@@ -73,7 +76,6 @@ class BrandPaperPainter extends CustomPainter {
     );
     _paintBloom(
       canvas,
-      size,
       center: Offset(size.width * 0.80, size.height * 0.72),
       radius: size.width * 0.88,
       inner: const Color(0x203F3028),
@@ -81,7 +83,6 @@ class BrandPaperPainter extends CustomPainter {
     );
     _paintBloom(
       canvas,
-      size,
       center: Offset(size.width * 0.22, size.height * 0.92),
       radius: size.width * 0.74,
       inner: const Color(0x18271915),
@@ -93,10 +94,7 @@ class BrandPaperPainter extends CustomPainter {
     for (var i = 0; i < bandCount; i++) {
       final y = (i * 430.0) + (_unit(i, 17) * 120.0);
       final height = 18.0 + (_unit(i, 29) * 28.0);
-      canvas.drawRect(
-        Rect.fromLTWH(0, y, size.width, height),
-        bandPaint,
-      );
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, height), bandPaint);
     }
 
     final fiberLight = Paint()
@@ -105,16 +103,14 @@ class BrandPaperPainter extends CustomPainter {
     final fiberDark = Paint()
       ..color = const Color(0x10160E0B)
       ..strokeWidth = 0.7;
-
     final fiberCount = (size.height / 54).ceil();
     for (var i = 0; i < fiberCount; i++) {
       final y = (i * 54.0) + (_unit(i, 41) * 19.0);
       final drift = (_unit(i, 73) - 0.5) * 10.0;
-      final paint = i.isEven ? fiberLight : fiberDark;
       canvas.drawLine(
         Offset(-22, y),
         Offset(size.width + 22, y + drift),
-        paint,
+        i.isEven ? fiberLight : fiberDark,
       );
     }
 
@@ -122,7 +118,6 @@ class BrandPaperPainter extends CustomPainter {
     final fleckDark = Paint()..color = const Color(0x14160E0B);
     final rows = (size.height / 76).ceil();
     final cols = (size.width / 88).ceil();
-
     for (var row = 0; row < rows; row++) {
       for (var col = 0; col < cols; col++) {
         final seed = (row * 131) + (col * 17);
@@ -132,7 +127,7 @@ class BrandPaperPainter extends CustomPainter {
         canvas.drawCircle(
           Offset(x, y),
           radius,
-          (seed % 3 == 0) ? fleckLight : fleckDark,
+          seed % 3 == 0 ? fleckLight : fleckDark,
         );
       }
     }
@@ -153,19 +148,21 @@ class BrandPaperPainter extends CustomPainter {
   }
 
   void _paintBloom(
-    Canvas canvas,
-    Size size, {
+    Canvas canvas, {
     required Offset center,
     required double radius,
     required Color inner,
     required Color outer,
   }) {
     final shaderRect = Rect.fromCircle(center: center, radius: radius);
-    final paint = Paint()
-      ..shader = RadialGradient(
-        colors: [inner, outer],
-      ).createShader(shaderRect);
-    canvas.drawCircle(center, radius, paint);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [inner, outer],
+        ).createShader(shaderRect),
+    );
   }
 
   double _unit(int value, int salt) {
