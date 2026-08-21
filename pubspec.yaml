@@ -1,8 +1,8 @@
 name: evil_space
-description: "Evil Space coworking electronic-paper web landing page for Nha Trang, Vietnam."
+description: "Evil Space Daily — a small electronic-paper coworking status page for Nha Trang."
 publish_to: 'none'
 
-version: 2.0.0+5
+version: 3.0.0+6
 
 environment:
   sdk: ^3.10.4
@@ -26,5 +26,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/slideshow/
     - assets/content/
