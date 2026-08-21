@@ -29,7 +29,6 @@ class _MatrixScreenState extends State<MatrixScreen>
   static const Color _paper = Color(0xFFF2F0E8);
   static const Color _ink = Color(0xFF171715);
   static const Color _midInk = Color(0xFF77736A);
-  static const Color _lightInk = Color(0xFFC8C4B9);
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _pricesKey = GlobalKey();
