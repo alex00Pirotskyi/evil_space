@@ -44,5 +44,8 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Browser dynamic e-paper master test
+        run: flutter test --platform chrome test/eink_web_master_test.dart
+
       - name: Build web
         run: flutter build web --release

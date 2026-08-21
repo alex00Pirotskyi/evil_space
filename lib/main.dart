@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:evil_space/app_router.dart';
+import 'package:evil_space/chunked_eink_asset_bundle.dart';
 import 'package:evil_space/eink_image.dart';
 import 'package:evil_space/localization.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
-  runApp(const EvilSpaceApp());
+  runApp(
+    DefaultAssetBundle(
+      bundle: ChunkedEInkAssetBundle(rootBundle),
+      child: const EvilSpaceApp(),
+    ),
+  );
 }
 
 class EvilSpaceApp extends StatefulWidget {
