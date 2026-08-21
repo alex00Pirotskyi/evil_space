@@ -51,7 +51,7 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
 
   @override
   Widget build(BuildContext context) {
-    return MatrixScreen(
+    return DailyScreen(
       currentRoute: _currentRoute,
       localization: localization,
       onNavigate: navigate,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:evil_space/app_router.dart';
+import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/localization.dart';
 
 void main() {
@@ -17,9 +18,6 @@ class EvilSpaceApp extends StatefulWidget {
 }
 
 class _EvilSpaceAppState extends State<EvilSpaceApp> {
-  static const Color _paper = Color(0xFFF2F0E8);
-  static const Color _ink = Color(0xFF171715);
-
   late final LocalizationController _localization;
   late final EvilSpaceRouterDelegate _routerDelegate;
 
@@ -44,19 +42,19 @@ class _EvilSpaceAppState extends State<EvilSpaceApp> {
       title: 'Evil Space Daily',
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: _paper,
-        colorScheme: const ColorScheme.light(
-          surface: _paper,
-          onSurface: _ink,
-          primary: _ink,
-          onPrimary: _paper,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: BrandPalette.brown,
+        colorScheme: const ColorScheme.dark(
+          surface: BrandPalette.brown,
+          onSurface: BrandPalette.cream,
+          primary: BrandPalette.cream,
+          onPrimary: BrandPalette.brown,
         ),
         splashFactory: NoSplash.splashFactory,
         textSelectionTheme: const TextSelectionThemeData(
-          cursorColor: _ink,
-          selectionColor: Color(0x5577736A),
-          selectionHandleColor: _ink,
+          cursorColor: BrandPalette.cream,
+          selectionColor: Color(0x6680685A),
+          selectionHandleColor: BrandPalette.cream,
         ),
       ),
       routerDelegate: _routerDelegate,
