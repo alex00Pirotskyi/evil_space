@@ -16,11 +16,13 @@ class SiteStatus {
   int get free => (total - occupied).clamp(0, total).toInt();
 
   factory SiteStatus.fromJson(Map<String, dynamic> json) {
-    final total = (json['total'] as num?)?.toInt() ?? 10;
-    final occupied = (json['occupied'] as num?)?.toInt() ?? 3;
+    final rawTotal = (json['total'] as num?)?.toInt() ?? 10;
+    final normalizedTotal = rawTotal.clamp(1, 999).toInt();
+    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 3;
+
     return SiteStatus(
-      total: total.clamp(1, 999).toInt(),
-      occupied: occupied.clamp(0, total).toInt(),
+      total: normalizedTotal,
+      occupied: rawOccupied.clamp(0, normalizedTotal).toInt(),
       updated: json['updated'] as String? ?? 'LOCAL',
     );
   }
@@ -110,8 +112,7 @@ class SiteContent {
           ? SiteStatus.fromJson(statusJson)
           : demo.status,
       prices: prices.isEmpty ? demo.prices : prices,
-      announcements:
-          announcements.isEmpty ? demo.announcements : announcements,
+      announcements: announcements.isEmpty ? demo.announcements : announcements,
     );
   }
 
@@ -150,7 +151,7 @@ class SiteContentRepository {
         return SiteContent.fromJson(decoded);
       }
     } catch (_) {
-      // Keep the landing page usable if local content is missing or malformed.
+      // The public page must remain usable if local status data is unavailable.
     }
     return SiteContent.demo;
   }

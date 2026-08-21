@@ -1,81 +1,38 @@
-# Evil Space
+# Evil Space Daily
 
-A web-first Flutter landing page for Evil Space coworking in Nha Trang.
+A deliberately small web-first Flutter site for Evil Space coworking in Nha Trang.
 
-The product is intentionally small. A visitor should be able to open the site on
-a phone and quickly answer five questions:
+The product behaves like a one-page electronic-paper bulletin, not a conventional coworking website. It should answer the useful questions immediately:
 
-1. What does Evil Space look like?
-2. How many tables are occupied today?
-3. What are the prices?
+1. How many desks are free?
+2. What matters about working here?
+3. What does it cost?
 4. What is new today?
-5. How do I contact Evil Space?
+5. How do I visit or contact Evil Space?
 
-## Experience
+## Product direction
 
-The public site is one vertically scrollable electronic-paper page. It is styled
-like a Kindle / printed monochrome publication rather than a conventional web
-app: warm paper, black ink, editorial typography, thin rules, and very little
-visual chrome.
+The visual identity is Kindle / printed e-paper: warm paper, black ink, serif editorial typography, monospace metadata, thin rules, and almost no chrome.
 
-The visible sections are:
+The page is intentionally still. There is one short e-ink refresh on initial load and when language changes; there are no carousels, looping animations, parallax effects, or runtime image processing.
 
-- hero + today's occupancy
-- live e-paper photo plate
-- prices
-- announcements
-- contact
+Real photos are kept out of the core website. Visitors can open Instagram to see the space and Google Maps for directions. Those platforms own the image hosting and gallery problem.
 
-Header links scroll to those sections. `/qr` opens the same page and scrolls to
-contact. Legacy URLs resolve to the main landing page.
+## Page structure
 
-## Live e-paper photos
+- publication header: `EVIL SPACE / DAILY`, date, issue number, language
+- live desk availability and day-pass CTA
+- four work essentials: big desks, good chairs, fast Wi-Fi, cold AC
+- price list
+- today's short bulletin
+- visit/contact links
+- `PAGE 1 OF 1` footer
 
-Put real Evil Space images directly in:
-
-```text
-assets/slideshow/
-```
-
-Supported images are discovered through Flutter's `AssetManifest`. There is no
-per-image Dart configuration.
-
-At runtime each image goes through the e-paper pipeline:
-
-1. decode close to the required display resolution;
-2. center cover-crop to the photo plate;
-3. convert RGB to perceptual luminance;
-4. calculate image histogram and stretch useful black/white range;
-5. apply a restrained contrast curve;
-6. apply local 3x3 unsharp contrast to preserve edges and furniture detail;
-7. quantize to four electronic-ink tones;
-8. diffuse quantization error with an Atkinson-style kernel;
-9. render the resulting monochrome frame on warm paper.
-
-The initial image is not faded in. It develops across the paper with a slightly
-irregular print/refresh frontier. Subsequent images refresh the same way with a
-small temporary ghosting band, closer to an e-reader refresh than a slideshow
-crossfade.
-
-Only the current and nearby frames are cached, so adding many photos does not
-require decoding the whole asset folder into memory at startup.
-
-Alphabetical file names control order:
-
-```text
-01_front.jpg
-02_workspace.jpg
-03_desks.jpg
-04_studio.jpg
-05_evening.jpg
-```
-
-If the photo directory is empty, a monochrome generated fallback is used instead
-of a broken image or colorful placeholder.
+`/qr` opens the same page and scrolls directly to the visit/contact section. Legacy URLs resolve to the main page.
 
 ## Content
 
-Daily content lives in:
+Normal daily maintenance lives in:
 
 ```text
 assets/content/status.json
@@ -83,23 +40,39 @@ assets/content/status.json
 
 It contains:
 
-- total tables
-- occupied tables
-- static prices
+- total desks
+- occupied desks
+- last update date
+- prices
 - multilingual announcements (EN/RU/VI)
 
-This keeps normal website maintenance out of the Dart layout code.
+The UI remains usable with safe fallback data if that file is missing or malformed.
 
 ## Localization
 
-The landing page supports:
+The public page supports:
 
 - English
 - Russian
 - Vietnamese
 
-Browser locale selects the initial language and the header exposes EN / RU / VI
-switches.
+Browser locale selects the initial language. EN / RU / VI controls remain visible in the publication header.
+
+## Repository shape
+
+The active application is intentionally compact:
+
+```text
+lib/
+  app_route.dart
+  app_router.dart
+  app_shell.dart
+  coworking_model.dart
+  localization.dart
+  main.dart
+```
+
+Historical pixel-wall, LED-wall, slideshow, image dithering, and image-processing experiments are not part of the production tree.
 
 ## Local development
 
@@ -120,7 +93,7 @@ Cloudflare serves `build/web` using `wrangler.toml`.
 
 ## CI
 
-`.github/workflows/web-ci.yml` requires:
+`.github/workflows/web-ci.yml` runs on `main` and `agent/**` branches and requires:
 
 - `flutter analyze`
 - `flutter test`
