@@ -43,7 +43,7 @@ class LocalizationController extends ChangeNotifier {
   static const Map<String, Map<String, String>> strings = {
     'en': {
       'brand_daily': 'EVIL SPACE / DAILY',
-      'hero_kicker': 'NHA TRANG / COWORKING',
+      'hero_kicker': 'NHA TRANG / COWORKING / OPEN DAILY 11:00–23:00',
       'desk_free': 'DESK FREE',
       'desks_free': 'DESKS FREE',
       'occupied': 'OCCUPIED',
@@ -92,7 +92,7 @@ class LocalizationController extends ChangeNotifier {
     },
     'ru': {
       'brand_daily': 'EVIL SPACE / DAILY',
-      'hero_kicker': 'НЯЧАНГ / КОВОРКИНГ',
+      'hero_kicker': 'НЯЧАНГ / КОВОРКИНГ / ЕЖЕДНЕВНО 11:00–23:00',
       'desk_free': 'СВОБОДНЫЙ СТОЛ',
       'desks_free': 'СВОБОДНЫХ СТОЛОВ',
       'occupied': 'ЗАНЯТО',
@@ -141,7 +141,7 @@ class LocalizationController extends ChangeNotifier {
     },
     'vi': {
       'brand_daily': 'EVIL SPACE / DAILY',
-      'hero_kicker': 'NHA TRANG / COWORKING',
+      'hero_kicker': 'NHA TRANG / COWORKING / MỞ CỬA HẰNG NGÀY 11:00–23:00',
       'desk_free': 'BÀN TRỐNG',
       'desks_free': 'BÀN TRỐNG',
       'occupied': 'ĐANG DÙNG',
