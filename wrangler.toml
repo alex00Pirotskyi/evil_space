@@ -1,5 +1,5 @@
 name = "evil-space"
-main = "worker/index.js"
+main = "worker/entry.js"
 compatibility_date = "2026-08-29"
 
 [assets]
