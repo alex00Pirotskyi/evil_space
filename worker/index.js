@@ -10,6 +10,8 @@ const DAY_PASS_VND = 250000;
 const MONTH_PASS_VND = 2500000;
 const MAX_NAME_LENGTH = 100;
 const MAX_PURCHASE_LENGTH = 180;
+const MAX_CONTACT_LENGTH = 160;
+const MAX_NOTES_LENGTH = 600;
 
 export default {
   async fetch(request, env) {
@@ -22,6 +24,13 @@ export default {
     try {
       if (request.method === 'GET' && url.pathname === '/api/health') {
         return json({ ok: true, service: 'evil-space' });
+      }
+      if (request.method === 'GET' && url.pathname === '/api/public/status') {
+        return handlePublicStatus(env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/public/book') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handlePublicBooking(request, env);
       }
       if (request.method === 'GET' && url.pathname === '/api/admin/session') {
         return handleSession(request, env);
@@ -66,6 +75,18 @@ export default {
         if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
         return handleActiveMonth(request, env);
       }
+      if (request.method === 'POST' && url.pathname === '/api/admin/booking/accept') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleAcceptBooking(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/admin/customers/update') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleUpdateCustomer(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/admin/customers/delete') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleDeleteCustomer(request, env);
+      }
       if (request.method === 'POST' && url.pathname === '/api/admin/purchases') {
         if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
         return handleAddPurchase(request, env);
@@ -85,6 +106,82 @@ export default {
     }
   },
 };
+
+async function handlePublicStatus(env) {
+  const now = nowSeconds();
+  const { start, end } = nhaTrangDayBounds(now);
+  const [state, occupied] = await Promise.all([
+    env.evil_space
+      .prepare('SELECT total_desks FROM site_state WHERE id = 1')
+      .first(),
+    env.evil_space
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM visits
+        WHERE created_at >= ? AND created_at < ?
+      `)
+      .bind(start, end)
+      .first(),
+  ]);
+
+  const total = Math.max(1, Number(state?.total_desks ?? 10));
+  const used = Math.min(total, Math.max(0, Number(occupied?.count ?? 0)));
+  return json({
+    ok: true,
+    status: {
+      total,
+      occupied: used,
+      free: Math.max(0, total - used),
+      updated: new Date().toISOString(),
+    },
+  });
+}
+
+async function handlePublicBooking(request, env) {
+  const body = await readJson(request);
+  if (!body) return jsonError('Invalid request.', 400);
+
+  const name = cleanText(body.name, MAX_NAME_LENGTH);
+  const contactType = body.contactType === 'phone' || body.contactType === 'telegram'
+    ? body.contactType
+    : '';
+  const contactValue = cleanText(body.contactValue, MAX_CONTACT_LENGTH);
+
+  if (!name) return jsonError('Name is required.', 400);
+  if (!contactType || contactValue.length < 3) {
+    return jsonError('Phone or Telegram is required.', 400);
+  }
+
+  const now = nowSeconds();
+  const duplicate = await env.evil_space
+    .prepare(`
+      SELECT id
+      FROM booking_requests
+      WHERE status = 'new'
+        AND contact_type = ?
+        AND lower(contact_value) = lower(?)
+        AND created_at >= ?
+      LIMIT 1
+    `)
+    .bind(contactType, contactValue, now - 15 * 60)
+    .first();
+
+  if (!duplicate) {
+    await env.evil_space
+      .prepare(`
+        INSERT INTO booking_requests
+          (name, contact_type, contact_value, status, created_at)
+        VALUES (?, ?, ?, 'new', ?)
+      `)
+      .bind(name, contactType, contactValue, now)
+      .run();
+  }
+
+  return json({
+    ok: true,
+    message: 'Desk request sent. Evil Space staff can now see it.',
+  }, duplicate ? 200 : 201);
+}
 
 async function handleSession(request, env) {
   const session = await authenticatedAdmin(request, env);
@@ -402,12 +499,14 @@ async function handleDayPass(request, env) {
   if (!name) return jsonError('Name is required.', 400);
 
   const now = nowSeconds();
+  const customer = await ensureCustomer(env, { name });
   await env.evil_space
     .prepare(`
-      INSERT INTO visits (name, kind, membership_id, amount, created_at, created_by_email)
-      VALUES (?, 'day', NULL, ?, ?, ?)
+      INSERT INTO visits
+        (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
+      VALUES (?, 'day', NULL, ?, ?, ?, ?)
     `)
-    .bind(name, DAY_PASS_VND, now, session.email)
+    .bind(name, DAY_PASS_VND, now, session.email, customer.id)
     .run();
 
   return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
@@ -421,13 +520,14 @@ async function handleNewMonth(request, env) {
   if (!name) return jsonError('Name is required.', 400);
 
   const now = nowSeconds();
+  const customer = await ensureCustomer(env, { name });
   const existing = await env.evil_space
     .prepare(`
       SELECT id FROM memberships
-      WHERE lower(name) = lower(?) AND expires_at > ?
+      WHERE customer_id = ? AND expires_at > ?
       LIMIT 1
     `)
-    .bind(name, now)
+    .bind(customer.id, now)
     .first();
   if (existing) {
     return jsonError('This customer already has an active month pass.', 409);
@@ -436,19 +536,20 @@ async function handleNewMonth(request, env) {
   const expiresAt = addCalendarMonth(now);
   const membership = await env.evil_space
     .prepare(`
-      INSERT INTO memberships (name, starts_at, expires_at, created_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO memberships (name, starts_at, expires_at, created_at, customer_id)
+      VALUES (?, ?, ?, ?, ?)
       RETURNING id
     `)
-    .bind(name, now, expiresAt, now)
+    .bind(name, now, expiresAt, now, customer.id)
     .first();
 
   await env.evil_space
     .prepare(`
-      INSERT INTO visits (name, kind, membership_id, amount, created_at, created_by_email)
-      VALUES (?, 'month', ?, ?, ?, ?)
+      INSERT INTO visits
+        (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
+      VALUES (?, 'month', ?, ?, ?, ?, ?)
     `)
-    .bind(name, membership.id, MONTH_PASS_VND, now, session.email)
+    .bind(name, membership.id, MONTH_PASS_VND, now, session.email, customer.id)
     .run();
 
   return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
@@ -464,7 +565,7 @@ async function handleActiveMonth(request, env) {
   const now = nowSeconds();
   const membership = await env.evil_space
     .prepare(`
-      SELECT id, name FROM memberships
+      SELECT id, name, customer_id FROM memberships
       WHERE id = ? AND expires_at > ?
     `)
     .bind(membershipId, now)
@@ -484,13 +585,132 @@ async function handleActiveMonth(request, env) {
 
   await env.evil_space
     .prepare(`
-      INSERT INTO visits (name, kind, membership_id, amount, created_at, created_by_email)
-      VALUES (?, 'month', ?, 0, ?, ?)
+      INSERT INTO visits
+        (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
+      VALUES (?, 'month', ?, 0, ?, ?, ?)
     `)
-    .bind(membership.name, membership.id, now, session.email)
+    .bind(membership.name, membership.id, now, session.email, membership.customer_id)
     .run();
 
   return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
+}
+
+async function handleAcceptBooking(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  const bookingId = toPositiveInt(body?.id);
+  if (!bookingId) return jsonError('Booking request is required.', 400);
+
+  const booking = await env.evil_space
+    .prepare(`
+      SELECT id, name, contact_type, contact_value
+      FROM booking_requests
+      WHERE id = ? AND status = 'new'
+    `)
+    .bind(bookingId)
+    .first();
+  if (!booking) return jsonError('Booking request was already handled.', 409);
+
+  const customerData = {
+    name: booking.name,
+    phone: booking.contact_type === 'phone' ? booking.contact_value : '',
+    telegram: booking.contact_type === 'telegram' ? booking.contact_value : '',
+  };
+  const customer = await ensureCustomer(env, customerData);
+  const now = nowSeconds();
+  const { start, end } = nhaTrangDayBounds(now);
+  const already = await env.evil_space
+    .prepare(`
+      SELECT id FROM visits
+      WHERE customer_id = ? AND created_at >= ? AND created_at < ?
+      LIMIT 1
+    `)
+    .bind(customer.id, start, end)
+    .first();
+
+  if (!already) {
+    await env.evil_space
+      .prepare(`
+        INSERT INTO visits
+          (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
+        VALUES (?, 'day', NULL, ?, ?, ?, ?)
+      `)
+      .bind(booking.name, DAY_PASS_VND, now, session.email, customer.id)
+      .run();
+  }
+
+  await env.evil_space
+    .prepare(`
+      UPDATE booking_requests
+      SET status = 'accepted', handled_at = ?, handled_by_email = ?, customer_id = ?
+      WHERE id = ? AND status = 'new'
+    `)
+    .bind(now, session.email, customer.id, booking.id)
+    .run();
+
+  return json({ ok: true, snapshot: await operationsSnapshot(env) });
+}
+
+async function handleUpdateCustomer(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  if (!body) return jsonError('Invalid request.', 400);
+
+  const id = toPositiveInt(body.id);
+  const name = cleanText(body.name, MAX_NAME_LENGTH);
+  const phone = cleanOptionalText(body.phone, MAX_CONTACT_LENGTH);
+  const email = cleanOptionalText(body.email, MAX_CONTACT_LENGTH);
+  const telegram = cleanOptionalText(body.telegram, MAX_CONTACT_LENGTH);
+  const contactOther = cleanOptionalText(body.contactOther, MAX_CONTACT_LENGTH);
+  const notes = cleanOptionalText(body.notes, MAX_NOTES_LENGTH);
+
+  if (!id || !name) return jsonError('Customer and name are required.', 400);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return jsonError('Email address is invalid.', 400);
+  }
+
+  const result = await env.evil_space
+    .prepare(`
+      UPDATE customers
+      SET name = ?, phone = ?, email = ?, telegram = ?, contact_other = ?,
+          notes = ?, updated_at = ?
+      WHERE id = ?
+    `)
+    .bind(name, phone, email, telegram, contactOther, notes, nowSeconds(), id)
+    .run();
+  if (!result.meta?.changes) return jsonError('Customer not found.', 404);
+
+  await env.evil_space.batch([
+    env.evil_space.prepare('UPDATE memberships SET name = ? WHERE customer_id = ?').bind(name, id),
+    env.evil_space.prepare('UPDATE visits SET name = ? WHERE customer_id = ?').bind(name, id),
+  ]);
+
+  return json({ ok: true, snapshot: await operationsSnapshot(env) });
+}
+
+async function handleDeleteCustomer(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  const id = toPositiveInt(body?.id);
+  if (!id) return jsonError('Customer is required.', 400);
+
+  const customer = await env.evil_space
+    .prepare('SELECT id FROM customers WHERE id = ?')
+    .bind(id)
+    .first();
+  if (!customer) return jsonError('Customer not found.', 404);
+
+  await env.evil_space.batch([
+    env.evil_space.prepare('UPDATE visits SET customer_id = NULL WHERE customer_id = ?').bind(id),
+    env.evil_space.prepare('DELETE FROM memberships WHERE customer_id = ?').bind(id),
+    env.evil_space.prepare('DELETE FROM booking_requests WHERE customer_id = ?').bind(id),
+    env.evil_space.prepare('DELETE FROM customers WHERE id = ?').bind(id),
+  ]);
+
+  return json({ ok: true, snapshot: await operationsSnapshot(env) });
 }
 
 async function handleAddPurchase(request, env) {
@@ -531,16 +751,79 @@ async function handlePurchaseBought(request, env) {
   return json({ ok: true, snapshot: await operationsSnapshot(env) });
 }
 
+async function ensureCustomer(env, data) {
+  const name = cleanText(data.name, MAX_NAME_LENGTH);
+  if (!name) throw new Error('Customer name is required.');
+
+  const phone = cleanOptionalText(data.phone, MAX_CONTACT_LENGTH);
+  const telegram = cleanOptionalText(data.telegram, MAX_CONTACT_LENGTH);
+  let customer = null;
+
+  if (phone) {
+    customer = await env.evil_space
+      .prepare('SELECT id FROM customers WHERE lower(phone) = lower(?) LIMIT 1')
+      .bind(phone)
+      .first();
+  }
+  if (!customer && telegram) {
+    customer = await env.evil_space
+      .prepare('SELECT id FROM customers WHERE lower(telegram) = lower(?) LIMIT 1')
+      .bind(telegram)
+      .first();
+  }
+  if (!customer) {
+    customer = await env.evil_space
+      .prepare('SELECT id FROM customers WHERE lower(name) = lower(?) ORDER BY id LIMIT 1')
+      .bind(name)
+      .first();
+  }
+
+  const now = nowSeconds();
+  if (customer) {
+    await env.evil_space
+      .prepare(`
+        UPDATE customers
+        SET name = ?,
+            phone = CASE WHEN ? <> '' THEN ? ELSE phone END,
+            telegram = CASE WHEN ? <> '' THEN ? ELSE telegram END,
+            updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(name, phone, phone, telegram, telegram, now, customer.id)
+      .run();
+    return { id: Number(customer.id), name };
+  }
+
+  const created = await env.evil_space
+    .prepare(`
+      INSERT INTO customers
+        (name, phone, email, telegram, contact_other, notes, created_at, updated_at)
+      VALUES (?, ?, '', ?, '', '', ?, ?)
+      RETURNING id
+    `)
+    .bind(name, phone, telegram, now, now)
+    .first();
+  return { id: Number(created.id), name };
+}
+
 async function operationsSnapshot(env) {
   const now = nowSeconds();
   const { start, end } = nhaTrangDayBounds(now);
   const sevenDaysStart = start - 6 * 86400;
   const thirtyDaysStart = start - 29 * 86400;
 
-  const [todayVisits, activeMemberships, toBuy, history, income] = await Promise.all([
+  const [
+    todayVisits,
+    activeMemberships,
+    bookingRequests,
+    customers,
+    toBuy,
+    history,
+    income,
+  ] = await Promise.all([
     env.evil_space
       .prepare(`
-        SELECT id, name, kind, amount, created_at
+        SELECT id, name, kind, amount, created_at, customer_id
         FROM visits
         WHERE created_at >= ? AND created_at < ?
         ORDER BY created_at DESC, id DESC
@@ -549,10 +832,36 @@ async function operationsSnapshot(env) {
       .all(),
     env.evil_space
       .prepare(`
-        SELECT id, name, starts_at, expires_at
+        SELECT id, name, starts_at, expires_at, customer_id
         FROM memberships
         WHERE expires_at > ?
         ORDER BY expires_at ASC, name COLLATE NOCASE ASC
+      `)
+      .bind(now)
+      .all(),
+    env.evil_space
+      .prepare(`
+        SELECT id, name, contact_type, contact_value, status, created_at
+        FROM booking_requests
+        WHERE status = 'new'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 100
+      `)
+      .all(),
+    env.evil_space
+      .prepare(`
+        SELECT
+          c.id, c.name, COALESCE(c.phone, '') AS phone,
+          COALESCE(c.email, '') AS email,
+          COALESCE(c.telegram, '') AS telegram,
+          COALESCE(c.contact_other, '') AS contact_other,
+          COALESCE(c.notes, '') AS notes,
+          c.created_at,
+          MAX(CASE WHEN m.expires_at > ? THEN m.expires_at ELSE NULL END) AS active_until
+        FROM customers c
+        LEFT JOIN memberships m ON m.customer_id = c.id
+        GROUP BY c.id
+        ORDER BY c.name COLLATE NOCASE ASC, c.id ASC
       `)
       .bind(now)
       .all(),
@@ -589,6 +898,8 @@ async function operationsSnapshot(env) {
   return {
     today_visits: todayVisits.results ?? [],
     active_memberships: activeMemberships.results ?? [],
+    booking_requests: bookingRequests.results ?? [],
+    customers: customers.results ?? [],
     to_buy: toBuy.results ?? [],
     purchase_history: history.results ?? [],
     income: {
@@ -636,6 +947,11 @@ function cleanText(value, maxLength) {
   const text = value.trim().replace(/\s+/g, ' ');
   if (!text || text.length > maxLength) return '';
   return text;
+}
+
+function cleanOptionalText(value, maxLength) {
+  if (value === null || value === undefined || value === '') return '';
+  return cleanText(value, maxLength);
 }
 
 function toPositiveInt(value) {
