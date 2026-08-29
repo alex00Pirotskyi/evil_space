@@ -5,9 +5,9 @@ import 'package:evil_space/localization.dart';
 
 class PersistentLocalizationController extends LocalizationController {
   PersistentLocalizationController._(
-    AppLanguage language,
+    super.language,
     this._hasSavedLanguage,
-  ) : super(language);
+  );
 
   factory PersistentLocalizationController.fromPlatform() {
     final saved = readSavedLanguage();
