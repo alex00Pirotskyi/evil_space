@@ -14,9 +14,11 @@ void main() {
 
     expect(find.text('STAFF ACCESS'), findsOneWidget);
     expect(find.text('SIGN IN'), findsOneWidget);
-    expect(find.text('NEW ADMIN? REQUEST ACCESS'), findsOneWidget);
 
-    await tester.tap(find.text('NEW ADMIN? REQUEST ACCESS'));
+    final requestAccess = find.text('NEW ADMIN? REQUEST ACCESS');
+    expect(requestAccess, findsOneWidget);
+    await tester.ensureVisible(requestAccess);
+    await tester.tap(requestAccess);
     await tester.pump();
 
     expect(find.text('Request admin access.'), findsOneWidget);
