@@ -33,6 +33,7 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   final _purchaseController = TextEditingController();
+  final _customerSearchController = TextEditingController();
   Timer? _refreshTimer;
   OperationsSnapshot? _snapshot;
   int _section = 0;
@@ -41,6 +42,7 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _russian = true;
   bool _busy = false;
   bool _loading = true;
+  String _customerQuery = '';
   String? _error;
 
   @override
@@ -57,6 +59,7 @@ class _AdminScreenState extends State<AdminScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     _purchaseController.dispose();
+    _customerSearchController.dispose();
     super.dispose();
   }
 
@@ -131,10 +134,7 @@ class _AdminScreenState extends State<AdminScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = t(
-          'Сервер отвечает слишком долго.',
-          'The server is taking too long.',
-        );
+        _error = t('Сервер отвечает слишком долго.', 'The server is taking too long.');
       });
     } on AdminApiException catch (error) {
       if (!mounted) return;
@@ -178,9 +178,7 @@ class _AdminScreenState extends State<AdminScreen> {
     if (!mounted || passType == null) return;
 
     if (passType == 'day') {
-      final name = await _askName(
-        t('Дневной пропуск', 'Day pass'),
-      );
+      final name = await _askName(t('Дневной пропуск', 'Day pass'));
       if (name == null) return;
       await _apply(
         () => widget.api.addDayPass(name),
@@ -233,11 +231,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
     if (memberships.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            t('Нет активных абонементов.', 'No active memberships.'),
-          ),
-        ),
+        SnackBar(content: Text(t('Нет активных абонементов.', 'No active memberships.'))),
       );
       return;
     }
@@ -297,6 +291,69 @@ class _AdminScreenState extends State<AdminScreen> {
     );
     controller.dispose();
     return result;
+  }
+
+  Future<void> _acceptBooking(BookingRequestRecord booking) async {
+    await _apply(
+      () => widget.api.acceptBooking(booking.id),
+      success: t('Клиент добавлен на сегодня', 'Customer added for today'),
+    );
+  }
+
+  Future<void> _editCustomer(CustomerRecord customer) async {
+    final result = await showDialog<_CustomerEditResult>(
+      context: context,
+      builder: (_) => _CustomerEditorDialog(
+        russian: _russian,
+        customer: customer,
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    if (result.delete) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: BrandPalette.paper,
+          shape: const RoundedRectangleBorder(),
+          title: Text(t('Удалить клиента?', 'Delete customer?'), style: _serif(26)),
+          content: Text(customer.name, style: _serif(18)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(t('ОТМЕНА', 'CANCEL'), style: _mono(10)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: _darkButton(),
+              child: Text(
+                t('УДАЛИТЬ', 'DELETE'),
+                style: _mono(10, color: BrandPalette.paperLift),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      await _apply(
+        () => widget.api.deleteCustomer(customer.id),
+        success: t('Клиент удалён', 'Customer deleted'),
+      );
+      return;
+    }
+
+    await _apply(
+      () => widget.api.updateCustomerFields(
+        id: customer.id,
+        name: result.name,
+        phone: result.phone,
+        email: result.email,
+        telegram: result.telegram,
+        contactOther: result.contactOther,
+        notes: result.notes,
+      ),
+      success: t('Клиент сохранён', 'Customer saved'),
+    );
   }
 
   Future<void> _addPurchase() async {
@@ -369,15 +426,18 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _navigation(OperationsSnapshot? snapshot) {
+    final requestCount = snapshot?.bookingRequests.length ?? 0;
     final labels = [
-      t('СЕГОДНЯ', 'TODAY'),
+      '${t('СЕГОДНЯ', 'TODAY')}${requestCount == 0 ? '' : ' $requestCount'}',
       t('МЕСЯЦ', 'MONTH'),
+      t('КЛИЕНТЫ', 'CUSTOMERS'),
       t('ДОХОД', 'INCOME'),
       '${t('КУПИТЬ', 'BUY')}${snapshot == null || snapshot.toBuy.isEmpty ? '' : ' ${snapshot.toBuy.length}'}',
     ];
     final icons = const [
       Icons.today_outlined,
       Icons.calendar_month_outlined,
+      Icons.people_outline,
       Icons.payments_outlined,
       Icons.shopping_cart_outlined,
     ];
@@ -490,7 +550,8 @@ class _AdminScreenState extends State<AdminScreen> {
     return switch (_section) {
       0 => _today(snapshot),
       1 => _month(snapshot),
-      2 => _income(snapshot),
+      2 => _customers(snapshot),
+      3 => _income(snapshot),
       _ => _buy(snapshot),
     };
   }
@@ -516,19 +577,15 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _today(OperationsSnapshot snapshot) {
     return _page([
       _metricRow([
-        _MetricCard(
-          t('ЛЮДЕЙ СЕГОДНЯ', 'PEOPLE TODAY'),
-          '${snapshot.todayVisits.length}',
-        ),
-        _MetricCard(
-          t('ДОХОД СЕГОДНЯ', 'TODAY INCOME'),
-          _money(snapshot.income.today),
-        ),
-        _MetricCard(
-          t('АКТИВНЫХ МЕСЯЦЕВ', 'ACTIVE MONTHS'),
-          '${snapshot.activeMemberships.length}',
-        ),
+        _MetricCard(t('ЛЮДЕЙ СЕГОДНЯ', 'PEOPLE TODAY'), '${snapshot.todayVisits.length}'),
+        _MetricCard(t('ДОХОД СЕГОДНЯ', 'TODAY INCOME'), _money(snapshot.income.today)),
+        _MetricCard(t('АКТИВНЫХ МЕСЯЦЕВ', 'ACTIVE MONTHS'), '${snapshot.activeMemberships.length}'),
       ]),
+      if (snapshot.bookingRequests.isNotEmpty) ...[
+        const SizedBox(height: 28),
+        _sectionTitle('${t('ЗАПРОСЫ С САЙТА', 'WEBSITE REQUESTS')} · ${snapshot.bookingRequests.length}'),
+        ...snapshot.bookingRequests.map(_bookingRow),
+      ],
       const SizedBox(height: 28),
       _sectionTitle(t('СЕГОДНЯ', 'TODAY')),
       if (snapshot.todayVisits.isEmpty)
@@ -538,25 +595,50 @@ class _AdminScreenState extends State<AdminScreen> {
           (visit) => _row(
             visit.name,
             '${_time(visit.createdAt)}  ·  ${visit.kind == 'day' ? t('ДЕНЬ', 'DAY') : t('МЕСЯЦ', 'MONTH')}',
-            visit.amount == 0
-                ? t('АКТИВЕН', 'ACTIVE')
-                : _money(visit.amount),
+            visit.amount == 0 ? t('АКТИВЕН', 'ACTIVE') : _money(visit.amount),
           ),
         ),
     ]);
   }
 
+  Widget _bookingRow(BookingRequestRecord booking) {
+    final type = booking.contactType == 'telegram' ? 'TG' : t('ТЕЛ', 'PHONE');
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(booking.name, style: _serif(19)),
+                const SizedBox(height: 5),
+                Text('$type · ${booking.contactValue} · ${_time(booking.createdAt)}', style: _mono(9.5, color: BrandPalette.inkMuted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: _busy ? null : () => _acceptBooking(booking),
+            style: _darkButton(minHeight: 42),
+            child: Text(
+              t('ПРИНЯТЬ', 'ACCEPT'),
+              style: _mono(9.5, color: BrandPalette.paperLift),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _month(OperationsSnapshot snapshot) {
     return _page([
       _metricRow([
-        _MetricCard(
-          t('АКТИВНЫЕ', 'ACTIVE'),
-          '${snapshot.activeMemberships.length}',
-        ),
-        _MetricCard(
-          t('30 ДНЕЙ ДОХОД', '30D INCOME'),
-          _money(snapshot.income.thirtyDays),
-        ),
+        _MetricCard(t('АКТИВНЫЕ', 'ACTIVE'), '${snapshot.activeMemberships.length}'),
+        _MetricCard(t('30 ДНЕЙ ДОХОД', '30D INCOME'), _money(snapshot.income.thirtyDays)),
       ]),
       const SizedBox(height: 28),
       _sectionTitle(t('АКТИВНЫЕ АБОНЕМЕНТЫ', 'ACTIVE MEMBERSHIPS')),
@@ -571,6 +653,83 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ),
     ]);
+  }
+
+  Widget _customers(OperationsSnapshot snapshot) {
+    final query = _customerQuery.trim().toLowerCase();
+    final customers = snapshot.customers.where((customer) {
+      if (query.isEmpty) return true;
+      return [
+        customer.name,
+        customer.phone,
+        customer.email,
+        customer.telegram,
+        customer.contactOther,
+        customer.notes,
+      ].any((value) => value.toLowerCase().contains(query));
+    }).toList(growable: false);
+
+    return _page([
+      TextField(
+        controller: _customerSearchController,
+        decoration: _inputDecoration(t('ПОИСК КЛИЕНТА', 'SEARCH CUSTOMER')),
+        onChanged: (value) => setState(() => _customerQuery = value),
+      ),
+      const SizedBox(height: 20),
+      _sectionTitle('${t('КЛИЕНТЫ', 'CUSTOMERS')} · ${snapshot.customers.length}'),
+      if (customers.isEmpty)
+        _empty(t('Клиентов пока нет.', 'No customers yet.'))
+      else
+        ...customers.map(_customerRow),
+    ]);
+  }
+
+  Widget _customerRow(CustomerRecord customer) {
+    final contacts = <String>[
+      if (customer.phone.isNotEmpty) customer.phone,
+      if (customer.telegram.isNotEmpty) 'TG ${customer.telegram}',
+      if (customer.email.isNotEmpty) customer.email,
+      if (customer.contactOther.isNotEmpty) customer.contactOther,
+    ];
+    final meta = contacts.isEmpty
+        ? t('КОНТАКТ НЕ ДОБАВЛЕН', 'NO CONTACT')
+        : contacts.join(' · ');
+    final trailing = customer.hasActiveMembership
+        ? '${t('ДО', 'UNTIL')} ${_date(customer.activeUntil!)}'
+        : t('ИЗМЕНИТЬ', 'EDIT');
+
+    return InkWell(
+      onTap: () => _editCustomer(customer),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 72),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(customer.name, style: _serif(18)),
+                  const SizedBox(height: 5),
+                  Text(meta, style: _mono(9, color: BrandPalette.inkMuted)),
+                  if (customer.notes.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(customer.notes, maxLines: 2, overflow: TextOverflow.ellipsis, style: _serif(14, color: BrandPalette.inkMuted)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(trailing, style: _mono(9.5)),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _income(OperationsSnapshot snapshot) {
@@ -600,9 +759,7 @@ class _AdminScreenState extends State<AdminScreen> {
             selectedColor: BrandPalette.ink,
             backgroundColor: BrandPalette.paper,
             labelStyle: TextStyle(
-              color: _incomePeriod == index
-                  ? BrandPalette.paperLift
-                  : BrandPalette.ink,
+              color: _incomePeriod == index ? BrandPalette.paperLift : BrandPalette.ink,
             ),
             shape: const RoundedRectangleBorder(
               side: BorderSide(color: BrandPalette.ink),
@@ -612,10 +769,7 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
       ),
       const SizedBox(height: 28),
-      Text(
-        _money(values[_incomePeriod]),
-        style: _serif(54),
-      ),
+      Text(_money(values[_incomePeriod]), style: _serif(54)),
       const SizedBox(height: 8),
       Text(labels[_incomePeriod], style: _mono(11)),
       const SizedBox(height: 30),
@@ -653,21 +807,9 @@ class _AdminScreenState extends State<AdminScreen> {
       const SizedBox(height: 18),
       Row(
         children: [
-          Expanded(
-            child: _tabButton(
-              t('НУЖНО КУПИТЬ', 'TO BUY'),
-              _purchaseTab == 0,
-              () => setState(() => _purchaseTab = 0),
-            ),
-          ),
+          Expanded(child: _tabButton(t('НУЖНО КУПИТЬ', 'TO BUY'), _purchaseTab == 0, () => setState(() => _purchaseTab = 0))),
           const SizedBox(width: 8),
-          Expanded(
-            child: _tabButton(
-              t('ИСТОРИЯ', 'HISTORY'),
-              _purchaseTab == 1,
-              () => setState(() => _purchaseTab = 1),
-            ),
-          ),
+          Expanded(child: _tabButton(t('ИСТОРИЯ', 'HISTORY'), _purchaseTab == 1, () => setState(() => _purchaseTab = 1))),
         ],
       ),
       const SizedBox(height: 20),
@@ -678,9 +820,7 @@ class _AdminScreenState extends State<AdminScreen> {
               : t('История пуста.', 'History is empty.'),
         )
       else
-        ...list.map(
-          (purchase) => _purchaseRow(purchase),
-        ),
+        ...list.map(_purchaseRow),
     ]);
   }
 
@@ -698,10 +838,7 @@ class _AdminScreenState extends State<AdminScreen> {
               children: [
                 Text(purchase.title, style: _serif(19)),
                 const SizedBox(height: 5),
-                Text(
-                  _dateTime(purchase.boughtAt ?? purchase.createdAt),
-                  style: _mono(9, color: BrandPalette.inkMuted),
-                ),
+                Text(_dateTime(purchase.boughtAt ?? purchase.createdAt), style: _mono(9, color: BrandPalette.inkMuted)),
               ],
             ),
           ),
@@ -714,10 +851,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         success: t('Перенесено в историю', 'Moved to history'),
                       ),
               style: _darkButton(minHeight: 42),
-              child: Text(
-                t('КУПЛЕНО', 'BOUGHT'),
-                style: _mono(9.5, color: BrandPalette.paperLift),
-              ),
+              child: Text(t('КУПЛЕНО', 'BOUGHT'), style: _mono(9.5, color: BrandPalette.paperLift)),
             )
           else
             Text(t('КУПЛЕНО', 'BOUGHT'), style: _mono(9.5)),
@@ -732,8 +866,7 @@ class _AdminScreenState extends State<AdminScreen> {
         final count = constraints.maxWidth >= 700 ? cards.length : 1;
         final width = count == 1
             ? constraints.maxWidth
-            : (constraints.maxWidth - (10 * (cards.length - 1))) /
-                  cards.length;
+            : (constraints.maxWidth - (10 * (cards.length - 1))) / cards.length;
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -743,9 +876,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   width: width,
                   child: Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: BrandPalette.ink),
-                    ),
+                    decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -776,11 +907,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _empty(String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 30),
-      child: Text(
-        value,
-        textAlign: TextAlign.center,
-        style: _serif(18, color: BrandPalette.inkMuted),
-      ),
+      child: Text(value, textAlign: TextAlign.center, style: _serif(18, color: BrandPalette.inkMuted)),
     );
   }
 
@@ -917,10 +1044,7 @@ class _ChoiceDialog extends StatelessWidget {
                         children: [
                           Text(choice.title, style: _mono(11)),
                           const SizedBox(height: 4),
-                          Text(
-                            choice.subtitle,
-                            style: _serif(15, color: BrandPalette.inkMuted),
-                          ),
+                          Text(choice.subtitle, style: _serif(15, color: BrandPalette.inkMuted)),
                         ],
                       ),
                     ),
@@ -942,10 +1066,7 @@ class _ChoiceDialog extends StatelessWidget {
 }
 
 class _MembershipDialog extends StatefulWidget {
-  const _MembershipDialog({
-    required this.russian,
-    required this.memberships,
-  });
+  const _MembershipDialog({required this.russian, required this.memberships});
 
   final bool russian;
   final List<MembershipRecord> memberships;
@@ -969,11 +1090,7 @@ class _MembershipDialogState extends State<_MembershipDialog> {
   @override
   Widget build(BuildContext context) {
     final filtered = widget.memberships
-        .where(
-          (membership) => membership.name.toLowerCase().contains(
-                _query.trim().toLowerCase(),
-              ),
-        )
+        .where((membership) => membership.name.toLowerCase().contains(_query.trim().toLowerCase()))
         .toList(growable: false);
 
     return AlertDialog(
@@ -994,12 +1111,7 @@ class _MembershipDialogState extends State<_MembershipDialog> {
             const SizedBox(height: 12),
             Expanded(
               child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        t('Ничего не найдено.', 'Nothing found.'),
-                        style: _serif(17, color: BrandPalette.inkMuted),
-                      ),
-                    )
+                  ? Center(child: Text(t('Ничего не найдено.', 'Nothing found.'), style: _serif(17, color: BrandPalette.inkMuted)))
                   : ListView.separated(
                       itemCount: filtered.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -1017,6 +1129,145 @@ class _MembershipDialogState extends State<_MembershipDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CustomerEditResult {
+  const _CustomerEditResult({
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.telegram,
+    required this.contactOther,
+    required this.notes,
+    this.delete = false,
+  });
+
+  final String name;
+  final String phone;
+  final String email;
+  final String telegram;
+  final String contactOther;
+  final String notes;
+  final bool delete;
+}
+
+class _CustomerEditorDialog extends StatefulWidget {
+  const _CustomerEditorDialog({required this.russian, required this.customer});
+
+  final bool russian;
+  final CustomerRecord customer;
+
+  @override
+  State<_CustomerEditorDialog> createState() => _CustomerEditorDialogState();
+}
+
+class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _phone;
+  late final TextEditingController _email;
+  late final TextEditingController _telegram;
+  late final TextEditingController _other;
+  late final TextEditingController _notes;
+
+  String t(String ru, String en) => widget.russian ? ru : en;
+
+  @override
+  void initState() {
+    super.initState();
+    final customer = widget.customer;
+    _name = TextEditingController(text: customer.name);
+    _phone = TextEditingController(text: customer.phone);
+    _email = TextEditingController(text: customer.email);
+    _telegram = TextEditingController(text: customer.telegram);
+    _other = TextEditingController(text: customer.contactOther);
+    _notes = TextEditingController(text: customer.notes);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _telegram.dispose();
+    _other.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    Navigator.of(context).pop(
+      _CustomerEditResult(
+        name: name,
+        phone: _phone.text.trim(),
+        email: _email.text.trim(),
+        telegram: _telegram.text.trim(),
+        contactOther: _other.text.trim(),
+        notes: _notes.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      title: Text(t('Клиент', 'Customer'), style: _serif(28)),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(controller: _name, decoration: _inputDecoration(t('ИМЯ', 'NAME'))),
+              const SizedBox(height: 10),
+              TextField(controller: _phone, decoration: _inputDecoration(t('ТЕЛЕФОН', 'PHONE'))),
+              const SizedBox(height: 10),
+              TextField(controller: _telegram, decoration: _inputDecoration('TELEGRAM')),
+              const SizedBox(height: 10),
+              TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: _inputDecoration('EMAIL')),
+              const SizedBox(height: 10),
+              TextField(controller: _other, decoration: _inputDecoration(t('ДРУГОЙ КОНТАКТ', 'OTHER CONTACT'))),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _notes,
+                minLines: 3,
+                maxLines: 6,
+                decoration: _inputDecoration(t('ЗАМЕТКИ', 'NOTES')),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(
+            _CustomerEditResult(
+              name: widget.customer.name,
+              phone: widget.customer.phone,
+              email: widget.customer.email,
+              telegram: widget.customer.telegram,
+              contactOther: widget.customer.contactOther,
+              notes: widget.customer.notes,
+              delete: true,
+            ),
+          ),
+          child: Text(t('УДАЛИТЬ', 'DELETE'), style: _mono(9.5)),
+        ),
+        const Spacer(),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t('ОТМЕНА', 'CANCEL'), style: _mono(9.5)),
+        ),
+        FilledButton(
+          onPressed: _save,
+          style: _darkButton(),
+          child: Text(t('СОХРАНИТЬ', 'SAVE'), style: _mono(9.5, color: BrandPalette.paperLift)),
+        ),
+      ],
     );
   }
 }
