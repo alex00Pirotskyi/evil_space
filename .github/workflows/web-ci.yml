@@ -42,7 +42,9 @@ jobs:
         run: git diff --exit-code -- pubspec.lock
 
       - name: Check Worker syntax
-        run: node --check worker/index.js
+        run: |
+          node --check worker/index.js
+          node --check worker/entry.js
 
       - name: Analyze
         run: flutter analyze
