@@ -1257,7 +1257,7 @@ class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
           ),
           child: Text(t('УДАЛИТЬ', 'DELETE'), style: _mono(9.5)),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(t('ОТМЕНА', 'CANCEL'), style: _mono(9.5)),
