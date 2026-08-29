@@ -64,6 +64,55 @@ class AdminApi {
     return DeleteAdminResult.fromJson(data);
   }
 
+  Future<OperationsSnapshot> operations() async {
+    final data = await _request('GET', '/api/admin/operations');
+    return OperationsSnapshot.fromJson(_snapshotMap(data));
+  }
+
+  Future<OperationsSnapshot> addDayPass(String name) async {
+    return _operation('POST', '/api/admin/day-pass', {'name': name});
+  }
+
+  Future<OperationsSnapshot> addMonthPass(String name) async {
+    return _operation('POST', '/api/admin/month-new', {'name': name});
+  }
+
+  Future<OperationsSnapshot> checkInMembership(int membershipId) async {
+    return _operation(
+      'POST',
+      '/api/admin/month-active',
+      {'membershipId': membershipId},
+    );
+  }
+
+  Future<OperationsSnapshot> addPurchase(String title) async {
+    return _operation('POST', '/api/admin/purchases', {'title': title});
+  }
+
+  Future<OperationsSnapshot> markPurchaseBought(int id) async {
+    return _operation(
+      'POST',
+      '/api/admin/purchases/bought',
+      {'id': id},
+    );
+  }
+
+  Future<OperationsSnapshot> _operation(
+    String method,
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final data = await _request(method, path, body: body);
+    return OperationsSnapshot.fromJson(_snapshotMap(data));
+  }
+
+  Map<String, dynamic> _snapshotMap(Map<String, dynamic> data) {
+    final snapshot = data['snapshot'];
+    if (snapshot is Map<String, dynamic>) return snapshot;
+    if (snapshot is Map) return Map<String, dynamic>.from(snapshot);
+    return data;
+  }
+
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
