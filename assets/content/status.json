@@ -1,8 +1,8 @@
 {
   "status": {
-    "updated": "2026-08-20",
+    "updated": "2026-08-29",
     "total": 10,
-    "occupied": 3
+    "occupied": 0
   },
   "prices": [
     {"label_key": "price_day_pass", "price": "250K VND"},
