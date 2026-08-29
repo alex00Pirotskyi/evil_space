@@ -524,7 +524,7 @@ class _PanelFrame extends StatelessWidget {
                 runSpacing: 14,
                 children: [
                   Text(title, style: _adminSerif(34)),
-                  if (action != null) action!,
+                  ?action,
                 ],
               ),
               const SizedBox(height: 28),
