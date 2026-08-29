@@ -31,6 +31,23 @@ class AdminApi {
   Future<OperationsSnapshot> checkInMembership(int membershipId) async =>
       _webOnly();
 
+  Future<OperationsSnapshot> acceptBooking(int id) async => _webOnly();
+
+  Future<OperationsSnapshot> updateCustomer(CustomerRecord customer) async =>
+      _webOnly();
+
+  Future<OperationsSnapshot> updateCustomerFields({
+    required int id,
+    required String name,
+    required String phone,
+    required String email,
+    required String telegram,
+    required String contactOther,
+    required String notes,
+  }) async => _webOnly();
+
+  Future<OperationsSnapshot> deleteCustomer(int id) async => _webOnly();
+
   Future<OperationsSnapshot> addPurchase(String title) async => _webOnly();
 
   Future<OperationsSnapshot> markPurchaseBought(int id) async => _webOnly();
