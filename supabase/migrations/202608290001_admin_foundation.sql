@@ -53,6 +53,13 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+insert into public.profiles (id, display_name)
+select
+  id,
+  coalesce(raw_user_meta_data ->> 'display_name', split_part(email, '@', 1), '')
+from auth.users
+on conflict (id) do nothing;
+
 create table if not exists public.site_state (
   singleton boolean primary key default true check (singleton),
   total_desks integer not null default 10 check (total_desks between 1 and 999),
@@ -274,6 +281,24 @@ begin
     if auth.uid() is not null then
       new.verified_by = auth.uid();
     end if;
+  elsif new.status <> 'paid' then
+    new.paid_at = null;
+    new.verified_by = null;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.normalize_customer()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'INSERT' and auth.uid() is not null then
+    new.created_by = auth.uid();
+  elsif tg_op = 'UPDATE' then
+    new.created_by = old.created_by;
   end if;
   return new;
 end;
@@ -287,13 +312,25 @@ as $$
 begin
   if tg_op = 'INSERT' and auth.uid() is not null then
     new.requested_by = auth.uid();
+    new.state = 'needed';
+    new.approved_by = null;
+    new.bought_by = null;
+    new.purchased_at = null;
   elsif tg_op = 'UPDATE' then
     new.requested_by = old.requested_by;
+    new.approved_by = old.approved_by;
+    new.bought_by = old.bought_by;
+    new.purchased_at = old.purchased_at;
   end if;
 
   if tg_op = 'UPDATE' and old.state is distinct from new.state then
-    if new.state = 'approved' and auth.uid() is not null then
-      new.approved_by = auth.uid();
+    if new.state = 'approved' then
+      if not public.is_manager() then
+        raise exception 'Only a manager or owner can approve a purchase';
+      end if;
+      if auth.uid() is not null then
+        new.approved_by = auth.uid();
+      end if;
     elsif new.state = 'bought' then
       new.purchased_at = coalesce(new.purchased_at, now());
       if auth.uid() is not null then
@@ -355,7 +392,10 @@ begin
     old_json,
     new_json
   );
-  return coalesce(new, old);
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
 $$;
 
@@ -449,8 +489,17 @@ as $$
 declare
   updated_profile public.profiles;
 begin
-  if public.current_app_role() <> 'owner' then
+  if public.current_app_role() is distinct from 'owner'::public.app_role then
     raise exception 'Only an owner can change staff access';
+  end if;
+
+  if exists (
+    select 1 from public.profiles
+    where id = target_user_id and role = 'owner' and active = true
+  ) and (new_role <> 'owner' or new_active = false) and (
+    select count(*) from public.profiles where role = 'owner' and active = true
+  ) <= 1 then
+    raise exception 'The last active owner cannot be removed';
   end if;
 
   update public.profiles
@@ -464,6 +513,26 @@ begin
     raise exception 'Profile not found';
   end if;
   return updated_profile;
+end;
+$$;
+
+create or replace function public.mark_notification_read(target_notification_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.is_active_staff() then
+    raise exception 'Active staff access is required';
+  end if;
+
+  update public.notification_deliveries
+  set state = 'read',
+      read_at = now(),
+      updated_at = now()
+  where notification_id = target_notification_id
+    and user_id = auth.uid();
 end;
 $$;
 
@@ -491,6 +560,11 @@ drop trigger if exists customers_touch_updated_at on public.customers;
 create trigger customers_touch_updated_at
   before update on public.customers
   for each row execute function public.touch_updated_at();
+
+drop trigger if exists customers_normalize on public.customers;
+create trigger customers_normalize
+  before insert or update on public.customers
+  for each row execute function public.normalize_customer();
 
 drop trigger if exists payments_touch_updated_at on public.payments;
 create trigger payments_touch_updated_at
@@ -612,7 +686,9 @@ create policy payments_staff_select on public.payments
 drop policy if exists payments_staff_insert on public.payments;
 create policy payments_staff_insert on public.payments
   for insert to authenticated with check (
-    public.is_active_staff() and created_by = auth.uid()
+    public.is_active_staff()
+    and created_by = auth.uid()
+    and (status = 'pending' or public.is_manager())
   );
 
 drop policy if exists payments_manager_update on public.payments;
@@ -688,10 +764,6 @@ create policy deliveries_own_select on public.notification_deliveries
   for select to authenticated using (user_id = auth.uid());
 
 drop policy if exists deliveries_own_read_update on public.notification_deliveries;
-create policy deliveries_own_read_update on public.notification_deliveries
-  for update to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
 
 drop policy if exists audit_manager_select on public.audit_log;
 create policy audit_manager_select on public.audit_log
@@ -716,17 +788,19 @@ grant select, insert, update, delete on table public.payments to authenticated;
 grant select, insert, update, delete on table public.purchase_requests to authenticated;
 grant select, insert on table public.notifications to authenticated;
 grant select, insert, update, delete on table public.device_tokens to authenticated;
-grant select, update on table public.notification_deliveries to authenticated;
+grant select on table public.notification_deliveries to authenticated;
 grant select on table public.audit_log to authenticated;
 
 revoke all on function public.current_app_role() from public;
 revoke all on function public.is_active_staff() from public;
 revoke all on function public.is_manager() from public;
 revoke all on function public.set_staff_access(uuid, public.app_role, boolean) from public;
+revoke all on function public.mark_notification_read(uuid) from public;
 grant execute on function public.current_app_role() to authenticated;
 grant execute on function public.is_active_staff() to authenticated;
 grant execute on function public.is_manager() to authenticated;
 grant execute on function public.set_staff_access(uuid, public.app_role, boolean) to authenticated;
+grant execute on function public.mark_notification_read(uuid) to authenticated;
 
 do $$
 begin
