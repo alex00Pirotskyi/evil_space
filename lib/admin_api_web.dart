@@ -85,6 +85,54 @@ class AdminApi {
     );
   }
 
+  Future<OperationsSnapshot> acceptBooking(int id) async {
+    return _operation('POST', '/api/admin/booking/accept', {'id': id});
+  }
+
+  Future<OperationsSnapshot> updateCustomer(CustomerRecord customer) async {
+    return _operation(
+      'POST',
+      '/api/admin/customers/update',
+      {
+        'id': customer.id,
+        'name': customer.name,
+        'phone': customer.phone,
+        'email': customer.email,
+        'telegram': customer.telegram,
+        'contactOther': customer.contactOther,
+        'notes': customer.notes,
+      },
+    );
+  }
+
+  Future<OperationsSnapshot> updateCustomerFields({
+    required int id,
+    required String name,
+    required String phone,
+    required String email,
+    required String telegram,
+    required String contactOther,
+    required String notes,
+  }) async {
+    return _operation(
+      'POST',
+      '/api/admin/customers/update',
+      {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'telegram': telegram,
+        'contactOther': contactOther,
+        'notes': notes,
+      },
+    );
+  }
+
+  Future<OperationsSnapshot> deleteCustomer(int id) async {
+    return _operation('POST', '/api/admin/customers/delete', {'id': id});
+  }
+
   Future<OperationsSnapshot> addPurchase(String title) async {
     return _operation('POST', '/api/admin/purchases', {'title': title});
   }
