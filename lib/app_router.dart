@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:evil_space/admin_screen.dart';
+import 'package:evil_space/admin_portal.dart';
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_shell.dart';
 import 'package:evil_space/localization.dart';
@@ -67,7 +67,7 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
         MaterialPage<void>(
           key: const ValueKey('admin'),
           name: AppRoute.admin.path,
-          child: AdminScreen(onExit: () => navigate(AppRoute.home)),
+          child: AdminPortal(onExit: () => navigate(AppRoute.home)),
         ),
       );
     }

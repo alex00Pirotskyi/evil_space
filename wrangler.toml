@@ -1,6 +1,19 @@
 name = "evil-space"
-compatibility_date = "2026-05-22"
+main = "worker/index.js"
+compatibility_date = "2026-08-29"
 
 [assets]
 directory = "./build/web"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "evil_space"
+database_name = "evil-space"
+database_id = "ba5e5254-e34a-4bca-9127-1872faa0d001"
+migrations_dir = "migrations"
+
+[[send_email]]
+name = "ADMIN_EMAIL"
+destination_address = "evilssspace79@gmail.com"
