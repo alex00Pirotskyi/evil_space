@@ -6,33 +6,36 @@ class AdminApi {
   Future<String> register({
     required String email,
     required String password,
-  }) async {
-    throw const AdminApiException(
-      'Admin access is available from the deployed web app.',
-    );
-  }
+  }) async => _webOnly();
 
   Future<AdminSession> login({
     required String email,
     required String password,
-  }) async {
-    throw const AdminApiException(
-      'Admin access is available from the deployed web app.',
-    );
-  }
+  }) async => _webOnly();
 
   Future<void> logout() async {}
 
-  Future<List<AdminAccount>> admins() async {
-    throw const AdminApiException(
-      'Admin access is available from the deployed web app.',
-    );
-  }
+  Future<List<AdminAccount>> admins() async => _webOnly();
 
   Future<DeleteAdminResult> deleteAdmin({
     required String email,
     required String superPassword,
-  }) async {
+  }) async => _webOnly();
+
+  Future<OperationsSnapshot> operations() async => _webOnly();
+
+  Future<OperationsSnapshot> addDayPass(String name) async => _webOnly();
+
+  Future<OperationsSnapshot> addMonthPass(String name) async => _webOnly();
+
+  Future<OperationsSnapshot> checkInMembership(int membershipId) async =>
+      _webOnly();
+
+  Future<OperationsSnapshot> addPurchase(String title) async => _webOnly();
+
+  Future<OperationsSnapshot> markPurchaseBought(int id) async => _webOnly();
+
+  Never _webOnly() {
     throw const AdminApiException(
       'Admin access is available from the deployed web app.',
     );
