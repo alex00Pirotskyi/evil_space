@@ -8,6 +8,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    if (request.method === 'GET' && url.pathname === '/api/public/status') {
+      return handlePublicStatus(env);
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/public/book') {
       if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
       return handlePublicBooking(request, env);
@@ -54,6 +58,31 @@ export default {
     return legacyWorker.fetch(request, env, ctx);
   },
 };
+
+async function handlePublicStatus(env) {
+  const now = nowSeconds();
+  const { start, end } = nhaTrangDayBounds(now);
+  const row = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied
+    `)
+    .bind(start, end)
+    .first();
+
+  const total = Math.max(1, Number(row?.total ?? 10));
+  const occupied = Math.min(total, Math.max(0, Number(row?.occupied ?? 0)));
+  return json({
+    ok: true,
+    status: {
+      total,
+      occupied,
+      free: Math.max(0, total - occupied),
+      updated: new Date(start * 1000).toISOString(),
+    },
+  });
+}
 
 async function handlePublicBooking(request, env) {
   const body = await readJson(request);
