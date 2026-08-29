@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:evil_space/admin_portal.dart';
 
 void main() {
-  testWidgets('admin portal exposes sign in and owner approval request', (
+  testWidgets('admin portal defaults to Russian and can switch to English', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -12,18 +12,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('STAFF ACCESS'), findsOneWidget);
-    expect(find.text('SIGN IN'), findsOneWidget);
-    expect(find.byTooltip('SHOW PASSWORD'), findsOneWidget);
+    expect(find.text('Вход'), findsOneWidget);
+    expect(find.text('ВОЙТИ'), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(2));
 
-    final requestAccess = find.text('NEW ADMIN? REQUEST ACCESS');
+    final requestAccess = find.text('НОВЫЙ АДМИН? ЗАПРОСИТЬ ДОСТУП');
     expect(requestAccess, findsOneWidget);
-    await tester.ensureVisible(requestAccess);
     await tester.tap(requestAccess);
     await tester.pump();
 
-    expect(find.text('Request admin access.'), findsOneWidget);
-    expect(find.text('SEND APPROVAL REQUEST'), findsOneWidget);
-    expect(find.byTooltip('SHOW PASSWORD'), findsOneWidget);
+    expect(find.text('Новый администратор'), findsOneWidget);
+    expect(find.text('ОТПРАВИТЬ ЗАПРОС'), findsOneWidget);
+
+    await tester.tap(find.text('EN'));
+    await tester.pump();
+
+    expect(find.text('New administrator'), findsOneWidget);
+    expect(find.text('REQUEST ACCESS'), findsOneWidget);
   });
 }
