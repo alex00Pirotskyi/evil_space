@@ -11,7 +11,6 @@ void main() {
   ) async {
     final localization = LocalizationController(AppLanguage.en);
     final router = EvilSpaceRouterDelegate(localization: localization);
-    await router.setNewRoutePath(AppRoute.admin);
 
     await tester.pumpWidget(
       MaterialApp.router(
@@ -19,6 +18,9 @@ void main() {
         routeInformationParser: const EvilSpaceRouteParser(),
       ),
     );
+    await tester.pumpAndSettle();
+
+    router.navigate(AppRoute.admin);
     await tester.pumpAndSettle();
 
     expect(find.byType(SelectionArea), findsNothing);
