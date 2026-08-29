@@ -48,38 +48,31 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
 
   @override
   Widget build(BuildContext context) {
-    final publicRoute =
-        _currentRoute == AppRoute.qr ? AppRoute.qr : AppRoute.home;
-    final pages = <Page<void>>[
-      MaterialPage<void>(
-        key: const ValueKey('public'),
+    final Page<void> activePage;
+
+    if (_currentRoute == AppRoute.admin) {
+      activePage = MaterialPage<void>(
+        key: const ValueKey('admin'),
+        name: AppRoute.admin.path,
+        child: AdminPortal(onExit: () => navigate(AppRoute.home)),
+      );
+    } else {
+      final publicRoute =
+          _currentRoute == AppRoute.qr ? AppRoute.qr : AppRoute.home;
+      activePage = MaterialPage<void>(
+        key: ValueKey('public-${publicRoute.path}'),
         name: publicRoute.path,
         child: DailyScreen(
           currentRoute: publicRoute,
           localization: localization,
           onNavigate: navigate,
         ),
-      ),
-    ];
-
-    if (_currentRoute == AppRoute.admin) {
-      pages.add(
-        MaterialPage<void>(
-          key: const ValueKey('admin'),
-          name: AppRoute.admin.path,
-          child: AdminPortal(onExit: () => navigate(AppRoute.home)),
-        ),
       );
     }
 
     return Navigator(
-      pages: pages,
-      onDidRemovePage: (page) {
-        if (page.key == const ValueKey('admin') &&
-            _currentRoute == AppRoute.admin) {
-          navigate(AppRoute.home);
-        }
-      },
+      pages: [activePage],
+      onDidRemovePage: (_) {},
     );
   }
 
