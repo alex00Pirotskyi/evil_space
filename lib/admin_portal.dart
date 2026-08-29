@@ -115,6 +115,61 @@ class _AdminPortalState extends State<AdminPortal> {
     widget.onExit();
   }
 
+  Future<void> _showAdmins() async {
+    try {
+      final admins = await _api.admins();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: BrandPalette.paper,
+          shape: const RoundedRectangleBorder(),
+          title: Text(t('Администраторы', 'Administrators'), style: _serif(28)),
+          content: SizedBox(
+            width: 460,
+            child: admins.isEmpty
+                ? Text(t('Список пуст.', 'No administrators.'), style: _serif(17))
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: admins
+                        .map(
+                          (admin) => Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: const BoxDecoration(
+                              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(child: Text(admin.email, style: _mono(10))),
+                                const SizedBox(width: 10),
+                                Text(
+                                  admin.status == 'approved'
+                                      ? t('АКТИВЕН', 'ACTIVE')
+                                      : admin.status.toUpperCase(),
+                                  style: _mono(9.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(t('ЗАКРЫТЬ', 'CLOSE'), style: _mono(10)),
+            ),
+          ],
+        ),
+      );
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = _session;
@@ -136,7 +191,7 @@ class _AdminPortalState extends State<AdminPortal> {
       return AdminScreen(
         api: _api,
         onExit: _logoutAndExit,
-        onManageAdmins: () {},
+        onManageAdmins: _showAdmins,
       );
     }
 
