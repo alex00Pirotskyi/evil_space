@@ -923,16 +923,19 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
 
   Widget _contactTypeButton(String type, String label) {
     final selected = _type == type;
+    final foreground = selected
+        ? BrandPalette.paperLift
+        : BrandPalette.ink;
     return OutlinedButton(
       onPressed: () => setState(() => _type = type),
       style: OutlinedButton.styleFrom(
-        foregroundColor: selected ? BrandPalette.paperLift : BrandPalette.ink,
+        foregroundColor: foreground,
         backgroundColor: selected ? BrandPalette.ink : BrandPalette.paper,
         minimumSize: const Size.fromHeight(46),
         side: const BorderSide(color: BrandPalette.ink),
         shape: const RoundedRectangleBorder(),
       ),
-      child: Text(label, style: _mono(9.5)),
+      child: Text(label, style: _mono(9.5, color: foreground)),
     );
   }
 }
