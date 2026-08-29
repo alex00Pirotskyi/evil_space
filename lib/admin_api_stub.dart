@@ -22,4 +22,19 @@ class AdminApi {
   }
 
   Future<void> logout() async {}
+
+  Future<List<AdminAccount>> admins() async {
+    throw const AdminApiException(
+      'Admin access is available from the deployed web app.',
+    );
+  }
+
+  Future<DeleteAdminResult> deleteAdmin({
+    required String email,
+    required String superPassword,
+  }) async {
+    throw const AdminApiException(
+      'Admin access is available from the deployed web app.',
+    );
+  }
 }

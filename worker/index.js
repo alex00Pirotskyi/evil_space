@@ -44,8 +44,19 @@ export default {
       }
 
       if (request.method === 'POST' && url.pathname === '/api/admin/decision') {
-        if (!isSameOrigin(request, url)) return htmlMessage('Request blocked', 'Invalid origin.', 403);
+        if (!isSameOrigin(request, url)) {
+          return htmlMessage('Request blocked', 'Invalid origin.', 403);
+        }
         return handleDecision(request, env);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/admin/admins') {
+        return handleAdmins(request, env);
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/admin/delete') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleDeleteAdmin(request, env);
       }
 
       return jsonError('Not found.', 404);
@@ -88,7 +99,10 @@ async function handleRegister(request, env, url) {
   }
 
   if (existing?.status === 'pending' && Number(existing.created_at) > now - 60) {
-    return jsonError('An approval email was just sent. Please wait a minute before retrying.', 429);
+    return jsonError(
+      'An approval email was just sent. Please wait a minute before retrying.',
+      429,
+    );
   }
 
   const salt = randomBase64(16);
@@ -140,22 +154,21 @@ async function handleRegister(request, env, url) {
     await env.ADMIN_EMAIL.send({
       to: OWNER_EMAIL,
       from: FROM_EMAIL,
-      subject: `Evil Space admin request: ${email}`,
+      subject: `Approve Evil Space admin: ${email}`,
       text: [
         'A new Evil Space admin account is requesting access.',
         '',
         `Email: ${email}`,
         '',
-        'Review and approve or reject this request:',
+        'Approve this admin:',
         reviewUrl,
         '',
-        'This link expires in 24 hours.',
+        'The page has one APPROVE ADMIN button. This link expires in 24 hours.',
       ].join('\n'),
       html: `
         <h2>Evil Space admin request</h2>
-        <p>A new admin account is requesting access.</p>
         <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-        <p><a href="${escapeHtml(reviewUrl)}">Review request</a></p>
+        <p><a href="${escapeHtml(reviewUrl)}"><strong>APPROVE ADMIN</strong></a></p>
         <p>This link expires in 24 hours.</p>
       `,
     });
@@ -171,10 +184,13 @@ async function handleRegister(request, env, url) {
     );
   }
 
-  return json({
-    ok: true,
-    message: `Approval request sent to ${OWNER_EMAIL}.`,
-  }, 202);
+  return json(
+    {
+      ok: true,
+      message: `Approval request sent to ${OWNER_EMAIL}.`,
+    },
+    202,
+  );
 }
 
 async function handleLogin(request, env) {
@@ -279,11 +295,19 @@ async function handleReview(url, env) {
     .first();
 
   if (!admin) {
-    return htmlMessage('Request unavailable', 'This request was already handled or the link is invalid.', 404);
+    return htmlMessage(
+      'Request unavailable',
+      'This request was already handled or the link is invalid.',
+      404,
+    );
   }
 
   if (Number(admin.approval_expires_at) <= now) {
-    return htmlMessage('Request expired', 'This approval link has expired. Ask the admin to register again.', 410);
+    return htmlMessage(
+      'Request expired',
+      'This approval link has expired. Ask the admin to register again.',
+      410,
+    );
   }
 
   const safeEmail = escapeHtml(admin.email);
@@ -295,7 +319,7 @@ async function handleReview(url, env) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Evil Space admin approval</title>
+<title>Approve Evil Space admin</title>
 <style>
 body{margin:0;background:#f2f0e8;color:#1c1c1a;font-family:Georgia,serif}
 main{max-width:620px;margin:64px auto;padding:24px}
@@ -303,31 +327,21 @@ small{font-family:"Courier New",monospace;font-weight:700;letter-spacing:.08em}
 h1{font-weight:400;font-size:42px;line-height:1;margin:18px 0}
 .card{border-top:1px solid #1c1c1a;border-bottom:1px solid #1c1c1a;padding:24px 0;margin:28px 0}
 .email{font-family:"Courier New",monospace;font-weight:700;word-break:break-all}
-.actions{display:flex;gap:12px;flex-wrap:wrap}
-button{min-height:48px;padding:0 18px;border:1px solid #1c1c1a;background:#f2f0e8;color:#1c1c1a;font:700 13px "Courier New",monospace;cursor:pointer}
-button.approve{background:#1c1c1a;color:#f8f6ef}
+button{width:100%;min-height:54px;padding:0 18px;border:1px solid #1c1c1a;background:#1c1c1a;color:#f8f6ef;font:700 13px "Courier New",monospace;cursor:pointer}
 </style>
 </head>
 <body>
 <main>
 <small>EVIL SPACE / ADMIN</small>
-<h1>New admin request</h1>
+<h1>Approve admin.</h1>
 <div class="card">
-<p>Approve this email to access the Evil Space operations panel:</p>
 <p class="email">${safeEmail}</p>
 </div>
-<div class="actions">
 <form method="post" action="/api/admin/decision">
 <input type="hidden" name="token" value="${safeToken}">
 <input type="hidden" name="decision" value="approve">
-<button class="approve" type="submit">APPROVE ADMIN</button>
+<button type="submit">APPROVE ADMIN</button>
 </form>
-<form method="post" action="/api/admin/decision">
-<input type="hidden" name="token" value="${safeToken}">
-<input type="hidden" name="decision" value="reject">
-<button type="submit">REJECT</button>
-</form>
-</div>
 </main>
 </body>
 </html>`,
@@ -340,7 +354,7 @@ async function handleDecision(request, env) {
   const token = String(form.get('token') ?? '');
   const decision = String(form.get('decision') ?? '');
 
-  if (!isReasonableToken(token) || !['approve', 'reject'].includes(decision)) {
+  if (!isReasonableToken(token) || decision !== 'approve') {
     return htmlMessage('Invalid request', 'The approval request is invalid.', 400);
   }
 
@@ -356,43 +370,100 @@ async function handleDecision(request, env) {
     .first();
 
   if (!admin) {
-    return htmlMessage('Request unavailable', 'This request was already handled or the link is invalid.', 404);
+    return htmlMessage(
+      'Request unavailable',
+      'This request was already handled or the link is invalid.',
+      404,
+    );
   }
 
   if (Number(admin.approval_expires_at) <= now) {
     return htmlMessage('Request expired', 'This approval link has expired.', 410);
   }
 
-  if (decision === 'approve') {
-    await env.evil_space
-      .prepare(`
-        UPDATE admins
-        SET status = 'approved', approved_at = ?,
-            approval_token_hash = NULL, approval_expires_at = NULL
-        WHERE id = ?
-      `)
-      .bind(now, admin.id)
-      .run();
-
-    return htmlMessage(
-      'Admin approved',
-      `${admin.email} can now sign in at /admin.`,
-      200,
-      '/admin',
-    );
-  }
-
   await env.evil_space
     .prepare(`
       UPDATE admins
-      SET status = 'rejected', approval_token_hash = NULL,
-          approval_expires_at = NULL
+      SET status = 'approved', approved_at = ?,
+          approval_token_hash = NULL, approval_expires_at = NULL
       WHERE id = ?
     `)
-    .bind(admin.id)
+    .bind(now, admin.id)
     .run();
 
-  return htmlMessage('Admin rejected', `${admin.email} was not granted access.`, 200);
+  return htmlMessage(
+    'Admin approved',
+    `${admin.email} can now sign in at /admin.`,
+    200,
+    '/admin',
+  );
+}
+
+async function handleAdmins(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+
+  const result = await env.evil_space
+    .prepare(`
+      SELECT email, status, created_at, approved_at
+      FROM admins
+      ORDER BY
+        CASE status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
+        email COLLATE NOCASE
+    `)
+    .all();
+
+  return json({
+    ok: true,
+    admins: result.results ?? [],
+    currentEmail: session.email,
+  });
+}
+
+async function handleDeleteAdmin(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+
+  const body = await readJson(request);
+  if (!body) return jsonError('Invalid request.', 400);
+
+  const email = normalizeEmail(body.email);
+  const superPassword =
+    typeof body.superPassword === 'string' ? body.superPassword : '';
+
+  if (!email) return jsonError('Admin email is required.', 400);
+
+  if (
+    typeof env.SUPER_ADMIN_PASSWORD !== 'string' ||
+    env.SUPER_ADMIN_PASSWORD.length === 0
+  ) {
+    return jsonError('Super password is not configured on the Worker.', 503);
+  }
+
+  if (!timingSafeEqual(superPassword, env.SUPER_ADMIN_PASSWORD)) {
+    return jsonError('Wrong super password.', 403);
+  }
+
+  const admin = await env.evil_space
+    .prepare('SELECT id, email FROM admins WHERE email = ?')
+    .bind(email)
+    .first();
+
+  if (!admin) return jsonError('Admin not found.', 404);
+
+  await env.evil_space.prepare('DELETE FROM admins WHERE id = ?').bind(admin.id).run();
+
+  const deletedSelf = normalizeEmail(session.email) === normalizeEmail(admin.email);
+
+  return json(
+    {
+      ok: true,
+      email: admin.email,
+      deletedSelf,
+    },
+    200,
+    deletedSelf ? { 'Set-Cookie': sessionCookie('', 0) } : {},
+  );
 }
 
 async function authenticatedAdmin(request, env) {
@@ -416,10 +487,14 @@ async function authenticatedAdmin(request, env) {
 }
 
 function validateCredentials(email, password) {
-  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (
+    !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
     return 'Enter a valid email address.';
   }
-  if (password.length < 10) return 'Password must be at least 10 characters.';
+  if (password.length < 4) return 'Password must be at least 4 characters.';
   if (password.length > 200) return 'Password is too long.';
   return null;
 }
@@ -487,7 +562,10 @@ function toBase64(bytes) {
 }
 
 function toBase64Url(bytes) {
-  return toBase64(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/g, '');
+  return toBase64(bytes)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/g, '');
 }
 
 function fromBase64(value) {
@@ -500,7 +578,11 @@ function fromBase64(value) {
 }
 
 function timingSafeEqual(left, right) {
-  if (typeof left !== 'string' || typeof right !== 'string' || left.length !== right.length) {
+  if (
+    typeof left !== 'string' ||
+    typeof right !== 'string' ||
+    left.length !== right.length
+  ) {
     return false;
   }
 
@@ -532,7 +614,11 @@ function isSameOrigin(request, url) {
 }
 
 function isReasonableToken(token) {
-  return token.length >= 32 && token.length <= 128 && /^[A-Za-z0-9_-]+$/.test(token);
+  return (
+    token.length >= 32 &&
+    token.length <= 128 &&
+    /^[A-Za-z0-9_-]+$/.test(token)
+  );
 }
 
 function nowSeconds() {
@@ -558,7 +644,8 @@ function htmlHeaders() {
   return {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    'Content-Security-Policy':
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',

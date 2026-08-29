@@ -22,6 +22,8 @@ class _AdminPortalState extends State<AdminPortal> {
   AdminSession? _session;
   bool _requestAccess = false;
   bool _busy = false;
+  bool _passwordVisible = false;
+  bool _manageAdmins = false;
   String? _message;
   bool _messageIsError = false;
 
@@ -63,8 +65,8 @@ class _AdminPortalState extends State<AdminPortal> {
       _setMessage('Enter a valid email address.', error: true);
       return;
     }
-    if (password.length < 10) {
-      _setMessage('Password must be at least 10 characters.', error: true);
+    if (password.length < 4) {
+      _setMessage('Password must be at least 4 characters.', error: true);
       return;
     }
 
@@ -140,12 +142,42 @@ class _AdminPortalState extends State<AdminPortal> {
     }
 
     if (session.authenticated) {
-      if (AdminBuildConfig.previewEnabled) {
-        return AdminScreen(onExit: _logoutAndExit);
+      if (!AdminBuildConfig.previewEnabled) {
+        return _AdminBuildDisabled(
+          email: session.email,
+          onLogout: _logoutAndExit,
+        );
       }
-      return _AdminBuildDisabled(
-        email: session.email,
-        onLogout: _logoutAndExit,
+
+      if (_manageAdmins) {
+        return _AdminManagementScreen(
+          api: _api,
+          currentEmail: session.email,
+          onBack: () => setState(() => _manageAdmins = false),
+          onDeletedSelf: _logoutAndExit,
+        );
+      }
+
+      return Stack(
+        children: [
+          Positioned.fill(child: AdminScreen(onExit: _logoutAndExit)),
+          Positioned(
+            top: 12,
+            right: 108,
+            child: OutlinedButton.icon(
+              onPressed: () => setState(() => _manageAdmins = true),
+              icon: const Icon(Icons.admin_panel_settings_outlined, size: 17),
+              label: Text('ADMINS', style: _mono(9.5)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BrandPalette.ink,
+                backgroundColor: BrandPalette.paper,
+                minimumSize: const Size(44, 46),
+                side: const BorderSide(color: BrandPalette.ink),
+                shape: const RoundedRectangleBorder(),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -177,7 +209,7 @@ class _AdminPortalState extends State<AdminPortal> {
                       const SizedBox(height: 12),
                       Text(
                         _requestAccess
-                            ? 'Enter the email and password you want to use. Evil Space will email the owner for approval. Your password is stored only as a salted server-side hash.'
+                            ? 'Choose your email and password. Evil Space will email the owner for approval. Passwords are stored only as salted server-side hashes.'
                             : 'Only owner-approved administrators can sign in.',
                         style: _serif(
                           17,
@@ -200,13 +232,30 @@ class _AdminPortalState extends State<AdminPortal> {
                         autofillHints: _requestAccess
                             ? const [AutofillHints.newPassword]
                             : const [AutofillHints.password],
-                        obscureText: true,
+                        obscureText: !_passwordVisible,
                         enableSuggestions: false,
                         autocorrect: false,
                         textInputAction: TextInputAction.done,
                         enabled: !_busy,
                         onSubmitted: (_) => _submit(),
-                        decoration: _inputDecoration('PASSWORD'),
+                        decoration: _inputDecoration('PASSWORD').copyWith(
+                          suffixIcon: IconButton(
+                            tooltip: _passwordVisible
+                                ? 'HIDE PASSWORD'
+                                : 'SHOW PASSWORD',
+                            onPressed: _busy
+                                ? null
+                                : () => setState(
+                                      () => _passwordVisible = !_passwordVisible,
+                                    ),
+                            icon: Icon(
+                              _passwordVisible
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: BrandPalette.ink,
+                            ),
+                          ),
+                        ),
                       ),
                       if (_message != null) ...[
                         const SizedBox(height: 16),
@@ -255,6 +304,7 @@ class _AdminPortalState extends State<AdminPortal> {
                             : () => setState(() {
                                 _requestAccess = !_requestAccess;
                                 _message = null;
+                                _passwordVisible = false;
                                 _passwordController.clear();
                               }),
                         style: TextButton.styleFrom(
@@ -296,6 +346,325 @@ class _AdminPortalState extends State<AdminPortal> {
   }
 }
 
+class _AdminManagementScreen extends StatefulWidget {
+  const _AdminManagementScreen({
+    required this.api,
+    required this.currentEmail,
+    required this.onBack,
+    required this.onDeletedSelf,
+  });
+
+  final AdminApi api;
+  final String? currentEmail;
+  final VoidCallback onBack;
+  final Future<void> Function() onDeletedSelf;
+
+  @override
+  State<_AdminManagementScreen> createState() => _AdminManagementScreenState();
+}
+
+class _AdminManagementScreenState extends State<_AdminManagementScreen> {
+  List<AdminAccount>? _admins;
+  String? _error;
+  String? _busyEmail;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final admins = await widget.api.admins();
+      if (!mounted) return;
+      setState(() {
+        _admins = admins;
+        _error = null;
+      });
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _admins = const [];
+        _error = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _admins = const [];
+        _error = 'Could not load administrators.';
+      });
+    }
+  }
+
+  Future<void> _delete(AdminAccount admin) async {
+    if (_busyEmail != null) return;
+
+    final controller = TextEditingController();
+    var visible = false;
+    final superPassword = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: BrandPalette.paper,
+          shape: const RoundedRectangleBorder(),
+          title: Text('Delete admin?', style: _serif(28)),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(admin.email, style: _mono(11)),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  obscureText: !visible,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  decoration: _inputDecoration('SUPER PASSWORD').copyWith(
+                    suffixIcon: IconButton(
+                      tooltip: visible ? 'HIDE PASSWORD' : 'SHOW PASSWORD',
+                      onPressed: () => setDialogState(() => visible = !visible),
+                      icon: Icon(
+                        visible
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: BrandPalette.ink,
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text('CANCEL', style: _mono(10)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              style: FilledButton.styleFrom(
+                backgroundColor: BrandPalette.ink,
+                foregroundColor: BrandPalette.paperLift,
+                shape: const RoundedRectangleBorder(),
+              ),
+              child: Text(
+                'DELETE',
+                style: _mono(10, color: BrandPalette.paperLift),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+
+    if (superPassword == null || superPassword.isEmpty || !mounted) return;
+
+    setState(() {
+      _busyEmail = admin.email;
+      _error = null;
+    });
+
+    try {
+      final result = await widget.api.deleteAdmin(
+        email: admin.email,
+        superPassword: superPassword,
+      );
+      if (!mounted) return;
+      if (result.deletedSelf) {
+        await widget.onDeletedSelf();
+        return;
+      }
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${result.email} deleted.')),
+      );
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not delete this administrator.');
+    } finally {
+      if (mounted) setState(() => _busyEmail = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final admins = _admins;
+
+    return Scaffold(
+      backgroundColor: BrandPalette.paper,
+      body: BrandPaper(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Container(
+                height: 72,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: BrandPalette.ink)),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'BACK TO OPERATIONS',
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('ADMINS', style: _mono(11, spacing: 0.8)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh, size: 17),
+                      label: Text('REFRESH', style: _mono(9.5)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: BrandPalette.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 920),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'ADMIN ACCESS',
+                            style: _mono(10, color: BrandPalette.inkMuted),
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Administrators', style: _serif(36)),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Deleting an administrator requires the super password. Their active sessions are removed automatically.',
+                            style: _serif(
+                              17,
+                              color: BrandPalette.inkMuted,
+                              height: 1.4,
+                            ),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 18),
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: BrandPalette.ink),
+                                color: BrandPalette.paperDeep,
+                              ),
+                              child: Text(_error!, style: _mono(10.5)),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          if (admins == null)
+                            const Center(
+                              child: CircularProgressIndicator(
+                                color: BrandPalette.ink,
+                              ),
+                            )
+                          else if (admins.isEmpty)
+                            Text('NO ADMINS FOUND', style: _mono(11))
+                          else
+                            ...admins.map(
+                              (admin) => _AdminAccountRow(
+                                admin: admin,
+                                current: admin.email.toLowerCase() ==
+                                    widget.currentEmail?.toLowerCase(),
+                                busy: _busyEmail == admin.email,
+                                onDelete: () => _delete(admin),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminAccountRow extends StatelessWidget {
+  const _AdminAccountRow({
+    required this.admin,
+    required this.current,
+    required this.busy,
+    required this.onDelete,
+  });
+
+  final AdminAccount admin;
+  final bool current;
+  final bool busy;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = admin.status.toUpperCase();
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(admin.email, style: _mono(11.5)),
+                const SizedBox(height: 6),
+                Text(
+                  '$status${current ? '  /  YOU' : ''}  /  ${_formatTimestamp(admin.createdAt)}',
+                  style: _mono(9.5, color: BrandPalette.inkMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton(
+            onPressed: busy ? null : onDelete,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BrandPalette.ink,
+              side: const BorderSide(color: BrandPalette.ink),
+              shape: const RoundedRectangleBorder(),
+            ),
+            child: Text(busy ? 'WAIT…' : 'DELETE', style: _mono(9.5)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatTimestamp(int seconds) {
+  if (seconds <= 0) return 'UNKNOWN DATE';
+  final date = DateTime.fromMillisecondsSinceEpoch(
+    seconds * 1000,
+    isUtc: true,
+  ).toLocal();
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${two(date.day)}.${two(date.month)}.${date.year}';
+}
+
 class _AdminBuildDisabled extends StatelessWidget {
   const _AdminBuildDisabled({required this.email, required this.onLogout});
 
@@ -321,10 +690,7 @@ class _AdminBuildDisabled extends StatelessWidget {
                     const SizedBox(height: 28),
                     Text('SIGNED IN', style: _mono(11, spacing: 1.1)),
                     const SizedBox(height: 12),
-                    Text(
-                      email ?? 'Approved administrator',
-                      style: _serif(30),
-                    ),
+                    Text(email ?? 'Approved administrator', style: _serif(30)),
                     const SizedBox(height: 14),
                     Text(
                       'This build does not include the operations dashboard. Rebuild the web app with EVIL_SPACE_ADMIN_PREVIEW=true.',

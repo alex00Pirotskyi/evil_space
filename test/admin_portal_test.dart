@@ -14,6 +14,7 @@ void main() {
 
     expect(find.text('STAFF ACCESS'), findsOneWidget);
     expect(find.text('SIGN IN'), findsOneWidget);
+    expect(find.byTooltip('SHOW PASSWORD'), findsOneWidget);
 
     final requestAccess = find.text('NEW ADMIN? REQUEST ACCESS');
     expect(requestAccess, findsOneWidget);
@@ -23,5 +24,6 @@ void main() {
 
     expect(find.text('Request admin access.'), findsOneWidget);
     expect(find.text('SEND APPROVAL REQUEST'), findsOneWidget);
+    expect(find.byTooltip('SHOW PASSWORD'), findsOneWidget);
   });
 }

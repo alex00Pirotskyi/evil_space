@@ -41,6 +41,29 @@ class AdminApi {
     await _request('POST', '/api/admin/logout');
   }
 
+  Future<List<AdminAccount>> admins() async {
+    final data = await _request('GET', '/api/admin/admins');
+    final raw = data['admins'];
+    if (raw is! List) return const [];
+
+    return raw
+        .whereType<Map>()
+        .map((item) => AdminAccount.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  Future<DeleteAdminResult> deleteAdmin({
+    required String email,
+    required String superPassword,
+  }) async {
+    final data = await _request(
+      'POST',
+      '/api/admin/delete',
+      body: {'email': email, 'superPassword': superPassword},
+    );
+    return DeleteAdminResult.fromJson(data);
+  }
+
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
