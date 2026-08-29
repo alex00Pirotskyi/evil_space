@@ -51,6 +51,8 @@ class _DailyScreenState extends State<DailyScreen>
   DeskBookingState? _booking;
   bool _bookingBusy = false;
   bool _qrScrollScheduled = false;
+  bool _publicRefreshInFlight = false;
+  bool _publicRefreshQueued = false;
 
   @override
   void initState() {
@@ -62,11 +64,11 @@ class _DailyScreenState extends State<DailyScreen>
     widget.localization.addListener(_handleLocalizationChanged);
     _savedProfile = _deskApi.savedProfile();
     _booking = _deskApi.savedBooking();
-    _loadContent();
-    _loadPublicState();
+    unawaited(_loadContent());
+    unawaited(_loadPublicState());
     _statusTimer = Timer.periodic(
       const Duration(seconds: 10),
-      (_) => _loadPublicState(),
+      (_) => unawaited(_loadPublicState()),
     );
     _scheduleQrScrollIfNeeded();
     WidgetsBinding.instance.addPostFrameCallback((_) => _triggerRefresh());
@@ -101,21 +103,80 @@ class _DailyScreenState extends State<DailyScreen>
   }
 
   Future<void> _loadPublicState() async {
-    final status = await _deskApi.status();
+    if (_publicRefreshInFlight) {
+      _publicRefreshQueued = true;
+      return;
+    }
+
+    _publicRefreshInFlight = true;
     final currentBooking = _booking;
-    DeskBookingState? refreshedBooking = currentBooking;
-    if (currentBooking != null) {
-      try {
-        refreshedBooking = await _deskApi.bookingStatus(currentBooking);
-      } on PublicDeskException {
-        refreshedBooking = currentBooking;
+    try {
+      final statusFuture = _deskApi.status().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => null,
+      );
+      final bookingFuture = currentBooking == null
+          ? Future<DeskBookingState?>.value(null)
+          : _refreshBooking(currentBooking);
+      final results = await Future.wait<Object?>([
+        statusFuture,
+        bookingFuture,
+      ]);
+      if (!mounted) return;
+
+      final status = results[0] as SiteStatus?;
+      final refreshedBooking = results[1] as DeskBookingState?;
+      final statusChanged = status != null && !_sameStatus(_liveStatus, status);
+      final bookingContextUnchanged = _sameBooking(_booking, currentBooking);
+      final bookingChanged = currentBooking != null &&
+          bookingContextUnchanged &&
+          !_sameBooking(_booking, refreshedBooking);
+
+      if (!statusChanged && !bookingChanged) return;
+      setState(() {
+        if (statusChanged) _liveStatus = status;
+        if (bookingChanged) _booking = refreshedBooking;
+      });
+    } finally {
+      _publicRefreshInFlight = false;
+      if (_publicRefreshQueued && mounted) {
+        _publicRefreshQueued = false;
+        unawaited(_loadPublicState());
       }
     }
-    if (!mounted) return;
-    setState(() {
-      if (status != null) _liveStatus = status;
-      if (currentBooking != null) _booking = refreshedBooking;
-    });
+  }
+
+  Future<DeskBookingState?> _refreshBooking(DeskBookingState booking) async {
+    try {
+      return await _deskApi
+          .bookingStatus(booking)
+          .timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      return booking;
+    } on PublicDeskException {
+      return booking;
+    }
+  }
+
+  bool _sameStatus(SiteStatus? a, SiteStatus? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    return a.total == b.total &&
+        a.occupied == b.occupied &&
+        _statusDayKey(a.updated) == _statusDayKey(b.updated);
+  }
+
+  String _statusDayKey(String raw) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    final local = parsed.toUtc().add(const Duration(hours: 7));
+    return '${local.year}-${local.month}-${local.day}';
+  }
+
+  bool _sameBooking(DeskBookingState? a, DeskBookingState? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    return a.token == b.token && a.status == b.status;
   }
 
   void _handleLocalizationChanged() {
