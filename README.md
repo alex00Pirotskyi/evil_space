@@ -1,78 +1,72 @@
 # Evil Space Daily
 
-A deliberately small web-first Flutter site for Evil Space coworking in Nha Trang.
+A deliberately small, web-first Flutter product for Evil Space coworking in Nha Trang.
 
-The product behaves like a one-page electronic-paper bulletin, not a conventional coworking website. It should answer the useful questions immediately:
+The public page behaves like a single sheet of warm electronic paper. It answers only the questions a visitor needs: whether a desk is free, what it costs, what opens next, and how to reach the space. Operations live behind a separate `/admin` boundary.
 
-1. How many desks are free?
-2. What matters about working here?
-3. What does it cost?
-4. What is new today?
-5. How do I visit or contact Evil Space?
+## Public experience
 
-## Product direction
+- custom Evil Space logo and black-on-paper visual system
+- current desk availability with a clearly dated update
+- exactly two prices: `250K VND` for one day and `2.5 MLN VND` for one month
+- podcast/studio room and lecture room opening on 20 October
+- one short daily note
+- a monochrome location plate with separate Google Maps directions and photos/reviews links
+- Instagram, Zalo, and phone contact actions
+- English, Russian, and Vietnamese
 
-The visual identity is Kindle / printed e-paper: warm paper, black ink, serif editorial typography, monospace metadata, thin rules, and almost no chrome.
+The core website intentionally hosts no photo gallery. Real photos remain on Instagram and Google Maps, where visitors already expect current images and reviews.
 
-The page is intentionally still. There is one short e-ink refresh on initial load and when language changes; there are no carousels, looping animations, parallax effects, or runtime image processing.
+`/qr` opens the same public page and scrolls directly to the location/contact section. Legacy public URLs resolve to `/`.
 
-Real photos are kept out of the core website. Visitors can open Instagram to see the space and Google Maps for directions. Those platforms own the image hosting and gallery problem.
+## Admin foundation
 
-## Page structure
+`/admin` is a separate operational surface for:
 
-- publication header: `EVIL SPACE / DAILY`, date, issue number, language
-- live desk availability and day-pass CTA
-- four work essentials: big desks, good chairs, fast Wi-Fi, cold AC
-- price list
-- today's short bulletin
-- visit/contact links
-- `PAGE 1 OF 1` footer
+- today's desk and task overview
+- customer passes
+- payment status and verification
+- purchase requests and bought state
+- staff notifications across approved devices
 
-`/qr` opens the same page and scrolls directly to the visit/contact section. Legacy URLs resolve to the main page.
+The route is locked by default. It does not accept a local password and does not trust SharedPreferences or LocalStorage for authorization. A compile-time sample-data preview exists only for design review:
+
+```bash
+flutter run -d chrome --dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
+```
+
+The production data contract is in `supabase/migrations/202608290001_admin_foundation.sql`. It includes Postgres row-level security, role management, audit logging, Realtime publication, notification records, and device registrations. The FCM fan-out Edge Function is in `supabase/functions/push-notifications/`.
+
+See [Admin activation](docs/admin-setup.md) for the project setup and security checklist.
 
 ## Content
 
-Normal daily maintenance lives in:
+Until the Supabase public-state adapter is connected, day-to-day public content lives in:
 
 ```text
 assets/content/status.json
 ```
 
-It contains:
+The UI uses safe fallback data if that asset is missing or malformed.
 
-- total desks
-- occupied desks
-- last update date
-- prices
-- multilingual announcements (EN/RU/VI)
-
-The UI remains usable with safe fallback data if that file is missing or malformed.
-
-## Localization
-
-The public page supports:
-
-- English
-- Russian
-- Vietnamese
-
-Browser locale selects the initial language. EN / RU / VI controls remain visible in the publication header.
-
-## Repository shape
-
-The active application is intentionally compact:
+## Project shape
 
 ```text
 lib/
+  admin_screen.dart
   app_route.dart
   app_router.dart
   app_shell.dart
+  brand_logo.dart
+  brand_surface.dart
   coworking_model.dart
   localization.dart
   main.dart
-```
 
-Historical pixel-wall, LED-wall, slideshow, image dithering, and image-processing experiments are not part of the production tree.
+supabase/
+  functions/push-notifications/
+  migrations/
+```
 
 ## Local development
 
@@ -93,8 +87,4 @@ Cloudflare serves `build/web` using `wrangler.toml`.
 
 ## CI
 
-`.github/workflows/web-ci.yml` runs on `main` and `agent/**` branches and requires:
-
-- `flutter analyze`
-- `flutter test`
-- `flutter build web --release`
+`.github/workflows/web-ci.yml` runs on pull requests to `main` and requires dependency lock verification, static analysis, tests, and a release web build with Flutter 3.44.7.

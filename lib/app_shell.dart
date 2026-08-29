@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -29,49 +28,26 @@ class DailyScreen extends StatefulWidget {
 
 class _DailyScreenState extends State<DailyScreen>
     with SingleTickerProviderStateMixin {
+  static const _instagramUrl = 'https://www.instagram.com/evil_space_coworking';
+  static const _mapsUrl = 'https://maps.app.goo.gl/5AFFB2AzszcsFvSz5?g_st=ic';
+  static const _directionsUrl =
+      'https://www.google.com/maps/dir/?api=1&destination=evil%20space%2C%2060%20Cao%20V%C4%83n%20B%C3%A9%2C%20B%E1%BA%AFc%20Nha%20Trang%2C%20Kh%C3%A1nh%20H%C3%B2a%20650000';
+  static const _zaloUrl = 'https://zalo.me/84565056748';
+  static const _phoneUrl = 'tel:+84565056748';
+
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _pricesKey = GlobalKey();
-  final GlobalKey _notesKey = GlobalKey();
-  final GlobalKey _contactKey = GlobalKey();
+  final GlobalKey _visitKey = GlobalKey();
 
   late final AnimationController _refreshController;
   SiteContent _content = SiteContent.demo;
   bool _qrScrollScheduled = false;
-
-  static const _contacts = <_ContactLink>[
-    _ContactLink(
-      labelKey: 'contact_instagram',
-      detail: '@evil_space_coworking',
-      url: 'https://www.instagram.com/evil_space_coworking',
-    ),
-    _ContactLink(
-      labelKey: 'contact_map',
-      detail: 'NHA TRANG',
-      url: 'https://maps.app.goo.gl/5AFFB2AzszcsFvSz5?g_st=ic',
-    ),
-    _ContactLink(
-      labelKey: 'contact_zalo',
-      detail: '+84 56 5056 748',
-      url: 'https://zalo.me/84565056748',
-    ),
-    _ContactLink(
-      labelKey: 'contact_phone',
-      detail: '+84 56 5056 748',
-      url: 'tel:+84565056748',
-    ),
-    _ContactLink(
-      labelKey: 'contact_messenger',
-      detail: 'EVIL SPACE',
-      url: 'https://m.me/61585941012998?hash=AbbCb0BDEsCMHEqJ&source_id=8585216',
-    ),
-  ];
 
   @override
   void initState() {
     super.initState();
     _refreshController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 320),
     );
     widget.localization.addListener(_handleLocalizationChanged);
     _loadContent();
@@ -102,9 +78,8 @@ class _DailyScreenState extends State<DailyScreen>
 
   Future<void> _loadContent() async {
     final content = await SiteContentRepository.load(rootBundle);
-    if (mounted) {
-      setState(() => _content = content);
-    }
+    if (!mounted) return;
+    setState(() => _content = content);
   }
 
   void _handleLocalizationChanged() {
@@ -114,844 +89,783 @@ class _DailyScreenState extends State<DailyScreen>
   }
 
   void _triggerRefresh() {
-    if (!mounted) return;
-    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) return;
+    if (!mounted || (MediaQuery.maybeOf(context)?.disableAnimations ?? false)) {
+      return;
+    }
     _refreshController.forward(from: 0);
   }
 
   void _scheduleQrScrollIfNeeded() {
     if (widget.currentRoute != AppRoute.qr || _qrScrollScheduled) return;
     _qrScrollScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollTo(_contactKey);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final target = _visitKey.currentContext;
+      if (target != null) {
+        await Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
-  Future<void> _scrollTo(GlobalKey key) async {
-    final target = key.currentContext;
-    if (target == null) return;
-    final reduced = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    await Scrollable.ensureVisible(
-      target,
-      duration: reduced ? Duration.zero : const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      alignment: 0.025,
-    );
-  }
-
-  Future<void> _scrollHome() async {
-    widget.onNavigate(AppRoute.home);
-    if (!_scrollController.hasClients) return;
-    final reduced = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    await _scrollController.animateTo(
-      0,
-      duration: reduced ? Duration.zero : const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
   Future<void> _launch(String value) async {
-    final ok = await launchUrl(
-      Uri.parse(value),
-      mode: LaunchMode.platformDefault,
-    );
-    if (!ok) debugPrint('Could not launch $value');
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('COULD NOT OPEN THIS LINK')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: BrandPalette.brown,
-      body: Stack(
-        children: [
-          LayoutBuilder(
-            builder: (context, viewport) {
-              final phone = viewport.maxWidth < 720;
-              return Scrollbar(
-                controller: _scrollController,
-                thumbVisibility: !phone,
-                child: SingleChildScrollView(
+      backgroundColor: BrandPalette.paper,
+      body: BrandPaper(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: SafeArea(
+                child: Scrollbar(
                   controller: _scrollController,
-                  physics: kIsWeb
-                      ? const ClampingScrollPhysics()
-                      : const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                  child: BrandPaper(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: viewport.maxHeight),
-                      child: SafeArea(
-                        child: Center(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.only(bottom: 32),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 620;
+                        final gutter = compact ? 20.0 : 40.0;
+                        return Center(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 980),
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                phone ? 20 : 42,
-                                phone ? 18 : 30,
-                                phone ? 20 : 42,
-                                phone ? 48 : 78,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _header(phone),
-                                  SizedBox(height: phone ? 44 : 68),
-                                  _hero(phone),
-                                  SizedBox(height: phone ? 72 : 104),
-                                  _work(phone),
-                                  SizedBox(height: phone ? 72 : 104),
-                                  KeyedSubtree(
-                                    key: _pricesKey,
-                                    child: _prices(phone),
-                                  ),
-                                  SizedBox(height: phone ? 72 : 104),
-                                  KeyedSubtree(
-                                    key: _notesKey,
-                                    child: _notes(phone),
-                                  ),
-                                  SizedBox(height: phone ? 72 : 104),
-                                  KeyedSubtree(
-                                    key: _contactKey,
-                                    child: _visit(phone),
-                                  ),
-                                  SizedBox(height: phone ? 66 : 98),
-                                  _footer(phone),
-                                ],
+                            constraints: const BoxConstraints(maxWidth: 800),
+                            child: SelectionArea(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  gutter,
+                                  compact ? 20 : 32,
+                                  gutter,
+                                  16,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _header(compact),
+                                    const SizedBox(height: 44),
+                                    _availability(compact),
+                                    const SizedBox(height: 50),
+                                    _prices(compact),
+                                    const SizedBox(height: 50),
+                                    _openings(compact),
+                                    const SizedBox(height: 50),
+                                    _note(compact),
+                                    const SizedBox(height: 50),
+                                    KeyedSubtree(
+                                      key: _visitKey,
+                                      child: _visit(compact),
+                                    ),
+                                    const SizedBox(height: 50),
+                                    _footer(),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _refreshController,
-                builder: (context, _) => CustomPaint(
-                  painter: _EInkRefreshPainter(
-                    progress: _refreshController.value,
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _refreshController,
+                  builder: (context, _) => CustomPaint(
+                    painter: _EInkRefreshPainter(_refreshController.value),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _header(bool phone) {
-    final meta = Text(
-      '${_publicationDate()}   /   ISSUE ${_issueNumber().toString().padLeft(3, '0')}',
-      style: _mono(10.5, color: BrandPalette.creamMuted, spacing: 0.9),
-    );
-    final languages = Wrap(
-      spacing: 5,
-      runSpacing: 5,
-      children: AppLanguage.values
-          .map(
-            (language) => _DailyAction(
-              label: language.code.toUpperCase(),
-              selected: widget.localization.language == language,
-              onTap: () => widget.localization.setLanguage(language),
-            ),
-          )
-          .toList(),
-    );
-    final nav = Wrap(
-      spacing: 7,
-      runSpacing: 7,
-      children: [
-        _DailyAction(
-          label: widget.localization.t('nav_prices'),
-          onTap: () => _scrollTo(_pricesKey),
-        ),
-        _DailyAction(
-          label: widget.localization.t('nav_notes'),
-          onTap: () => _scrollTo(_notesKey),
-        ),
-        _DailyAction(
-          label: widget.localization.t('nav_visit'),
-          onTap: () => _scrollTo(_contactKey),
-        ),
-      ],
-    );
-    final brand = _DailyAction(
-      label: widget.localization.t('brand_daily'),
-      strong: true,
-      onTap: _scrollHome,
-    );
-
+  Widget _header(bool compact) {
+    final now = _nhaTrangNow();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (phone) ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: brand),
-              const SizedBox(width: 12),
-              languages,
-            ],
-          ),
-          const SizedBox(height: 12),
-          meta,
-          const SizedBox(height: 15),
-          nav,
-        ] else
-          Row(
-            children: [
-              brand,
-              const SizedBox(width: 28),
-              Expanded(child: meta),
-              nav,
-              const SizedBox(width: 16),
-              languages,
-            ],
-          ),
-        const SizedBox(height: 18),
-        const _Hairline(),
-      ],
-    );
-  }
-
-  Widget _hero(bool phone) {
-    final status = _content.status;
-    final dayPass = _priceFor('price_day_pass')?.price ?? '250K';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 8,
+          children: [
+            Text(
+              '${widget.localization.t('brand_daily')}  ·  ${_dateLabel(now)}  ·  NO. ${_issueNumber(now).toString().padLeft(3, '0')}',
+              style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.65),
+            ),
+            _languagePicker(),
+          ],
+        ),
+        const SizedBox(height: 26),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: EvilCoworkingLogo(width: compact ? 210 : 270),
+        ),
+        const SizedBox(height: 26),
+        const _Rule(),
+        const SizedBox(height: 14),
         Text(
           widget.localization.t('hero_kicker'),
-          style: _mono(11.5, color: BrandPalette.creamMuted, spacing: 1.45),
+          style: _mono(11, color: BrandPalette.inkMuted, spacing: 1.35),
         ),
-        SizedBox(height: phone ? 24 : 30),
-        Semantics(
-          image: true,
-          label: 'Evil Coworking',
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: phone ? 1.0 : 0.74,
-              child: const EvilCoworkingLogo(),
-            ),
-          ),
-        ),
-        SizedBox(height: phone ? 34 : 48),
-        _statusTicket(status, dayPass, phone),
       ],
     );
   }
 
-  Widget _statusTicket(SiteStatus status, String dayPass, bool phone) {
-    final primary = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'LIVE / ${widget.localization.t('local_data')}',
-          style: _mono(10, color: BrandPalette.brown, spacing: 1),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '${status.free}',
-          style: _serif(
-            phone ? 88 : 118,
-            color: BrandPalette.brown,
-            weight: FontWeight.w700,
-            height: 0.78,
-            spacing: -4,
-          ),
-        ),
-        SizedBox(height: phone ? 14 : 18),
-        Text(
-          widget.localization.t(status.free == 1 ? 'desk_free' : 'desks_free'),
-          style: _serif(
-            phone ? 29 : 42,
-            color: BrandPalette.brown,
-            weight: FontWeight.w700,
-            height: 0.94,
-          ),
-        ),
-      ],
-    );
-
-    final detail = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '${status.occupied} / ${status.total} ${widget.localization.t('occupied')}',
-          style: _mono(11.5, color: BrandPalette.brown, spacing: 0.45),
-        ),
-        const SizedBox(height: 12),
-        _OccupancyMarks(total: status.total, occupied: status.occupied),
-        const SizedBox(height: 12),
-        Text(
-          _statusUpdatedLabel(status),
-          style: _mono(10, color: BrandPalette.creamFaint, spacing: 0.7),
-        ),
-        SizedBox(height: phone ? 22 : 28),
-        Container(height: 1, color: const Color(0x66352822)),
-        SizedBox(height: phone ? 18 : 22),
-        Text(
-          widget.localization.t('day_pass_now'),
-          style: _mono(10, color: BrandPalette.creamFaint, spacing: 1),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          dayPass,
-          style: _serif(
-            35,
-            color: BrandPalette.brown,
-            weight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 11),
-        _InlineLink(
-          label: widget.localization.t('message_zalo'),
-          onTap: () => _launch('https://zalo.me/84565056748'),
-        ),
-      ],
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(phone ? 22 : 30),
-      decoration: const BoxDecoration(
-        color: BrandPalette.cream,
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x66201915),
-            offset: Offset(5, 6),
-            blurRadius: 0,
-          ),
-        ],
+  Widget _languagePicker() {
+    return Semantics(
+      label: 'Language',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: AppLanguage.values
+            .map((language) {
+              final selected = widget.localization.language == language;
+              return Padding(
+                padding: const EdgeInsets.only(left: 2),
+                child: TextButton(
+                  onPressed: () => widget.localization.setLanguage(language),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: const RoundedRectangleBorder(),
+                    side: selected
+                        ? const BorderSide(color: BrandPalette.ink)
+                        : BorderSide.none,
+                  ),
+                  child: Text(
+                    language.code.toUpperCase(),
+                    style: _mono(10.5, spacing: 0.7),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
       ),
-      child: phone
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [primary, const SizedBox(height: 26), detail],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(flex: 5, child: primary),
-                const SizedBox(width: 54),
-                Expanded(flex: 3, child: detail),
-              ],
-            ),
     );
   }
 
-  Widget _work(bool phone) {
-    final features = <(String, String)>[
-      ('01', widget.localization.t('feature_big_desks')),
-      ('02', widget.localization.t('feature_good_chairs')),
-      ('03', widget.localization.t('feature_fast_wifi')),
-      ('04', widget.localization.t('feature_cold_ac')),
-    ];
-    final tiles = features
-        .map((item) => _FeatureTile(number: item.$1, label: item.$2))
-        .toList();
-
+  Widget _availability(bool compact) {
+    final status = _content.status;
+    final dayPrice = _priceFor('price_day_pass').price;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle(widget.localization.t('work_title'), phone),
-        const SizedBox(height: 10),
-        Text(
-          widget.localization.t('work_intro'),
-          style: _serif(phone ? 18 : 22,
-              color: BrandPalette.creamMuted, height: 1.28),
-        ),
-        SizedBox(height: phone ? 24 : 30),
-        if (phone)
-          for (final tile in tiles) ...[
-            tile,
-            const SizedBox(height: 10),
-          ]
-        else ...[
-          Row(children: [Expanded(child: tiles[0]), const SizedBox(width: 12), Expanded(child: tiles[1])]),
-          const SizedBox(height: 12),
-          Row(children: [Expanded(child: tiles[2]), const SizedBox(width: 12), Expanded(child: tiles[3])]),
-        ],
-      ],
-    );
-  }
-
-  Widget _prices(bool phone) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+        _sectionKicker(widget.localization.t('availability_kicker')),
+        const SizedBox(height: 20),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(child: _sectionTitle(widget.localization.t('prices_title'), phone)),
-            Text('VND', style: _mono(11, color: BrandPalette.creamMuted, spacing: 1.2)),
-          ],
-        ),
-        SizedBox(height: phone ? 20 : 26),
-        const _Hairline(),
-        for (final price in _content.prices) ...[
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: phone ? 15 : 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.localization.t(price.labelKey),
-                    style: _serif(phone ? 20 : 23, weight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                  color: BrandPalette.cream,
-                  child: Text(
-                    price.price,
-                    style: _mono(phone ? 15.5 : 17, color: BrandPalette.brown),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const _Hairline(light: true),
-        ],
-      ],
-    );
-  }
-
-  Widget _notes(bool phone) {
-    final notes = _content.announcements.take(3).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle(widget.localization.t('notes_title'), phone),
-        const SizedBox(height: 9),
-        Text(
-          widget.localization.t('notes_intro'),
-          style: _serif(phone ? 18 : 21,
-              color: BrandPalette.creamMuted, height: 1.25),
-        ),
-        SizedBox(height: phone ? 22 : 28),
-        for (var i = 0; i < notes.length; i++) ...[
-          _NoteCard(
-            date: notes[i].date,
-            text: notes[i].textFor(widget.localization.language.code),
-            filled: i == 0,
-            phone: phone,
-          ),
-          if (i != notes.length - 1) SizedBox(height: phone ? 12 : 14),
-        ],
-      ],
-    );
-  }
-
-  Widget _visit(bool phone) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle(widget.localization.t('visit_title'), phone),
-        const SizedBox(height: 10),
-        Text(
-          widget.localization.t('visit_copy'),
-          style: _serif(phone ? 21 : 26, weight: FontWeight.w600, height: 1.22),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          widget.localization.t('contact_location'),
-          style: _mono(11, color: BrandPalette.creamMuted, spacing: 1.1),
-        ),
-        SizedBox(height: phone ? 24 : 30),
-        const _Hairline(),
-        for (final link in _contacts) ...[
-          _ContactRow(
-            label: widget.localization.t(link.labelKey),
-            detail: link.detail,
-            onTap: () => _launch(link.url),
-          ),
-          const _Hairline(light: true),
-        ],
-      ],
-    );
-  }
-
-  Widget _footer(bool phone) {
-    return Column(
-      children: [
-        const _Hairline(),
-        SizedBox(height: phone ? 32 : 40),
-        Opacity(
-          opacity: 0.18,
-          child: EvilCoworkingLogo(width: phone ? 190 : 250),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'EVIL SPACE  ·  NHA TRANG  ·  ${widget.localization.t('page_one')}',
-          textAlign: TextAlign.center,
-          style: _mono(10, color: BrandPalette.creamMuted, spacing: 1),
-        ),
-      ],
-    );
-  }
-
-  Widget _sectionTitle(String value, bool phone) => Text(
-        value,
-        style: _serif(phone ? 35 : 48, weight: FontWeight.w700, height: 0.98),
-      );
-
-  SitePrice? _priceFor(String key) {
-    for (final price in _content.prices) {
-      if (price.labelKey == key) return price;
-    }
-    return null;
-  }
-
-  TextStyle _serif(
-    double size, {
-    Color color = BrandPalette.cream,
-    FontWeight weight = FontWeight.w400,
-    double? height,
-    double? spacing,
-  }) =>
-      TextStyle(
-        fontFamily: 'Georgia',
-        fontFamilyFallback: const ['Times New Roman', 'serif'],
-        fontSize: size,
-        fontWeight: weight,
-        height: height,
-        letterSpacing: spacing,
-        color: color,
-      );
-
-  TextStyle _mono(
-    double size, {
-    Color color = BrandPalette.cream,
-    FontWeight weight = FontWeight.w700,
-    double? height,
-    double? spacing,
-  }) =>
-      TextStyle(
-        fontFamily: 'Courier New',
-        fontFamilyFallback: const ['Courier', 'monospace'],
-        fontSize: size,
-        fontWeight: weight,
-        height: height,
-        letterSpacing: spacing,
-        color: color,
-      );
-
-  String _publicationDate() {
-    final now = DateTime.now();
-    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    return '${weekdays[now.weekday - 1]} / ${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]} ${now.year}';
-  }
-
-  int _issueNumber() {
-    final now = DateTime.now();
-    return now.difference(DateTime(now.year, 1, 1)).inDays + 1;
-  }
-
-  String _statusUpdatedLabel(SiteStatus status) {
-    final parsed = DateTime.tryParse(status.updated);
-    if (parsed == null) return widget.localization.t('local_data');
-    final now = DateTime.now();
-    if (parsed.year == now.year && parsed.month == now.month && parsed.day == now.day) {
-      return widget.localization.t('updated_today');
-    }
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    return '${widget.localization.t('updated')} ${parsed.day.toString().padLeft(2, '0')} ${months[parsed.month - 1]}';
-  }
-}
-
-class _FeatureTile extends StatelessWidget {
-  const _FeatureTile({required this.number, required this.label});
-  final String number;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minHeight: 104),
-        padding: const EdgeInsets.fromLTRB(18, 17, 18, 18),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0x6680685A)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(number, style: _monoText(10, BrandPalette.creamMuted, 0.9)),
-            const SizedBox(height: 14),
             Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                height: 1,
-                color: BrandPalette.cream,
+              '${status.free}',
+              style: _serif(compact ? 86 : 116, height: 0.78),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Text(
+                  widget.localization.t(
+                    status.free == 1 ? 'desk_free' : 'desks_free',
+                  ),
+                  style: _serif(compact ? 23 : 30, height: 0.96),
+                ),
               ),
             ),
           ],
         ),
-      );
+        const SizedBox(height: 22),
+        _OccupancyMarks(total: status.total, occupied: status.occupied),
+        const SizedBox(height: 12),
+        Text(
+          '${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
+          style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
+        ),
+        const SizedBox(height: 26),
+        _PaperButton(
+          label: widget.localization.t('availability_action'),
+          detail: dayPrice,
+          icon: Icons.arrow_outward,
+          filled: true,
+          onPressed: () => _launch(_zaloUrl),
+        ),
+      ],
+    );
+  }
+
+  Widget _prices(bool compact) {
+    return _Section(
+      title: widget.localization.t('prices_title'),
+      child: Column(
+        children: _content.prices
+            .map((price) {
+              return Container(
+                constraints: const BoxConstraints(minHeight: 76),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.localization.t(price.labelKey),
+                        style: _mono(11, spacing: 0.8),
+                      ),
+                    ),
+                    Text(
+                      price.price,
+                      textAlign: TextAlign.right,
+                      style: _serif(compact ? 24 : 30),
+                    ),
+                  ],
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _openings(bool compact) {
+    return _Section(
+      title: widget.localization.t('opening_title'),
+      child: Column(
+        children: _content.openings
+            .map((opening) {
+              return Container(
+                constraints: const BoxConstraints(minHeight: 70),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      margin: const EdgeInsets.only(right: 14),
+                      decoration: BoxDecoration(
+                        color: opening.isOpen
+                            ? BrandPalette.ink
+                            : Colors.transparent,
+                        border: Border.all(color: BrandPalette.ink),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        widget.localization.t(opening.labelKey),
+                        style: _serif(compact ? 18 : 21),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      widget.localization.t(
+                        opening.isOpen ? 'now_open' : 'coming_soon',
+                      ),
+                      style: _mono(
+                        9.5,
+                        color: BrandPalette.inkMuted,
+                        spacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _note(bool compact) {
+    final announcement = _content.announcements.first;
+    return _Section(
+      title: widget.localization.t('notes_title'),
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: compact ? 24 : 30),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: BrandPalette.ink)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: compact ? 62 : 86,
+              child: Text(
+                announcement.date,
+                style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                announcement.textFor(widget.localization.language.code),
+                style: _serif(compact ? 21 : 26, height: 1.16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _visit(bool compact) {
+    return _Section(
+      title: widget.localization.t('visit_title'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 22),
+          Text(
+            widget.localization.t('visit_copy'),
+            style: _serif(compact ? 18 : 21, height: 1.35),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            height: compact ? 170 : 190,
+            decoration: BoxDecoration(
+              color: BrandPalette.paperDeep,
+              border: Border.all(color: BrandPalette.ink),
+            ),
+            child: Stack(
+              children: [
+                const Positioned.fill(
+                  child: CustomPaint(painter: _LocationPlatePainter()),
+                ),
+                Positioned(
+                  left: compact ? 18 : 26,
+                  right: compact ? 18 : 26,
+                  bottom: compact ? 16 : 22,
+                  child: Container(
+                    color: BrandPalette.paperLift,
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      widget.localization.t('contact_location'),
+                      style: _mono(10.5, spacing: 0.65, height: 1.45),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _CompactLink(
+                label: widget.localization.t('contact_directions'),
+                icon: Icons.near_me_outlined,
+                onPressed: () => _launch(_directionsUrl),
+              ),
+              _CompactLink(
+                label: widget.localization.t('contact_map'),
+                icon: Icons.rate_review_outlined,
+                onPressed: () => _launch(_mapsUrl),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _ContactLink(
+            label: widget.localization.t('contact_instagram'),
+            detail: '@evil_space_coworking',
+            onPressed: () => _launch(_instagramUrl),
+          ),
+          _ContactLink(
+            label: widget.localization.t('contact_zalo'),
+            detail: '+84 56 5056 748',
+            onPressed: () => _launch(_zaloUrl),
+          ),
+          _ContactLink(
+            label: widget.localization.t('contact_phone'),
+            detail: '+84 56 5056 748',
+            onPressed: () => _launch(_phoneUrl),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footer() {
+    return Column(
+      children: [
+        const _Rule(),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'EVIL SPACE  ·  NHA TRANG',
+                style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75),
+              ),
+            ),
+            Text(
+              widget.localization.t('page_one'),
+              style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionKicker(String text) => Text(
+    text,
+    style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
+  );
+
+  SitePrice _priceFor(String key) {
+    for (final price in _content.prices) {
+      if (price.labelKey == key) return price;
+    }
+    return SiteContent.demo.prices.first;
+  }
+
+  String _updatedLabel(String raw) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return widget.localization.t('local_data');
+    final today = _nhaTrangNow();
+    if (parsed.year == today.year &&
+        parsed.month == today.month &&
+        parsed.day == today.day) {
+      return widget.localization.t('updated_today');
+    }
+    return '${widget.localization.t('updated')} ${parsed.day.toString().padLeft(2, '0')} ${_months[parsed.month - 1]}';
+  }
+
+  DateTime _nhaTrangNow() =>
+      DateTime.now().toUtc().add(const Duration(hours: 7));
+
+  int _issueNumber(DateTime date) {
+    final start = DateTime.utc(date.year, 1, 1);
+    final day = DateTime.utc(date.year, date.month, date.day);
+    return day.difference(start).inDays + 1;
+  }
+
+  String _dateLabel(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')} ${_months[date.month - 1]} ${date.year}';
 }
 
-class _NoteCard extends StatelessWidget {
-  const _NoteCard({
-    required this.date,
-    required this.text,
-    required this.filled,
-    required this.phone,
-  });
-  final String date;
-  final String text;
-  final bool filled;
-  final bool phone;
+const _months = <String>[
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
+];
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = filled ? BrandPalette.brown : BrandPalette.cream;
-    final secondary = filled ? BrandPalette.creamFaint : BrandPalette.creamMuted;
-    final dateText = Text(date, style: _monoText(10.5, secondary, 0.9));
-    final bodyText = Text(
-      text,
-      style: TextStyle(
-        fontFamily: 'Georgia',
-        fontSize: phone ? 24 : 28,
-        fontWeight: FontWeight.w600,
-        height: 1.14,
-        color: foreground,
-      ),
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(phone ? 19 : 24),
-      decoration: BoxDecoration(
-        color: filled ? BrandPalette.cream : Colors.transparent,
-        border: Border.all(
-          color: filled ? BrandPalette.cream : const Color(0x6680685A),
-        ),
-      ),
-      child: phone
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [dateText, const SizedBox(height: 10), bodyText],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 106, child: dateText),
-                Expanded(child: bodyText),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _Rule(),
+        const SizedBox(height: 14),
+        Text(title, style: _mono(11, spacing: 1.05)),
+        child,
+      ],
     );
   }
 }
 
 class _OccupancyMarks extends StatelessWidget {
   const _OccupancyMarks({required this.total, required this.occupied});
+
   final int total;
   final int occupied;
 
   @override
-  Widget build(BuildContext context) => Wrap(
-        spacing: 5,
-        runSpacing: 5,
-        children: List.generate(total, (index) {
-          final filled = index < occupied;
-          return Container(
-            width: 15,
-            height: 15,
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 7,
+      runSpacing: 7,
+      children: List.generate(total, (index) {
+        final filled = index < occupied;
+        return Semantics(
+          label: filled ? 'Occupied desk' : 'Free desk',
+          child: Container(
+            width: 17,
+            height: 17,
             decoration: BoxDecoration(
-              color: filled ? BrandPalette.brown : Colors.transparent,
-              border: Border.all(color: BrandPalette.brown, width: 1.2),
+              color: filled ? BrandPalette.ink : Colors.transparent,
+              border: Border.all(color: BrandPalette.ink, width: 1.2),
             ),
-          );
-        }),
-      );
+          ),
+        );
+      }),
+    );
+  }
 }
 
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({required this.label, required this.detail, required this.onTap});
+class _PaperButton extends StatelessWidget {
+  const _PaperButton({
+    required this.label,
+    required this.detail,
+    required this.icon,
+    required this.onPressed,
+    this.filled = false,
+  });
+
   final String label;
   final String detail;
-  final VoidCallback onTap;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool filled;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: '$label $detail',
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: const TextStyle(
-                        fontFamily: 'Georgia',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: BrandPalette.cream,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Flexible(
-                    child: Text(
-                      detail,
-                      textAlign: TextAlign.right,
-                      style: _monoText(11, BrandPalette.creamMuted, 0.6),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('→', style: TextStyle(fontSize: 19, color: BrandPalette.cream)),
-                ],
-              ),
-            ),
-          ),
+  Widget build(BuildContext context) {
+    final foreground = filled ? BrandPalette.paperLift : BrandPalette.ink;
+    return Semantics(
+      button: true,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: foreground,
+          backgroundColor: filled ? BrandPalette.ink : Colors.transparent,
+          minimumSize: const Size.fromHeight(58),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          side: const BorderSide(color: BrandPalette.ink),
+          shape: const RoundedRectangleBorder(),
+          overlayColor: foreground.withValues(alpha: 0.08),
         ),
-      );
-}
-
-class _InlineLink extends StatelessWidget {
-  const _InlineLink({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            onTap: onTap,
-            child: Text(
-              '$label →',
-              style: const TextStyle(
-                fontFamily: 'Courier New',
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                decoration: TextDecoration.underline,
-                decorationColor: BrandPalette.brown,
-                color: BrandPalette.brown,
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
-class _DailyAction extends StatelessWidget {
-  const _DailyAction({
-    required this.label,
-    required this.onTap,
-    this.selected = false,
-    this.strong = false,
-  });
-  final String label;
-  final VoidCallback onTap;
-  final bool selected;
-  final bool strong;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        selected: selected,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-              decoration: BoxDecoration(
-                color: selected ? BrandPalette.cream : Colors.transparent,
-                border: Border.all(
-                  color: strong || selected ? BrandPalette.cream : Colors.transparent,
-                ),
-              ),
+        child: Row(
+          children: [
+            Expanded(
               child: Text(
                 label,
-                style: TextStyle(
-                  fontFamily: 'Courier New',
-                  fontSize: strong ? 12 : 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: strong ? 1.05 : 0.55,
-                  color: selected ? BrandPalette.brown : BrandPalette.cream,
-                ),
+                style: _mono(11, color: foreground, spacing: 0.75),
               ),
             ),
-          ),
+            Text(detail, style: _serif(19, color: foreground)),
+            const SizedBox(width: 12),
+            Icon(icon, size: 19),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
-class _Hairline extends StatelessWidget {
-  const _Hairline({this.light = false});
-  final bool light;
+class _CompactLink extends StatelessWidget {
+  const _CompactLink({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Container(
-        height: light ? 0.7 : 1.1,
-        color: light ? const Color(0x6680685A) : BrandPalette.cream,
-      );
-}
-
-class _ContactLink {
-  const _ContactLink({required this.labelKey, required this.detail, required this.url});
-  final String labelKey;
-  final String detail;
-  final String url;
-}
-
-TextStyle _monoText(double size, Color color, double spacing) => TextStyle(
-      fontFamily: 'Courier New',
-      fontSize: size,
-      fontWeight: FontWeight.w700,
-      letterSpacing: spacing,
-      color: color,
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label, style: _mono(10, spacing: 0.55)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: BrandPalette.ink,
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        side: const BorderSide(color: BrandPalette.ink),
+        shape: const RoundedRectangleBorder(),
+      ),
     );
+  }
+}
+
+class _ContactLink extends StatelessWidget {
+  const _ContactLink({
+    required this.label,
+    required this.detail,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String detail;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: BrandPalette.ink,
+          minimumSize: const Size.fromHeight(58),
+          padding: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(),
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: Text(label, style: _mono(10.5, spacing: 0.7))),
+              Text(
+                detail,
+                style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.25),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.arrow_outward, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Rule extends StatelessWidget {
+  const _Rule();
+
+  @override
+  Widget build(BuildContext context) =>
+      const SizedBox(height: 1, child: ColoredBox(color: BrandPalette.ink));
+}
+
+class _LocationPlatePainter extends CustomPainter {
+  const _LocationPlatePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final secondary = Paint()
+      ..color = BrandPalette.inkFaint
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final primary = Paint()
+      ..color = BrandPalette.ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final roadOne = Path()
+      ..moveTo(-12, size.height * 0.34)
+      ..cubicTo(
+        size.width * 0.25,
+        size.height * 0.08,
+        size.width * 0.58,
+        size.height * 0.55,
+        size.width + 12,
+        size.height * 0.18,
+      );
+    final roadTwo = Path()
+      ..moveTo(size.width * 0.2, -10)
+      ..cubicTo(
+        size.width * 0.42,
+        size.height * 0.3,
+        size.width * 0.25,
+        size.height * 0.72,
+        size.width * 0.52,
+        size.height + 10,
+      );
+    canvas.drawPath(roadOne, secondary);
+    canvas.drawPath(roadTwo, secondary);
+
+    final center = Offset(size.width * 0.7, size.height * 0.38);
+    canvas.drawCircle(center, 18, primary);
+    canvas.drawCircle(center, 5, Paint()..color = BrandPalette.ink);
+    canvas.drawLine(
+      center + const Offset(0, 18),
+      center + const Offset(0, 36),
+      primary,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LocationPlatePainter oldDelegate) => false;
+}
 
 class _EInkRefreshPainter extends CustomPainter {
-  const _EInkRefreshPainter({required this.progress});
+  const _EInkRefreshPainter(this.progress);
+
   final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (progress <= 0 || progress >= 0.999) return;
-    final flash = progress < 0.4 ? progress / 0.4 : (1 - progress) / 0.6;
-    final alpha = (flash.clamp(0.0, 1.0) * 24).round();
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = Color.fromARGB(alpha, 231, 210, 192),
-    );
-    final front = size.height * progress;
-    final band = (size.height * 0.035).clamp(14.0, 40.0);
-    canvas.drawRect(
-      Rect.fromLTWH(0, front - band, size.width, band),
-      Paint()..color = const Color.fromARGB(18, 231, 210, 192),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(0, front - 1, size.width, 2),
-      Paint()..color = const Color.fromARGB(32, 43, 31, 26),
-    );
+    if (progress <= 0 || progress >= 1 || size.isEmpty) return;
+    final intensity = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
+    final wash = Paint()
+      ..color = BrandPalette.ink.withValues(alpha: 0.035 * intensity);
+    canvas.drawRect(Offset.zero & size, wash);
+
+    final lines = Paint()
+      ..color = BrandPalette.ink.withValues(alpha: 0.045 * intensity)
+      ..strokeWidth = 0.7;
+    for (var y = 0.0; y < size.height; y += 7) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), lines);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _EInkRefreshPainter oldDelegate) =>
       oldDelegate.progress != progress;
+}
+
+TextStyle _serif(
+  double size, {
+  Color color = BrandPalette.ink,
+  double height = 1.05,
+}) {
+  return TextStyle(
+    color: color,
+    fontFamily: 'Georgia',
+    fontFamilyFallback: const ['Times New Roman', 'serif'],
+    fontSize: size,
+    fontWeight: FontWeight.w400,
+    height: height,
+    letterSpacing: -0.25,
+  );
+}
+
+TextStyle _mono(
+  double size, {
+  Color color = BrandPalette.ink,
+  double spacing = 0,
+  double height = 1.2,
+}) {
+  return TextStyle(
+    color: color,
+    fontFamily: 'Courier New',
+    fontFamilyFallback: const ['monospace'],
+    fontSize: size,
+    fontWeight: FontWeight.w700,
+    height: height,
+    letterSpacing: spacing,
+  );
 }

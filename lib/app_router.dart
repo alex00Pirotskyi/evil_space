@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'package:evil_space/admin_screen.dart';
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_shell.dart';
 import 'package:evil_space/localization.dart';
@@ -9,9 +10,7 @@ class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
   const EvilSpaceRouteParser();
 
   @override
-  Future<AppRoute> parseRouteInformation(
-    RouteInformation routeInformation,
-  ) {
+  Future<AppRoute> parseRouteInformation(RouteInformation routeInformation) {
     return SynchronousFuture(AppRoute.fromUri(routeInformation.uri));
   }
 
@@ -23,9 +22,7 @@ class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
 
 class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
     with ChangeNotifier {
-  EvilSpaceRouterDelegate({
-    required this.localization,
-  }) {
+  EvilSpaceRouterDelegate({required this.localization}) {
     localization.addListener(_handleLocalizationChanged);
   }
 
@@ -51,6 +48,10 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
 
   @override
   Widget build(BuildContext context) {
+    if (_currentRoute == AppRoute.admin) {
+      return AdminScreen(onExit: () => navigate(AppRoute.home));
+    }
+
     return DailyScreen(
       currentRoute: _currentRoute,
       localization: localization,

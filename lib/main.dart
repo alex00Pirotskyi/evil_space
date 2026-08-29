@@ -37,28 +37,39 @@ class _EvilSpaceAppState extends State<EvilSpaceApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      debugShowCheckedModeBanner: false,
-      title: 'Evil Space Daily',
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: BrandPalette.brown,
-        colorScheme: const ColorScheme.dark(
-          surface: BrandPalette.brown,
-          onSurface: BrandPalette.cream,
-          primary: BrandPalette.cream,
-          onPrimary: BrandPalette.brown,
+    return AnimatedBuilder(
+      animation: _localization,
+      builder: (context, _) => MaterialApp.router(
+        debugShowCheckedModeBanner: false,
+        title: 'Evil Space Daily',
+        theme: ThemeData(
+          useMaterial3: true,
+          brightness: Brightness.light,
+          scaffoldBackgroundColor: BrandPalette.paper,
+          colorScheme: const ColorScheme.light(
+            surface: BrandPalette.paper,
+            onSurface: BrandPalette.ink,
+            primary: BrandPalette.ink,
+            onPrimary: BrandPalette.paperLift,
+            outline: BrandPalette.ink,
+            outlineVariant: BrandPalette.rule,
+          ),
+          splashFactory: NoSplash.splashFactory,
+          focusColor: BrandPalette.inkFaint,
+          highlightColor: Colors.transparent,
+          textSelectionTheme: const TextSelectionThemeData(
+            cursorColor: BrandPalette.ink,
+            selectionColor: Color(0x55AAA79D),
+            selectionHandleColor: BrandPalette.ink,
+          ),
+          snackBarTheme: const SnackBarThemeData(
+            backgroundColor: BrandPalette.ink,
+            contentTextStyle: TextStyle(color: BrandPalette.paperLift),
+          ),
         ),
-        splashFactory: NoSplash.splashFactory,
-        textSelectionTheme: const TextSelectionThemeData(
-          cursorColor: BrandPalette.cream,
-          selectionColor: Color(0x6680685A),
-          selectionHandleColor: BrandPalette.cream,
-        ),
+        routerDelegate: _routerDelegate,
+        routeInformationParser: const EvilSpaceRouteParser(),
       ),
-      routerDelegate: _routerDelegate,
-      routeInformationParser: const EvilSpaceRouteParser(),
     );
   }
 }
