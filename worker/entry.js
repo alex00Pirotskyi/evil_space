@@ -25,16 +25,28 @@ export default {
       return handlePublicBookingDelete(request, env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/admin/operations') {
+      const response = await legacyWorker.fetch(request, env, ctx);
+      return filterOperationsToToday(response);
+    }
+
     if (
       request.method === 'POST' &&
       url.pathname === '/api/admin/booking/accept'
     ) {
       const clone = request.clone();
       const body = await readJson(clone);
+      const bookingId = toPositiveInt(body?.id);
+      if (bookingId) {
+        const stale = await isBookingFromPreviousDay(bookingId, env);
+        if (stale) {
+          return jsonError('This desk request expired at midnight.', 410);
+        }
+      }
+
       const response = await legacyWorker.fetch(request, env, ctx);
-      if (response.ok) {
-        const bookingId = toPositiveInt(body?.id);
-        if (bookingId) await linkAcceptedVisit(bookingId, env);
+      if (response.ok && bookingId) {
+        await linkAcceptedVisit(bookingId, env);
       }
       return response;
     }
@@ -168,6 +180,45 @@ async function handlePublicBookingDelete(request, env) {
   await env.evil_space.batch(statements);
 
   return json({ ok: true });
+}
+
+async function filterOperationsToToday(response) {
+  if (!response.ok) return response;
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return response;
+  }
+
+  const requests = payload?.snapshot?.booking_requests;
+  if (Array.isArray(requests)) {
+    const { start, end } = nhaTrangDayBounds(nowSeconds());
+    payload.snapshot.booking_requests = requests.filter((booking) => {
+      const createdAt = Number(booking?.created_at ?? 0);
+      return createdAt >= start && createdAt < end;
+    });
+  }
+
+  return json(payload, response.status);
+}
+
+async function isBookingFromPreviousDay(bookingId, env) {
+  const booking = await env.evil_space
+    .prepare(`
+      SELECT created_at
+      FROM booking_requests
+      WHERE id = ? AND status = 'new'
+      LIMIT 1
+    `)
+    .bind(bookingId)
+    .first();
+
+  if (!booking) return false;
+  const { start, end } = nhaTrangDayBounds(nowSeconds());
+  const createdAt = Number(booking.created_at ?? 0);
+  return createdAt < start || createdAt >= end;
 }
 
 async function linkAcceptedVisit(bookingId, env) {
