@@ -58,6 +58,7 @@ class VisitRecord {
     required this.kind,
     required this.amount,
     required this.createdAt,
+    this.customerId,
   });
 
   final int id;
@@ -65,6 +66,7 @@ class VisitRecord {
   final String kind;
   final int amount;
   final int createdAt;
+  final int? customerId;
 
   factory VisitRecord.fromJson(Map<String, dynamic> json) {
     return VisitRecord(
@@ -73,6 +75,7 @@ class VisitRecord {
       kind: json['kind']?.toString() ?? 'day',
       amount: _asInt(json['amount']) ?? 0,
       createdAt: _asInt(json['created_at']) ?? 0,
+      customerId: _asInt(json['customer_id']),
     );
   }
 }
@@ -83,12 +86,14 @@ class MembershipRecord {
     required this.name,
     required this.startsAt,
     required this.expiresAt,
+    this.customerId,
   });
 
   final int id;
   final String name;
   final int startsAt;
   final int expiresAt;
+  final int? customerId;
 
   factory MembershipRecord.fromJson(Map<String, dynamic> json) {
     return MembershipRecord(
@@ -96,6 +101,73 @@ class MembershipRecord {
       name: json['name']?.toString() ?? '',
       startsAt: _asInt(json['starts_at']) ?? 0,
       expiresAt: _asInt(json['expires_at']) ?? 0,
+      customerId: _asInt(json['customer_id']),
+    );
+  }
+}
+
+class BookingRequestRecord {
+  const BookingRequestRecord({
+    required this.id,
+    required this.name,
+    required this.contactType,
+    required this.contactValue,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String name;
+  final String contactType;
+  final String contactValue;
+  final int createdAt;
+
+  factory BookingRequestRecord.fromJson(Map<String, dynamic> json) {
+    return BookingRequestRecord(
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      contactType: json['contact_type']?.toString() ?? '',
+      contactValue: json['contact_value']?.toString() ?? '',
+      createdAt: _asInt(json['created_at']) ?? 0,
+    );
+  }
+}
+
+class CustomerRecord {
+  const CustomerRecord({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.telegram,
+    required this.contactOther,
+    required this.notes,
+    required this.createdAt,
+    this.activeUntil,
+  });
+
+  final int id;
+  final String name;
+  final String phone;
+  final String email;
+  final String telegram;
+  final String contactOther;
+  final String notes;
+  final int createdAt;
+  final int? activeUntil;
+
+  bool get hasActiveMembership => activeUntil != null && activeUntil! > 0;
+
+  factory CustomerRecord.fromJson(Map<String, dynamic> json) {
+    return CustomerRecord(
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      telegram: json['telegram']?.toString() ?? '',
+      contactOther: json['contact_other']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+      createdAt: _asInt(json['created_at']) ?? 0,
+      activeUntil: _asInt(json['active_until']),
     );
   }
 }
@@ -153,6 +225,8 @@ class OperationsSnapshot {
   const OperationsSnapshot({
     required this.todayVisits,
     required this.activeMemberships,
+    required this.bookingRequests,
+    required this.customers,
     required this.toBuy,
     required this.purchaseHistory,
     required this.income,
@@ -160,6 +234,8 @@ class OperationsSnapshot {
 
   final List<VisitRecord> todayVisits;
   final List<MembershipRecord> activeMemberships;
+  final List<BookingRequestRecord> bookingRequests;
+  final List<CustomerRecord> customers;
   final List<PurchaseRequestRecord> toBuy;
   final List<PurchaseRequestRecord> purchaseHistory;
   final IncomeSummary income;
@@ -171,14 +247,17 @@ class OperationsSnapshot {
         json['active_memberships'],
         MembershipRecord.fromJson,
       ),
+      bookingRequests: _listOf(
+        json['booking_requests'],
+        BookingRequestRecord.fromJson,
+      ),
+      customers: _listOf(json['customers'], CustomerRecord.fromJson),
       toBuy: _listOf(json['to_buy'], PurchaseRequestRecord.fromJson),
       purchaseHistory: _listOf(
         json['purchase_history'],
         PurchaseRequestRecord.fromJson,
       ),
-      income: IncomeSummary.fromJson(
-        _map(json['income']),
-      ),
+      income: IncomeSummary.fromJson(_map(json['income'])),
     );
   }
 }
