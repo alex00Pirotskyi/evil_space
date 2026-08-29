@@ -48,6 +48,7 @@ class _DailyScreenState extends State<DailyScreen>
   SiteContent _content = SiteContent.demo;
   SiteStatus? _liveStatus;
   DeskBookingProfile? _savedProfile;
+  DeskBookingState? _booking;
   bool _bookingBusy = false;
   bool _qrScrollScheduled = false;
 
@@ -60,11 +61,12 @@ class _DailyScreenState extends State<DailyScreen>
     );
     widget.localization.addListener(_handleLocalizationChanged);
     _savedProfile = _deskApi.savedProfile();
+    _booking = _deskApi.savedBooking();
     _loadContent();
-    _loadLiveStatus();
+    _loadPublicState();
     _statusTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _loadLiveStatus(),
+      const Duration(seconds: 10),
+      (_) => _loadPublicState(),
     );
     _scheduleQrScrollIfNeeded();
     WidgetsBinding.instance.addPostFrameCallback((_) => _triggerRefresh());
@@ -98,10 +100,22 @@ class _DailyScreenState extends State<DailyScreen>
     setState(() => _content = content);
   }
 
-  Future<void> _loadLiveStatus() async {
+  Future<void> _loadPublicState() async {
     final status = await _deskApi.status();
-    if (!mounted || status == null) return;
-    setState(() => _liveStatus = status);
+    final currentBooking = _booking;
+    DeskBookingState? refreshedBooking = currentBooking;
+    if (currentBooking != null) {
+      try {
+        refreshedBooking = await _deskApi.bookingStatus(currentBooking);
+      } on PublicDeskException {
+        refreshedBooking = currentBooking;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      if (status != null) _liveStatus = status;
+      if (currentBooking != null) _booking = refreshedBooking;
+    });
   }
 
   void _handleLocalizationChanged() {
@@ -144,7 +158,7 @@ class _DailyScreenState extends State<DailyScreen>
   }
 
   Future<void> _requestDesk() async {
-    if (_bookingBusy) return;
+    if (_bookingBusy || _booking != null) return;
 
     final saved = _savedProfile;
     if (saved != null && saved.valid) {
@@ -166,12 +180,14 @@ class _DailyScreenState extends State<DailyScreen>
   }) async {
     setState(() => _bookingBusy = true);
     try {
-      await _deskApi.book(profile).timeout(const Duration(seconds: 10));
+      final booking = await _deskApi
+          .book(profile)
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
-      setState(() => _bookingBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.localization.t('booking_sent'))),
-      );
+      setState(() {
+        _booking = booking;
+        _bookingBusy = false;
+      });
 
       if (askToSave) {
         final save = await showDialog<bool>(
@@ -190,7 +206,10 @@ class _DailyScreenState extends State<DailyScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(widget.localization.t('booking_not_now'), style: _mono(9.5)),
+                child: Text(
+                  widget.localization.t('booking_not_now'),
+                  style: _mono(9.5),
+                ),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
@@ -229,6 +248,39 @@ class _DailyScreenState extends State<DailyScreen>
       setState(() => _bookingBusy = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('COULD NOT SEND REQUEST')),
+      );
+    }
+  }
+
+  Future<void> _deleteDeskRequest() async {
+    final booking = _booking;
+    if (booking == null || _bookingBusy) return;
+    setState(() => _bookingBusy = true);
+    try {
+      await _deskApi
+          .deleteBooking(booking)
+          .timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      setState(() {
+        _booking = null;
+        _bookingBusy = false;
+      });
+      await _loadPublicState();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.localization.t('booking_deleted'))),
+      );
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('REQUEST TIMEOUT')),
+      );
+    } on PublicDeskException catch (error) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
       );
     }
   }
@@ -280,7 +332,10 @@ class _DailyScreenState extends State<DailyScreen>
                                     const SizedBox(height: 50),
                                     _note(compact),
                                     const SizedBox(height: 50),
-                                    KeyedSubtree(key: _visitKey, child: _visit(compact)),
+                                    KeyedSubtree(
+                                      key: _visitKey,
+                                      child: _visit(compact),
+                                    ),
                                     const SizedBox(height: 50),
                                     _footer(),
                                   ],
@@ -323,7 +378,11 @@ class _DailyScreenState extends State<DailyScreen>
           children: [
             Text(
               '${widget.localization.t('brand_daily')}  ·  ${_dateLabel(now)}  ·  NO. ${_issueNumber(now).toString().padLeft(3, '0')}',
-              style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.65),
+              style: _mono(
+                10.5,
+                color: BrandPalette.inkMuted,
+                spacing: 0.65,
+              ),
             ),
             _languagePicker(),
           ],
@@ -360,9 +419,14 @@ class _DailyScreenState extends State<DailyScreen>
                 minimumSize: const Size(44, 44),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 shape: const RoundedRectangleBorder(),
-                side: selected ? const BorderSide(color: BrandPalette.ink) : BorderSide.none,
+                side: selected
+                    ? const BorderSide(color: BrandPalette.ink)
+                    : BorderSide.none,
               ),
-              child: Text(language.code.toUpperCase(), style: _mono(10.5, spacing: 0.7)),
+              child: Text(
+                language.code.toUpperCase(),
+                style: _mono(10.5, spacing: 0.7),
+              ),
             ),
           );
         }).toList(growable: false),
@@ -374,6 +438,7 @@ class _DailyScreenState extends State<DailyScreen>
     final status = _liveStatus ?? _content.status;
     final dayPrice = _priceFor('price_day_pass').price;
     final saved = _savedProfile;
+    final booking = _booking;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -382,13 +447,18 @@ class _DailyScreenState extends State<DailyScreen>
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text('${status.free}', style: _serif(compact ? 86 : 116, height: 0.78)),
+            Text(
+              '${status.free}',
+              style: _serif(compact ? 86 : 116, height: 0.78),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 7),
                 child: Text(
-                  widget.localization.t(status.free == 1 ? 'desk_free' : 'desks_free'),
+                  widget.localization.t(
+                    status.free == 1 ? 'desk_free' : 'desks_free',
+                  ),
                   style: _serif(compact ? 23 : 30, height: 0.96),
                 ),
               ),
@@ -403,13 +473,63 @@ class _DailyScreenState extends State<DailyScreen>
           style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
         ),
         const SizedBox(height: 26),
-        _PaperButton(
-          label: widget.localization.t('availability_action'),
-          detail: _bookingBusy ? '…' : dayPrice,
-          icon: saved == null ? Icons.arrow_outward : Icons.bolt_outlined,
-          filled: true,
-          onPressed: _bookingBusy ? null : _requestDesk,
-        ),
+        if (booking == null)
+          _PaperButton(
+            label: widget.localization.t('availability_action'),
+            detail: _bookingBusy ? '…' : dayPrice,
+            icon: saved == null ? Icons.arrow_outward : Icons.bolt_outlined,
+            filled: true,
+            onPressed: _bookingBusy ? null : _requestDesk,
+          )
+        else ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: booking.accepted
+                  ? BrandPalette.paperDeep
+                  : BrandPalette.paperLift,
+              border: Border.all(color: BrandPalette.ink),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  booking.accepted
+                      ? Icons.check_circle_outline
+                      : Icons.hourglass_top_outlined,
+                  size: 24,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    widget.localization.t(
+                      booking.accepted
+                          ? 'booking_accepted'
+                          : 'booking_pending',
+                    ),
+                    style: _mono(11.5, spacing: 0.55),
+                  ),
+                ),
+                Text(dayPrice, style: _serif(18)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _bookingBusy ? null : _deleteDeskRequest,
+            icon: const Icon(Icons.close, size: 17),
+            label: Text(
+              _bookingBusy ? '…' : widget.localization.t('booking_delete'),
+              style: _mono(9.5),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BrandPalette.ink,
+              minimumSize: const Size.fromHeight(48),
+              side: const BorderSide(color: BrandPalette.ink),
+              shape: const RoundedRectangleBorder(),
+            ),
+          ),
+        ],
         if (saved != null) ...[
           const SizedBox(height: 8),
           Row(
@@ -422,7 +542,10 @@ class _DailyScreenState extends State<DailyScreen>
               ),
               TextButton(
                 onPressed: _forgetSavedProfile,
-                child: Text(widget.localization.t('booking_forget'), style: _mono(8.5)),
+                child: Text(
+                  widget.localization.t('booking_forget'),
+                  style: _mono(8.5),
+                ),
               ),
             ],
           ),
@@ -443,8 +566,17 @@ class _DailyScreenState extends State<DailyScreen>
             ),
             child: Row(
               children: [
-                Expanded(child: Text(widget.localization.t(price.labelKey), style: _mono(11, spacing: 0.8))),
-                Text(price.price, textAlign: TextAlign.right, style: _serif(compact ? 24 : 30)),
+                Expanded(
+                  child: Text(
+                    widget.localization.t(price.labelKey),
+                    style: _mono(11, spacing: 0.8),
+                  ),
+                ),
+                Text(
+                  price.price,
+                  textAlign: TextAlign.right,
+                  style: _serif(compact ? 24 : 30),
+                ),
               ],
             ),
           );
@@ -471,16 +603,29 @@ class _DailyScreenState extends State<DailyScreen>
                   height: 9,
                   margin: const EdgeInsets.only(right: 14),
                   decoration: BoxDecoration(
-                    color: opening.isOpen ? BrandPalette.ink : Colors.transparent,
+                    color: opening.isOpen
+                        ? BrandPalette.ink
+                        : Colors.transparent,
                     border: Border.all(color: BrandPalette.ink),
                     shape: BoxShape.circle,
                   ),
                 ),
-                Expanded(child: Text(widget.localization.t(opening.labelKey), style: _serif(compact ? 18 : 21))),
+                Expanded(
+                  child: Text(
+                    widget.localization.t(opening.labelKey),
+                    style: _serif(compact ? 18 : 21),
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Text(
-                  widget.localization.t(opening.isOpen ? 'now_open' : 'coming_soon'),
-                  style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.6),
+                  widget.localization.t(
+                    opening.isOpen ? 'now_open' : 'coming_soon',
+                  ),
+                  style: _mono(
+                    9.5,
+                    color: BrandPalette.inkMuted,
+                    spacing: 0.6,
+                  ),
                 ),
               ],
             ),
@@ -504,7 +649,14 @@ class _DailyScreenState extends State<DailyScreen>
           children: [
             SizedBox(
               width: compact ? 62 : 86,
-              child: Text(announcement.date, style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7)),
+              child: Text(
+                announcement.date,
+                style: _mono(
+                  10,
+                  color: BrandPalette.inkMuted,
+                  spacing: 0.7,
+                ),
+              ),
             ),
             Expanded(
               child: Text(
@@ -525,7 +677,10 @@ class _DailyScreenState extends State<DailyScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 22),
-          Text(widget.localization.t('visit_copy'), style: _serif(compact ? 18 : 21, height: 1.35)),
+          Text(
+            widget.localization.t('visit_copy'),
+            style: _serif(compact ? 18 : 21, height: 1.35),
+          ),
           const SizedBox(height: 24),
           Container(
             height: compact ? 170 : 190,
@@ -535,7 +690,9 @@ class _DailyScreenState extends State<DailyScreen>
             ),
             child: Stack(
               children: [
-                const Positioned.fill(child: CustomPaint(painter: _LocationPlatePainter())),
+                const Positioned.fill(
+                  child: CustomPaint(painter: _LocationPlatePainter()),
+                ),
                 Positioned(
                   left: compact ? 18 : 26,
                   right: compact ? 18 : 26,
@@ -602,8 +759,24 @@ class _DailyScreenState extends State<DailyScreen>
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: Text('EVIL SPACE  ·  NHA TRANG', style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75))),
-            Text(widget.localization.t('page_one'), style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75)),
+            Expanded(
+              child: Text(
+                'EVIL SPACE  ·  NHA TRANG',
+                style: _mono(
+                  9.5,
+                  color: BrandPalette.inkMuted,
+                  spacing: 0.75,
+                ),
+              ),
+            ),
+            Text(
+              widget.localization.t('page_one'),
+              style: _mono(
+                9.5,
+                color: BrandPalette.inkMuted,
+                spacing: 0.75,
+              ),
+            ),
           ],
         ),
       ],
@@ -611,9 +784,9 @@ class _DailyScreenState extends State<DailyScreen>
   }
 
   Widget _sectionKicker(String text) => Text(
-    text,
-    style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
-  );
+        text,
+        style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
+      );
 
   SitePrice _priceFor(String key) {
     for (final price in _content.prices) {
@@ -635,7 +808,8 @@ class _DailyScreenState extends State<DailyScreen>
     return '${widget.localization.t('updated')} ${localParsed.day.toString().padLeft(2, '0')} ${_months[localParsed.month - 1]}';
   }
 
-  DateTime _nhaTrangNow() => DateTime.now().toUtc().add(const Duration(hours: 7));
+  DateTime _nhaTrangNow() =>
+      DateTime.now().toUtc().add(const Duration(hours: 7));
 
   int _issueNumber(DateTime date) {
     final start = DateTime.utc(date.year, 1, 1);
@@ -673,7 +847,11 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
     final contact = _contact.text.trim();
     if (name.isEmpty || contact.length < 3) return;
     Navigator.of(context).pop(
-      DeskBookingProfile(name: name, contactType: _type, contactValue: contact),
+      DeskBookingProfile(
+        name: name,
+        contactType: _type,
+        contactValue: contact,
+      ),
     );
   }
 
@@ -700,15 +878,24 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _contactTypeButton('telegram', l.t('booking_telegram'))),
+                Expanded(
+                  child: _contactTypeButton(
+                    'telegram',
+                    l.t('booking_telegram'),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _contactTypeButton('phone', l.t('booking_phone'))),
+                Expanded(
+                  child: _contactTypeButton('phone', l.t('booking_phone')),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _contact,
-              keyboardType: _type == 'phone' ? TextInputType.phone : TextInputType.text,
+              keyboardType: _type == 'phone'
+                  ? TextInputType.phone
+                  : TextInputType.text,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
               decoration: _bookingInput(l.t('booking_contact')),
@@ -725,7 +912,10 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
             minimumSize: const Size(160, 48),
             shape: const RoundedRectangleBorder(),
           ),
-          child: Text(l.t('booking_send'), style: _mono(9.5, color: BrandPalette.paperLift)),
+          child: Text(
+            l.t('booking_send'),
+            style: _mono(9.5, color: BrandPalette.paperLift),
+          ),
         ),
       ],
     );
@@ -748,8 +938,18 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
 }
 
 const _months = <String>[
-  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
 ];
 
 class _Section extends StatelessWidget {
@@ -833,7 +1033,12 @@ class _PaperButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: _mono(11, color: foreground, spacing: 0.75))),
+            Expanded(
+              child: Text(
+                label,
+                style: _mono(11, color: foreground, spacing: 0.75),
+              ),
+            ),
             Text(detail, style: _serif(19, color: foreground)),
             const SizedBox(width: 12),
             Icon(icon, size: 19),
@@ -845,7 +1050,11 @@ class _PaperButton extends StatelessWidget {
 }
 
 class _CompactLink extends StatelessWidget {
-  const _CompactLink({required this.label, required this.icon, required this.onPressed});
+  const _CompactLink({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
 
   final String label;
   final IconData icon;
@@ -869,7 +1078,11 @@ class _CompactLink extends StatelessWidget {
 }
 
 class _ContactLink extends StatelessWidget {
-  const _ContactLink({required this.label, required this.detail, required this.onPressed});
+  const _ContactLink({
+    required this.label,
+    required this.detail,
+    required this.onPressed,
+  });
 
   final String label;
   final String detail;
@@ -891,8 +1104,17 @@ class _ContactLink extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: _mono(10.5, spacing: 0.7))),
-            Text(detail, style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.25)),
+            Expanded(
+              child: Text(label, style: _mono(10.5, spacing: 0.7)),
+            ),
+            Text(
+              detail,
+              style: _mono(
+                10,
+                color: BrandPalette.inkMuted,
+                spacing: 0.25,
+              ),
+            ),
             const SizedBox(width: 12),
             const Icon(Icons.arrow_outward, size: 18),
           ],
@@ -950,7 +1172,11 @@ class _LocationPlatePainter extends CustomPainter {
     final center = Offset(size.width * 0.7, size.height * 0.38);
     canvas.drawCircle(center, 18, primary);
     canvas.drawCircle(center, 5, Paint()..color = BrandPalette.ink);
-    canvas.drawLine(center + const Offset(0, 18), center + const Offset(0, 36), primary);
+    canvas.drawLine(
+      center + const Offset(0, 18),
+      center + const Offset(0, 36),
+      primary,
+    );
   }
 
   @override
@@ -966,7 +1192,8 @@ class _EInkRefreshPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (progress <= 0 || progress >= 1 || size.isEmpty) return;
     final intensity = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
-    final wash = Paint()..color = BrandPalette.ink.withValues(alpha: 0.035 * intensity);
+    final wash = Paint()
+      ..color = BrandPalette.ink.withValues(alpha: 0.035 * intensity);
     canvas.drawRect(Offset.zero & size, wash);
 
     final lines = Paint()
