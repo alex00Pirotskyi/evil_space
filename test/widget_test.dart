@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evil_space/admin_screen.dart';
@@ -6,6 +6,7 @@ import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
 import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/main.dart';
 
 void main() {
   group('routing', () {
@@ -47,6 +48,17 @@ void main() {
       expect(parser.restoreRouteInformation(AppRoute.home).uri.path, '/');
       expect(parser.restoreRouteInformation(AppRoute.qr).uri.path, '/qr');
       expect(parser.restoreRouteInformation(AppRoute.admin).uri.path, '/admin');
+    });
+
+    testWidgets('public app boots with an overlay for selectable content', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const EvilSpaceApp());
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SelectionArea), findsOneWidget);
+      expect(find.byType(Overlay), findsWidgets);
     });
   });
 

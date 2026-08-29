@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import 'package:evil_space/admin_screen.dart';
 import 'package:evil_space/app_route.dart';
@@ -48,14 +48,38 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
 
   @override
   Widget build(BuildContext context) {
+    final publicRoute =
+        _currentRoute == AppRoute.qr ? AppRoute.qr : AppRoute.home;
+    final pages = <Page<void>>[
+      MaterialPage<void>(
+        key: const ValueKey('public'),
+        name: publicRoute.path,
+        child: DailyScreen(
+          currentRoute: publicRoute,
+          localization: localization,
+          onNavigate: navigate,
+        ),
+      ),
+    ];
+
     if (_currentRoute == AppRoute.admin) {
-      return AdminScreen(onExit: () => navigate(AppRoute.home));
+      pages.add(
+        MaterialPage<void>(
+          key: const ValueKey('admin'),
+          name: AppRoute.admin.path,
+          child: AdminScreen(onExit: () => navigate(AppRoute.home)),
+        ),
+      );
     }
 
-    return DailyScreen(
-      currentRoute: _currentRoute,
-      localization: localization,
-      onNavigate: navigate,
+    return Navigator(
+      pages: pages,
+      onDidRemovePage: (page) {
+        if (page.key == const ValueKey('admin') &&
+            _currentRoute == AppRoute.admin) {
+          navigate(AppRoute.home);
+        }
+      },
     );
   }
 
