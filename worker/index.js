@@ -44,9 +44,6 @@ export default {
       }
 
       if (request.method === 'POST' && url.pathname === '/api/admin/decision') {
-        if (!isSameOrigin(request, url)) {
-          return htmlMessage('Request blocked', 'Invalid origin.', 403);
-        }
         return handleDecision(request, env);
       }
 
@@ -70,12 +67,7 @@ export default {
 async function handleSession(request, env) {
   const session = await authenticatedAdmin(request, env);
   if (!session) return json({ ok: true, authenticated: false });
-
-  return json({
-    ok: true,
-    authenticated: true,
-    email: session.email,
-  });
+  return json({ ok: true, authenticated: true, email: session.email });
 }
 
 async function handleRegister(request, env, url) {
@@ -84,7 +76,6 @@ async function handleRegister(request, env, url) {
 
   const email = normalizeEmail(body.email);
   const password = typeof body.password === 'string' ? body.password : '';
-
   const validation = validateCredentials(email, password);
   if (validation) return jsonError(validation, 400);
 
@@ -185,10 +176,7 @@ async function handleRegister(request, env, url) {
   }
 
   return json(
-    {
-      ok: true,
-      message: `Approval request sent to ${OWNER_EMAIL}.`,
-    },
+    { ok: true, message: `Approval request sent to ${OWNER_EMAIL}.` },
     202,
   );
 }
@@ -199,9 +187,9 @@ async function handleLogin(request, env) {
 
   const email = normalizeEmail(body.email);
   const password = typeof body.password === 'string' ? body.password : '';
-
-  const validation = validateCredentials(email, password);
-  if (validation) return jsonError('Invalid email or password.', 401);
+  if (validateCredentials(email, password)) {
+    return jsonError('Invalid email or password.', 401);
+  }
 
   const admin = await env.evil_space
     .prepare(`
@@ -213,11 +201,9 @@ async function handleLogin(request, env) {
     .first();
 
   if (!admin) return jsonError('Invalid email or password.', 401);
-
   if (admin.status === 'pending') {
     return jsonError('This account is waiting for owner approval.', 403);
   }
-
   if (admin.status !== 'approved') {
     return jsonError('This admin request was not approved.', 403);
   }
@@ -245,21 +231,14 @@ async function handleLogin(request, env) {
   ]);
 
   return json(
-    {
-      ok: true,
-      authenticated: true,
-      email: admin.email,
-    },
+    { ok: true, authenticated: true, email: admin.email },
     200,
-    {
-      'Set-Cookie': sessionCookie(token, SESSION_TTL_SECONDS),
-    },
+    { 'Set-Cookie': sessionCookie(token, SESSION_TTL_SECONDS) },
   );
 }
 
 async function handleLogout(request, env) {
   const token = cookieValue(request, SESSION_COOKIE);
-
   if (token) {
     const tokenHash = await hashToken(token);
     await env.evil_space
@@ -271,9 +250,7 @@ async function handleLogout(request, env) {
   return json(
     { ok: true },
     200,
-    {
-      'Set-Cookie': sessionCookie('', 0),
-    },
+    { 'Set-Cookie': sessionCookie('', 0) },
   );
 }
 
@@ -334,9 +311,7 @@ button{width:100%;min-height:54px;padding:0 18px;border:1px solid #1c1c1a;backgr
 <main>
 <small>EVIL SPACE / ADMIN</small>
 <h1>Approve admin.</h1>
-<div class="card">
-<p class="email">${safeEmail}</p>
-</div>
+<div class="card"><p class="email">${safeEmail}</p></div>
 <form method="post" action="/api/admin/decision">
 <input type="hidden" name="token" value="${safeToken}">
 <input type="hidden" name="decision" value="approve">
@@ -451,16 +426,14 @@ async function handleDeleteAdmin(request, env) {
 
   if (!admin) return jsonError('Admin not found.', 404);
 
-  await env.evil_space.prepare('DELETE FROM admins WHERE id = ?').bind(admin.id).run();
+  await env.evil_space
+    .prepare('DELETE FROM admins WHERE id = ?')
+    .bind(admin.id)
+    .run();
 
   const deletedSelf = normalizeEmail(session.email) === normalizeEmail(admin.email);
-
   return json(
-    {
-      ok: true,
-      email: admin.email,
-      deletedSelf,
-    },
+    { ok: true, email: admin.email, deletedSelf },
     200,
     deletedSelf ? { 'Set-Cookie': sessionCookie('', 0) } : {},
   );
@@ -472,7 +445,6 @@ async function authenticatedAdmin(request, env) {
 
   const tokenHash = await hashToken(token);
   const now = nowSeconds();
-
   const session = await env.evil_space
     .prepare(`
       SELECT a.id, a.email, s.expires_at
