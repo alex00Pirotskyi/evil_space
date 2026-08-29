@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +9,7 @@ import 'package:evil_space/brand_logo.dart';
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/public_desk.dart';
 
 typedef AppRouteCallback = void Function(AppRoute route);
 
@@ -33,13 +36,19 @@ class _DailyScreenState extends State<DailyScreen>
   static const _directionsUrl =
       'https://www.google.com/maps/dir/?api=1&destination=evil%20space%2C%2060%20Cao%20V%C4%83n%20B%C3%A9%2C%20B%E1%BA%AFc%20Nha%20Trang%2C%20Kh%C3%A1nh%20H%C3%B2a%20650000';
   static const _zaloUrl = 'https://zalo.me/84565056748';
+  static const _telegramUrl = 'https://t.me/your_evil_space';
   static const _phoneUrl = 'tel:+84565056748';
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _visitKey = GlobalKey();
+  final PublicDeskApi _deskApi = PublicDeskApi();
 
   late final AnimationController _refreshController;
+  Timer? _statusTimer;
   SiteContent _content = SiteContent.demo;
+  SiteStatus? _liveStatus;
+  DeskBookingProfile? _savedProfile;
+  bool _bookingBusy = false;
   bool _qrScrollScheduled = false;
 
   @override
@@ -50,7 +59,13 @@ class _DailyScreenState extends State<DailyScreen>
       duration: const Duration(milliseconds: 320),
     );
     widget.localization.addListener(_handleLocalizationChanged);
+    _savedProfile = _deskApi.savedProfile();
     _loadContent();
+    _loadLiveStatus();
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _loadLiveStatus(),
+    );
     _scheduleQrScrollIfNeeded();
     WidgetsBinding.instance.addPostFrameCallback((_) => _triggerRefresh());
   }
@@ -71,6 +86,7 @@ class _DailyScreenState extends State<DailyScreen>
   @override
   void dispose() {
     widget.localization.removeListener(_handleLocalizationChanged);
+    _statusTimer?.cancel();
     _refreshController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -80,6 +96,12 @@ class _DailyScreenState extends State<DailyScreen>
     final content = await SiteContentRepository.load(rootBundle);
     if (!mounted) return;
     setState(() => _content = content);
+  }
+
+  Future<void> _loadLiveStatus() async {
+    final status = await _deskApi.status();
+    if (!mounted || status == null) return;
+    setState(() => _liveStatus = status);
   }
 
   void _handleLocalizationChanged() {
@@ -113,13 +135,107 @@ class _DailyScreenState extends State<DailyScreen>
 
   Future<void> _launch(String value) async {
     final uri = Uri.tryParse(value);
-    if (uri == null ||
-        !await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+    if (uri == null || !await launchUrl(uri, mode: LaunchMode.platformDefault)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('COULD NOT OPEN THIS LINK')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT OPEN THIS LINK')),
+      );
     }
+  }
+
+  Future<void> _requestDesk() async {
+    if (_bookingBusy) return;
+
+    final saved = _savedProfile;
+    if (saved != null && saved.valid) {
+      await _sendDeskRequest(saved, askToSave: false);
+      return;
+    }
+
+    final profile = await showDialog<DeskBookingProfile>(
+      context: context,
+      builder: (_) => _DeskBookingDialog(localization: widget.localization),
+    );
+    if (!mounted || profile == null) return;
+    await _sendDeskRequest(profile, askToSave: true);
+  }
+
+  Future<void> _sendDeskRequest(
+    DeskBookingProfile profile, {
+    required bool askToSave,
+  }) async {
+    setState(() => _bookingBusy = true);
+    try {
+      await _deskApi.book(profile).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.localization.t('booking_sent'))),
+      );
+
+      if (askToSave) {
+        final save = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: BrandPalette.paper,
+            shape: const RoundedRectangleBorder(),
+            title: Text(
+              widget.localization.t('booking_save_title'),
+              style: _serif(28),
+            ),
+            content: Text(
+              widget.localization.t('booking_save_copy'),
+              style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(widget.localization.t('booking_not_now'), style: _mono(9.5)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: BrandPalette.ink,
+                  foregroundColor: BrandPalette.paperLift,
+                  shape: const RoundedRectangleBorder(),
+                ),
+                child: Text(
+                  widget.localization.t('booking_save'),
+                  style: _mono(9.5, color: BrandPalette.paperLift),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (save == true && mounted) {
+          _deskApi.saveProfile(profile);
+          setState(() => _savedProfile = profile);
+        }
+      }
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('REQUEST TIMEOUT')),
+      );
+    } on PublicDeskException catch (error) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT SEND REQUEST')),
+      );
+    }
+  }
+
+  void _forgetSavedProfile() {
+    _deskApi.clearSavedProfile();
+    setState(() => _savedProfile = null);
   }
 
   @override
@@ -152,8 +268,7 @@ class _DailyScreenState extends State<DailyScreen>
                                   16,
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     _header(compact),
                                     const SizedBox(height: 44),
@@ -165,10 +280,7 @@ class _DailyScreenState extends State<DailyScreen>
                                     const SizedBox(height: 50),
                                     _note(compact),
                                     const SizedBox(height: 50),
-                                    KeyedSubtree(
-                                      key: _visitKey,
-                                      child: _visit(compact),
-                                    ),
+                                    KeyedSubtree(key: _visitKey, child: _visit(compact)),
                                     const SizedBox(height: 50),
                                     _footer(),
                                   ],
@@ -237,37 +349,31 @@ class _DailyScreenState extends State<DailyScreen>
       label: 'Language',
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: AppLanguage.values
-            .map((language) {
-              final selected = widget.localization.language == language;
-              return Padding(
-                padding: const EdgeInsets.only(left: 2),
-                child: TextButton(
-                  onPressed: () => widget.localization.setLanguage(language),
-                  style: TextButton.styleFrom(
-                    foregroundColor: BrandPalette.ink,
-                    minimumSize: const Size(44, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    shape: const RoundedRectangleBorder(),
-                    side: selected
-                        ? const BorderSide(color: BrandPalette.ink)
-                        : BorderSide.none,
-                  ),
-                  child: Text(
-                    language.code.toUpperCase(),
-                    style: _mono(10.5, spacing: 0.7),
-                  ),
-                ),
-              );
-            })
-            .toList(growable: false),
+        children: AppLanguage.values.map((language) {
+          final selected = widget.localization.language == language;
+          return Padding(
+            padding: const EdgeInsets.only(left: 2),
+            child: TextButton(
+              onPressed: () => widget.localization.setLanguage(language),
+              style: TextButton.styleFrom(
+                foregroundColor: BrandPalette.ink,
+                minimumSize: const Size(44, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                shape: const RoundedRectangleBorder(),
+                side: selected ? const BorderSide(color: BrandPalette.ink) : BorderSide.none,
+              ),
+              child: Text(language.code.toUpperCase(), style: _mono(10.5, spacing: 0.7)),
+            ),
+          );
+        }).toList(growable: false),
       ),
     );
   }
 
   Widget _availability(bool compact) {
-    final status = _content.status;
+    final status = _liveStatus ?? _content.status;
     final dayPrice = _priceFor('price_day_pass').price;
+    final saved = _savedProfile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -276,18 +382,13 @@ class _DailyScreenState extends State<DailyScreen>
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              '${status.free}',
-              style: _serif(compact ? 86 : 116, height: 0.78),
-            ),
+            Text('${status.free}', style: _serif(compact ? 86 : 116, height: 0.78)),
             const SizedBox(width: 14),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 7),
                 child: Text(
-                  widget.localization.t(
-                    status.free == 1 ? 'desk_free' : 'desks_free',
-                  ),
+                  widget.localization.t(status.free == 1 ? 'desk_free' : 'desks_free'),
                   style: _serif(compact ? 23 : 30, height: 0.96),
                 ),
               ),
@@ -304,11 +405,28 @@ class _DailyScreenState extends State<DailyScreen>
         const SizedBox(height: 26),
         _PaperButton(
           label: widget.localization.t('availability_action'),
-          detail: dayPrice,
-          icon: Icons.arrow_outward,
+          detail: _bookingBusy ? '…' : dayPrice,
+          icon: saved == null ? Icons.arrow_outward : Icons.bolt_outlined,
           filled: true,
-          onPressed: () => _launch(_zaloUrl),
+          onPressed: _bookingBusy ? null : _requestDesk,
         ),
+        if (saved != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${widget.localization.t('booking_saved')} · ${saved.contactValue}',
+                  style: _mono(9, color: BrandPalette.inkMuted),
+                ),
+              ),
+              TextButton(
+                onPressed: _forgetSavedProfile,
+                child: Text(widget.localization.t('booking_forget'), style: _mono(8.5)),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -317,31 +435,20 @@ class _DailyScreenState extends State<DailyScreen>
     return _Section(
       title: widget.localization.t('prices_title'),
       child: Column(
-        children: _content.prices
-            .map((price) {
-              return Container(
-                constraints: const BoxConstraints(minHeight: 76),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.localization.t(price.labelKey),
-                        style: _mono(11, spacing: 0.8),
-                      ),
-                    ),
-                    Text(
-                      price.price,
-                      textAlign: TextAlign.right,
-                      style: _serif(compact ? 24 : 30),
-                    ),
-                  ],
-                ),
-              );
-            })
-            .toList(growable: false),
+        children: _content.prices.map((price) {
+          return Container(
+            constraints: const BoxConstraints(minHeight: 76),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: Text(widget.localization.t(price.labelKey), style: _mono(11, spacing: 0.8))),
+                Text(price.price, textAlign: TextAlign.right, style: _serif(compact ? 24 : 30)),
+              ],
+            ),
+          );
+        }).toList(growable: false),
       ),
     );
   }
@@ -350,51 +457,35 @@ class _DailyScreenState extends State<DailyScreen>
     return _Section(
       title: widget.localization.t('opening_title'),
       child: Column(
-        children: _content.openings
-            .map((opening) {
-              return Container(
-                constraints: const BoxConstraints(minHeight: 70),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+        children: _content.openings.map((opening) {
+          return Container(
+            constraints: const BoxConstraints(minHeight: 70),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  margin: const EdgeInsets.only(right: 14),
+                  decoration: BoxDecoration(
+                    color: opening.isOpen ? BrandPalette.ink : Colors.transparent,
+                    border: Border.all(color: BrandPalette.ink),
+                    shape: BoxShape.circle,
+                  ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 9,
-                      height: 9,
-                      margin: const EdgeInsets.only(right: 14),
-                      decoration: BoxDecoration(
-                        color: opening.isOpen
-                            ? BrandPalette.ink
-                            : Colors.transparent,
-                        border: Border.all(color: BrandPalette.ink),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        widget.localization.t(opening.labelKey),
-                        style: _serif(compact ? 18 : 21),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      widget.localization.t(
-                        opening.isOpen ? 'now_open' : 'coming_soon',
-                      ),
-                      style: _mono(
-                        9.5,
-                        color: BrandPalette.inkMuted,
-                        spacing: 0.6,
-                      ),
-                    ),
-                  ],
+                Expanded(child: Text(widget.localization.t(opening.labelKey), style: _serif(compact ? 18 : 21))),
+                const SizedBox(width: 12),
+                Text(
+                  widget.localization.t(opening.isOpen ? 'now_open' : 'coming_soon'),
+                  style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.6),
                 ),
-              );
-            })
-            .toList(growable: false),
+              ],
+            ),
+          );
+        }).toList(growable: false),
       ),
     );
   }
@@ -413,10 +504,7 @@ class _DailyScreenState extends State<DailyScreen>
           children: [
             SizedBox(
               width: compact ? 62 : 86,
-              child: Text(
-                announcement.date,
-                style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7),
-              ),
+              child: Text(announcement.date, style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7)),
             ),
             Expanded(
               child: Text(
@@ -437,10 +525,7 @@ class _DailyScreenState extends State<DailyScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 22),
-          Text(
-            widget.localization.t('visit_copy'),
-            style: _serif(compact ? 18 : 21, height: 1.35),
-          ),
+          Text(widget.localization.t('visit_copy'), style: _serif(compact ? 18 : 21, height: 1.35)),
           const SizedBox(height: 24),
           Container(
             height: compact ? 170 : 190,
@@ -450,9 +535,7 @@ class _DailyScreenState extends State<DailyScreen>
             ),
             child: Stack(
               children: [
-                const Positioned.fill(
-                  child: CustomPaint(painter: _LocationPlatePainter()),
-                ),
+                const Positioned.fill(child: CustomPaint(painter: _LocationPlatePainter())),
                 Positioned(
                   left: compact ? 18 : 26,
                   right: compact ? 18 : 26,
@@ -493,6 +576,11 @@ class _DailyScreenState extends State<DailyScreen>
             onPressed: () => _launch(_instagramUrl),
           ),
           _ContactLink(
+            label: widget.localization.t('contact_telegram'),
+            detail: '@your_evil_space',
+            onPressed: () => _launch(_telegramUrl),
+          ),
+          _ContactLink(
             label: widget.localization.t('contact_zalo'),
             detail: '+84 56 5056 748',
             onPressed: () => _launch(_zaloUrl),
@@ -514,16 +602,8 @@ class _DailyScreenState extends State<DailyScreen>
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(
-              child: Text(
-                'EVIL SPACE  ·  NHA TRANG',
-                style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75),
-              ),
-            ),
-            Text(
-              widget.localization.t('page_one'),
-              style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75),
-            ),
+            Expanded(child: Text('EVIL SPACE  ·  NHA TRANG', style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75))),
+            Text(widget.localization.t('page_one'), style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75)),
           ],
         ),
       ],
@@ -546,16 +626,16 @@ class _DailyScreenState extends State<DailyScreen>
     final parsed = DateTime.tryParse(raw);
     if (parsed == null) return widget.localization.t('local_data');
     final today = _nhaTrangNow();
-    if (parsed.year == today.year &&
-        parsed.month == today.month &&
-        parsed.day == today.day) {
+    final localParsed = parsed.toUtc().add(const Duration(hours: 7));
+    if (localParsed.year == today.year &&
+        localParsed.month == today.month &&
+        localParsed.day == today.day) {
       return widget.localization.t('updated_today');
     }
-    return '${widget.localization.t('updated')} ${parsed.day.toString().padLeft(2, '0')} ${_months[parsed.month - 1]}';
+    return '${widget.localization.t('updated')} ${localParsed.day.toString().padLeft(2, '0')} ${_months[localParsed.month - 1]}';
   }
 
-  DateTime _nhaTrangNow() =>
-      DateTime.now().toUtc().add(const Duration(hours: 7));
+  DateTime _nhaTrangNow() => DateTime.now().toUtc().add(const Duration(hours: 7));
 
   int _issueNumber(DateTime date) {
     final start = DateTime.utc(date.year, 1, 1);
@@ -567,19 +647,109 @@ class _DailyScreenState extends State<DailyScreen>
       '${date.day.toString().padLeft(2, '0')} ${_months[date.month - 1]} ${date.year}';
 }
 
+class _DeskBookingDialog extends StatefulWidget {
+  const _DeskBookingDialog({required this.localization});
+
+  final LocalizationController localization;
+
+  @override
+  State<_DeskBookingDialog> createState() => _DeskBookingDialogState();
+}
+
+class _DeskBookingDialogState extends State<_DeskBookingDialog> {
+  final _name = TextEditingController();
+  final _contact = TextEditingController();
+  String _type = 'telegram';
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _contact.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _name.text.trim();
+    final contact = _contact.text.trim();
+    if (name.isEmpty || contact.length < 3) return;
+    Navigator.of(context).pop(
+      DeskBookingProfile(name: name, contactType: _type, contactValue: contact),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = widget.localization;
+    return AlertDialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      title: Text(l.t('booking_title'), style: _serif(30)),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _name,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              decoration: _bookingInput(l.t('booking_name')),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _contactTypeButton('telegram', l.t('booking_telegram'))),
+                const SizedBox(width: 8),
+                Expanded(child: _contactTypeButton('phone', l.t('booking_phone'))),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _contact,
+              keyboardType: _type == 'phone' ? TextInputType.phone : TextInputType.text,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
+              decoration: _bookingInput(l.t('booking_contact')),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: _submit,
+          style: FilledButton.styleFrom(
+            backgroundColor: BrandPalette.ink,
+            foregroundColor: BrandPalette.paperLift,
+            minimumSize: const Size(160, 48),
+            shape: const RoundedRectangleBorder(),
+          ),
+          child: Text(l.t('booking_send'), style: _mono(9.5, color: BrandPalette.paperLift)),
+        ),
+      ],
+    );
+  }
+
+  Widget _contactTypeButton(String type, String label) {
+    final selected = _type == type;
+    return OutlinedButton(
+      onPressed: () => setState(() => _type = type),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: selected ? BrandPalette.paperLift : BrandPalette.ink,
+        backgroundColor: selected ? BrandPalette.ink : BrandPalette.paper,
+        minimumSize: const Size.fromHeight(46),
+        side: const BorderSide(color: BrandPalette.ink),
+        shape: const RoundedRectangleBorder(),
+      ),
+      child: Text(label, style: _mono(9.5)),
+    );
+  }
+}
+
 const _months = <String>[
-  'JAN',
-  'FEB',
-  'MAR',
-  'APR',
-  'MAY',
-  'JUN',
-  'JUL',
-  'AUG',
-  'SEP',
-  'OCT',
-  'NOV',
-  'DEC',
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
 ];
 
 class _Section extends StatelessWidget {
@@ -643,7 +813,7 @@ class _PaperButton extends StatelessWidget {
   final String label;
   final String detail;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool filled;
 
   @override
@@ -660,16 +830,10 @@ class _PaperButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           side: const BorderSide(color: BrandPalette.ink),
           shape: const RoundedRectangleBorder(),
-          overlayColor: foreground.withValues(alpha: 0.08),
         ),
         child: Row(
           children: [
-            Expanded(
-              child: Text(
-                label,
-                style: _mono(11, color: foreground, spacing: 0.75),
-              ),
-            ),
+            Expanded(child: Text(label, style: _mono(11, color: foreground, spacing: 0.75))),
             Text(detail, style: _serif(19, color: foreground)),
             const SizedBox(width: 12),
             Icon(icon, size: 19),
@@ -681,11 +845,7 @@ class _PaperButton extends StatelessWidget {
 }
 
 class _CompactLink extends StatelessWidget {
-  const _CompactLink({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
+  const _CompactLink({required this.label, required this.icon, required this.onPressed});
 
   final String label;
   final IconData icon;
@@ -709,11 +869,7 @@ class _CompactLink extends StatelessWidget {
 }
 
 class _ContactLink extends StatelessWidget {
-  const _ContactLink({
-    required this.label,
-    required this.detail,
-    required this.onPressed,
-  });
+  const _ContactLink({required this.label, required this.detail, required this.onPressed});
 
   final String label;
   final String detail;
@@ -721,31 +877,25 @@ class _ContactLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      child: TextButton(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          foregroundColor: BrandPalette.ink,
-          minimumSize: const Size.fromHeight(58),
-          padding: EdgeInsets.zero,
-          shape: const RoundedRectangleBorder(),
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: BrandPalette.ink,
+        minimumSize: const Size.fromHeight(58),
+        padding: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(),
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: BrandPalette.rule)),
         ),
-        child: Container(
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-          ),
-          child: Row(
-            children: [
-              Expanded(child: Text(label, style: _mono(10.5, spacing: 0.7))),
-              Text(
-                detail,
-                style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.25),
-              ),
-              const SizedBox(width: 12),
-              const Icon(Icons.arrow_outward, size: 18),
-            ],
-          ),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: _mono(10.5, spacing: 0.7))),
+            Text(detail, style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.25)),
+            const SizedBox(width: 12),
+            const Icon(Icons.arrow_outward, size: 18),
+          ],
         ),
       ),
     );
@@ -800,11 +950,7 @@ class _LocationPlatePainter extends CustomPainter {
     final center = Offset(size.width * 0.7, size.height * 0.38);
     canvas.drawCircle(center, 18, primary);
     canvas.drawCircle(center, 5, Paint()..color = BrandPalette.ink);
-    canvas.drawLine(
-      center + const Offset(0, 18),
-      center + const Offset(0, 36),
-      primary,
-    );
+    canvas.drawLine(center + const Offset(0, 18), center + const Offset(0, 36), primary);
   }
 
   @override
@@ -820,8 +966,7 @@ class _EInkRefreshPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (progress <= 0 || progress >= 1 || size.isEmpty) return;
     final intensity = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
-    final wash = Paint()
-      ..color = BrandPalette.ink.withValues(alpha: 0.035 * intensity);
+    final wash = Paint()..color = BrandPalette.ink.withValues(alpha: 0.035 * intensity);
     canvas.drawRect(Offset.zero & size, wash);
 
     final lines = Paint()
@@ -835,6 +980,27 @@ class _EInkRefreshPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EInkRefreshPainter oldDelegate) =>
       oldDelegate.progress != progress;
+}
+
+InputDecoration _bookingInput(String label) {
+  return InputDecoration(
+    labelText: label,
+    labelStyle: _mono(9),
+    filled: true,
+    fillColor: BrandPalette.paperLift,
+    border: const OutlineInputBorder(
+      borderSide: BorderSide(color: BrandPalette.ink),
+      borderRadius: BorderRadius.zero,
+    ),
+    enabledBorder: const OutlineInputBorder(
+      borderSide: BorderSide(color: BrandPalette.ink),
+      borderRadius: BorderRadius.zero,
+    ),
+    focusedBorder: const OutlineInputBorder(
+      borderSide: BorderSide(color: BrandPalette.ink, width: 2),
+      borderRadius: BorderRadius.zero,
+    ),
+  );
 }
 
 TextStyle _serif(
