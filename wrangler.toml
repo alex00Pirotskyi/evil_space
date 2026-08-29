@@ -8,6 +8,10 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
 
+[[routes]]
+pattern = "evils.space"
+custom_domain = true
+
 [[d1_databases]]
 binding = "evil_space"
 database_name = "evil-space"
