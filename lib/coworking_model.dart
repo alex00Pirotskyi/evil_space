@@ -18,7 +18,7 @@ class SiteStatus {
   factory SiteStatus.fromJson(Map<String, dynamic> json) {
     final rawTotal = (json['total'] as num?)?.toInt() ?? 10;
     final normalizedTotal = rawTotal.clamp(1, 999).toInt();
-    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 3;
+    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 0;
 
     return SiteStatus(
       total: normalizedTotal,
@@ -141,7 +141,7 @@ class SiteContent {
   }
 
   static const SiteContent demo = SiteContent(
-    status: SiteStatus(total: 10, occupied: 3, updated: 'DEMO'),
+    status: SiteStatus(total: 10, occupied: 0, updated: 'DEMO'),
     prices: [
       SitePrice(labelKey: 'price_day_pass', price: '250K VND'),
       SitePrice(labelKey: 'price_month', price: '2.5 MLN VND'),
