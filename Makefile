@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := deploy
 
-.PHONY: deploy build verify test
+.PHONY: deploy build verify test telegram-setup
 
 deploy:
 	dart run tool/release.dart
@@ -14,3 +14,6 @@ verify:
 test:
 	flutter pub get
 	flutter test --no-pub
+
+telegram-setup:
+	dart run tool/telegram_setup.dart
