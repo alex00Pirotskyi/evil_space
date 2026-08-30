@@ -6,9 +6,10 @@ if /I "%~1"=="deploy" goto deploy
 if /I "%~1"=="build" goto build
 if /I "%~1"=="verify" goto verify
 if /I "%~1"=="test" goto test
+if /I "%~1"=="telegram-setup" goto telegram_setup
 
 echo Unknown target: %~1
-echo Use: make ^| make build ^| make verify ^| make test
+echo Use: make ^| make build ^| make verify ^| make test ^| make telegram-setup
 exit /b 2
 
 :deploy
@@ -27,4 +28,8 @@ exit /b %errorlevel%
 flutter pub get
 if errorlevel 1 exit /b %errorlevel%
 flutter test --no-pub
+exit /b %errorlevel%
+
+:telegram_setup
+dart run tool/telegram_setup.dart
 exit /b %errorlevel%
