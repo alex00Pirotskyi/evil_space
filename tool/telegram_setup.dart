@@ -69,6 +69,7 @@ Future<void> main() async {
         {'command': 'income', 'description': 'Income summary'},
         {'command': 'buy', 'description': 'Shared purchase list'},
         {'command': 'settings', 'description': 'Notification settings'},
+        {'command': 'language', 'description': 'Change bot language'},
         {'command': 'help', 'description': 'Bot help'},
       ],
     });
