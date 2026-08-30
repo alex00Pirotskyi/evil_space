@@ -75,6 +75,7 @@ class PublicDeskApi {
       final next = DeskBookingState(
         token: booking.token,
         status: data['status']?.toString() ?? '',
+        telegramLinkUrl: booking.telegramLinkUrl,
       );
       if (!next.valid) {
         clearSavedBooking();
