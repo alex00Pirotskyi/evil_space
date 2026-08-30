@@ -1,4 +1,5 @@
 import 'package:evil_space/admin_api_models.dart';
+import 'package:evil_space/admin_telegram_models.dart';
 
 class AdminApi {
   Future<AdminSession> session() async => const AdminSession.signedOut();
@@ -22,6 +23,17 @@ class AdminApi {
     required String superPassword,
   }) async => _webOnly();
 
+  Future<AdminTelegramStatus> telegramStatus() async => _webOnly();
+
+  Future<AdminTelegramLink> createTelegramLink() async => _webOnly();
+
+  Future<void> disconnectTelegram() async => _webOnly();
+
+  Future<AdminTelegramStatus> updateTelegramPreferences({
+    required bool bookingNotifications,
+    required bool purchaseNotifications,
+  }) async => _webOnly();
+
   Future<OperationsSnapshot> operations() async => _webOnly();
 
   Future<OperationsSnapshot> addDayPass(String name) async => _webOnly();
@@ -32,6 +44,8 @@ class AdminApi {
       _webOnly();
 
   Future<OperationsSnapshot> acceptBooking(int id) async => _webOnly();
+
+  Future<OperationsSnapshot> declineBooking(int id) async => _webOnly();
 
   Future<OperationsSnapshot> updateCustomer(CustomerRecord customer) async =>
       _webOnly();
