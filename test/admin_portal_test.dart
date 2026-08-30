@@ -4,11 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:evil_space/admin_portal.dart';
 
 void main() {
-  testWidgets('admin portal defaults to Russian and can switch to English', (
+  testWidgets('admin portal inherits Russian and can switch to English', (
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(home: AdminPortal(onExit: () {})),
+      MaterialApp(
+        home: AdminPortal(
+          onExit: () {},
+          initialLanguageCode: 'ru',
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -29,5 +34,22 @@ void main() {
 
     expect(find.text('New administrator'), findsOneWidget);
     expect(find.text('REQUEST ACCESS'), findsOneWidget);
+  });
+
+  testWidgets('Vietnamese web language is preserved for Telegram pairing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdminPortal(
+          onExit: () {},
+          initialLanguageCode: 'vi',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sign in'), findsOneWidget);
+    expect(find.text('SIGN IN'), findsOneWidget);
   });
 }
