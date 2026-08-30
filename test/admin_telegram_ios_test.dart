@@ -17,8 +17,11 @@ void main() {
     final refresh = source.substring(refreshStart, connectStart);
     final connect = source.substring(connectStart, disconnectStart);
 
-    expect(refresh, contains('widget.api.createTelegramLink()'));
-    expect(connect, isNot(contains('widget.api.createTelegramLink()')));
+    expect(
+      refresh,
+      contains('widget.api.createTelegramLink(widget.languageCode)'),
+    );
+    expect(connect, isNot(contains('widget.api.createTelegramLink(')));
     expect(connect, contains("TargetPlatform.iOS ? '_self' : '_blank'"));
     expect(connect, contains('launchUrl('));
   });
