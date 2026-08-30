@@ -1,5 +1,67 @@
 PRAGMA foreign_keys = ON;
 
+ALTER TABLE booking_requests RENAME TO booking_requests_before_telegram;
+
+CREATE TABLE booking_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  contact_type TEXT NOT NULL
+    CHECK (contact_type IN ('phone', 'telegram')),
+  contact_value TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new'
+    CHECK (status IN ('new', 'processing', 'accepted', 'declined', 'cancelled')),
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  handled_at INTEGER,
+  handled_by_email TEXT,
+  customer_id INTEGER,
+  client_token_hash TEXT,
+  accepted_visit_id INTEGER
+);
+
+INSERT INTO booking_requests (
+  id,
+  name,
+  contact_type,
+  contact_value,
+  status,
+  created_at,
+  handled_at,
+  handled_by_email,
+  customer_id,
+  client_token_hash,
+  accepted_visit_id
+)
+SELECT
+  id,
+  name,
+  contact_type,
+  contact_value,
+  status,
+  created_at,
+  handled_at,
+  handled_by_email,
+  customer_id,
+  client_token_hash,
+  accepted_visit_id
+FROM booking_requests_before_telegram;
+
+DROP TABLE booking_requests_before_telegram;
+
+CREATE INDEX IF NOT EXISTS idx_booking_requests_status_created
+  ON booking_requests(status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_booking_requests_contact
+  ON booking_requests(contact_type, contact_value);
+
+CREATE INDEX IF NOT EXISTS idx_booking_requests_client_token_hash
+  ON booking_requests(client_token_hash);
+
+CREATE INDEX IF NOT EXISTS idx_booking_requests_accepted_visit_id
+  ON booking_requests(accepted_visit_id);
+
+CREATE INDEX IF NOT EXISTS idx_booking_requests_customer_id
+  ON booking_requests(customer_id);
+
 CREATE TABLE IF NOT EXISTS admin_telegram_links (
   admin_id INTEGER PRIMARY KEY,
   telegram_user_id INTEGER NOT NULL UNIQUE,
