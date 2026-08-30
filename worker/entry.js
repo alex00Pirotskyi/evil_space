@@ -180,6 +180,7 @@ async function handlePublicBooking(request, env, ctx) {
       token,
       status: 'pending',
       telegramLinkUrl,
+      telegramLinked: false,
       message: 'Desk request sent. Evil Space staff can now see it.',
     },
     201,
@@ -193,9 +194,20 @@ async function handlePublicBookingStatus(url, env) {
   const tokenHash = await hashToken(token);
   const booking = await env.evil_space
     .prepare(`
-      SELECT id, status, created_at
-      FROM booking_requests
-      WHERE client_token_hash = ?
+      SELECT
+        b.id,
+        b.status,
+        b.created_at,
+        CASE
+          WHEN b.customer_id IS NOT NULL AND EXISTS (
+            SELECT 1
+            FROM customer_telegram_links l
+            WHERE l.customer_id = b.customer_id
+          ) THEN 1
+          ELSE 0
+        END AS telegram_linked
+      FROM booking_requests b
+      WHERE b.client_token_hash = ?
       LIMIT 1
     `)
     .bind(tokenHash)
@@ -218,7 +230,11 @@ async function handlePublicBookingStatus(url, env) {
         ? 'cancelled'
         : 'pending';
 
-  return json({ ok: true, status });
+  return json({
+    ok: true,
+    status,
+    telegramLinked: Number(booking.telegram_linked ?? 0) === 1,
+  });
 }
 
 async function filterOperationsToToday(response) {
