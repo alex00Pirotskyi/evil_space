@@ -8,6 +8,308 @@ const SESSION_TTL = 30 * 60;
 const MAX_NAME_LENGTH = 100;
 const MAX_TEXT_LENGTH = 180;
 const WIFI_SSID = 'Evil Space';
+const LANGUAGES = new Set(['en', 'ru', 'vi']);
+
+const TEXT = {
+  en: {
+    adminConnected: '✅ <b>TELEGRAM ADMIN CONNECTED</b>',
+    adminConnectedCopy: 'You can operate Evil Space from this chat.',
+    customerConnected: '✅ <b>BOOKING UPDATES CONNECTED</b>',
+    customerConnectedCopy: 'We will message you here when Evil Space accepts or declines your desk request.',
+    customerPending: '⏳ <b>BOOKING REQUEST SENT</b>',
+    customerPendingCopy: 'Your request is waiting for an Evil Space admin.',
+    customerAccepted: '✅ <b>BOOKING ACCEPTED</b>',
+    customerAcceptedCopy: 'Your desk at Evil Space is confirmed for today.\nOpen daily 11:00–23:00.\n\nYou can cancel here anytime if your plans change.',
+    customerDeclined: '❌ <b>BOOKING DECLINED</b>',
+    customerDeclinedCopy: 'We could not confirm this desk request. You can make another request anytime at evils.space.',
+    customerCancelled: '🚫 <b>BOOKING CANCELLED</b>',
+    customerCancelledCopy: 'Your desk is no longer counted as occupied.',
+    customerNoBooking: 'You do not have an active desk request today.',
+    unlinked: 'This Telegram account is not linked.\n\nAdmins: open evils.space/admin → Telegram.\nCustomers: open evils.space and press TG when booking.',
+    today: 'TODAY',
+    bookings: 'BOOKINGS',
+    dayPass: 'DAY PASS',
+    month: 'MONTH',
+    customers: 'CUSTOMERS',
+    income: 'INCOME',
+    buy: 'BUY',
+    settings: 'SETTINGS',
+    language: 'LANGUAGE',
+    back: 'BACK',
+    accept: 'ACCEPT',
+    decline: 'DECLINE',
+    openAdmin: 'OPEN ADMIN',
+    openSite: 'OPEN EVIL SPACE',
+    cancelBooking: 'CANCEL BOOKING',
+    cancelRequest: 'CANCEL REQUEST',
+    directions: 'DIRECTIONS',
+    wifi: 'WI-FI',
+    copyNetwork: 'COPY NETWORK',
+    copyPassword: 'COPY PASSWORD',
+    occupied: 'Occupied',
+    pendingBookings: 'Pending bookings',
+    nobody: 'Nobody yet.',
+    noPending: '✅ No pending bookings.',
+    newDeskRequest: '🔔 NEW DESK REQUEST',
+    bookingAcceptedTitle: '✅ BOOKING ACCEPTED',
+    bookingDeclinedTitle: '❌ BOOKING DECLINED',
+    bookingCancelledTitle: '🚫 BOOKING CANCELLED',
+    phone: 'PHONE',
+    time: 'Time',
+    by: 'By',
+    dayPrompt: 'DAY PASS · send the customer name.\n\n/cancel to stop.',
+    monthPrompt: 'NEW MONTH PASS · send the customer name.\n\n/cancel to stop.',
+    customerPrompt: 'CUSTOMERS · send a name, phone, Telegram or email to search.\n\n/cancel to stop.',
+    purchasePrompt: 'PURCHASE · send what needs to be bought.\n\n/cancel to stop.',
+    cancelled: 'Cancelled.',
+    confirm: 'CONFIRM',
+    cancel: 'CANCEL',
+    confirmQuestion: 'Confirm?',
+    newMonthPass: 'NEW MONTH PASS',
+    checkInActive: 'CHECK IN ACTIVE MEMBER',
+    noActiveMembers: 'No active memberships.',
+    activeMembers: 'ACTIVE MEMBERS · tap to check in',
+    nameRequired: 'Name is required.',
+    purchaseRequired: 'Purchase title is required.',
+    actionExpired: 'This action expired. Start again.',
+    dayAdded: 'Day pass added.',
+    monthAdded: 'Month pass added.',
+    purchaseAdded: 'Purchase request added.',
+    noCustomers: 'No customers found.',
+    noContact: 'No contact',
+    activeUntil: 'ACTIVE UNTIL',
+    noActiveMonth: 'NO ACTIVE MONTH PASS',
+    addPurchase: 'ADD PURCHASE',
+    toBuy: '🛒 TO BUY\n\nTap an item after it has been bought.',
+    notifications: '⚙️ NOTIFICATIONS',
+    purchases: 'Purchases',
+    on: 'ON',
+    off: 'OFF',
+    updated: 'Updated.',
+    bookingAcceptedCallback: 'Booking accepted.',
+    bookingDeclinedCallback: 'Booking declined.',
+    bookingCancelledCallback: 'Booking cancelled.',
+    checkedIn: 'Checked in.',
+    markedBought: 'Marked bought.',
+    invalidBooking: 'Invalid booking.',
+    notLinkedAdmin: 'Telegram is not linked to an approved admin.',
+    bookingNotYours: 'This booking is not linked to you.',
+    bookingExpired: 'This booking has expired.',
+    wifiAfterAccept: 'Wi-Fi is available after the booking is accepted.',
+    wifiNotConfigured: 'Wi-Fi access is not configured yet.',
+    wifiSent: 'Wi-Fi details sent.',
+    network: 'Network',
+    password: 'Password',
+    languageTitle: '🌐 <b>LANGUAGE</b>\n\nChoose the language for this bot.',
+    languageChanged: 'Language updated.',
+    bookingAlreadyActive: 'You already have an active desk request today.',
+    purchaseNotification: '🛒 <b>NEW PURCHASE REQUEST</b>',
+    purchaseNotificationCopy: 'Open /buy to manage the shared list.',
+    help: 'EVIL SPACE ADMIN\n\n/menu — main menu\n/today — today\n/bookings — pending desk requests\n/day Name — day pass\n/month Name — new month pass\n/customer Alex — search customers\n/income — income\n/buy Item — add purchase request\n/settings — notifications\n/language — language\n/cancel — cancel current action',
+  },
+  ru: {
+    adminConnected: '✅ <b>TELEGRAM АДМИНИСТРАТОРА ПОДКЛЮЧЁН</b>',
+    adminConnectedCopy: 'Теперь Evil Space можно управлять прямо из этого чата.',
+    customerConnected: '✅ <b>УВЕДОМЛЕНИЯ О БРОНИ ПОДКЛЮЧЕНЫ</b>',
+    customerConnectedCopy: 'Мы напишем сюда, когда Evil Space примет или отклонит ваш запрос.',
+    customerPending: '⏳ <b>ЗАПРОС НА БРОНЬ ОТПРАВЛЕН</b>',
+    customerPendingCopy: 'Запрос ожидает подтверждения администратора Evil Space.',
+    customerAccepted: '✅ <b>БРОНЬ ПОДТВЕРЖДЕНА</b>',
+    customerAcceptedCopy: 'Ваш стол в Evil Space подтверждён на сегодня.\nРаботаем ежедневно 11:00–23:00.\n\nЕсли планы изменятся, бронь можно отменить здесь.',
+    customerDeclined: '❌ <b>БРОНЬ ОТКЛОНЕНА</b>',
+    customerDeclinedCopy: 'Мы не смогли подтвердить этот запрос. Новый запрос можно отправить в любое время на evils.space.',
+    customerCancelled: '🚫 <b>БРОНЬ ОТМЕНЕНА</b>',
+    customerCancelledCopy: 'Стол больше не считается занятым.',
+    customerNoBooking: 'У вас нет активной брони на сегодня.',
+    unlinked: 'Этот Telegram не подключён.\n\nАдминистратор: откройте evils.space/admin → Telegram.\nКлиент: откройте evils.space и при бронировании нажмите TG.',
+    today: 'СЕГОДНЯ',
+    bookings: 'БРОНИ',
+    dayPass: 'ДЕНЬ',
+    month: 'МЕСЯЦ',
+    customers: 'КЛИЕНТЫ',
+    income: 'ДОХОД',
+    buy: 'КУПИТЬ',
+    settings: 'НАСТРОЙКИ',
+    language: 'ЯЗЫК',
+    back: 'НАЗАД',
+    accept: 'ПРИНЯТЬ',
+    decline: 'ОТКЛОНИТЬ',
+    openAdmin: 'ОТКРЫТЬ АДМИНКУ',
+    openSite: 'ОТКРЫТЬ EVIL SPACE',
+    cancelBooking: 'ОТМЕНИТЬ БРОНЬ',
+    cancelRequest: 'ОТМЕНИТЬ ЗАПРОС',
+    directions: 'МАРШРУТ',
+    wifi: 'WI-FI',
+    copyNetwork: 'КОПИРОВАТЬ СЕТЬ',
+    copyPassword: 'КОПИРОВАТЬ ПАРОЛЬ',
+    occupied: 'Занято',
+    pendingBookings: 'Ожидают подтверждения',
+    nobody: 'Пока никого.',
+    noPending: '✅ Нет ожидающих броней.',
+    newDeskRequest: '🔔 НОВЫЙ ЗАПРОС НА СТОЛ',
+    bookingAcceptedTitle: '✅ БРОНЬ ПРИНЯТА',
+    bookingDeclinedTitle: '❌ БРОНЬ ОТКЛОНЕНА',
+    bookingCancelledTitle: '🚫 БРОНЬ ОТМЕНЕНА',
+    phone: 'ТЕЛ',
+    time: 'Время',
+    by: 'Кем',
+    dayPrompt: 'ДНЕВНОЙ ПРОПУСК · отправьте имя клиента.\n\n/cancel — отмена.',
+    monthPrompt: 'НОВЫЙ МЕСЯЧНЫЙ АБОНЕМЕНТ · отправьте имя клиента.\n\n/cancel — отмена.',
+    customerPrompt: 'КЛИЕНТЫ · отправьте имя, телефон, Telegram или email для поиска.\n\n/cancel — отмена.',
+    purchasePrompt: 'ПОКУПКА · отправьте, что нужно купить.\n\n/cancel — отмена.',
+    cancelled: 'Отменено.',
+    confirm: 'ПОДТВЕРДИТЬ',
+    cancel: 'ОТМЕНА',
+    confirmQuestion: 'Подтвердить?',
+    newMonthPass: 'НОВЫЙ АБОНЕМЕНТ',
+    checkInActive: 'ОТМЕТИТЬ АКТИВНОГО',
+    noActiveMembers: 'Нет активных абонементов.',
+    activeMembers: 'АКТИВНЫЕ АБОНЕМЕНТЫ · нажмите для отметки',
+    nameRequired: 'Нужно имя.',
+    purchaseRequired: 'Нужно название покупки.',
+    actionExpired: 'Действие устарело. Начните заново.',
+    dayAdded: 'Дневной пропуск добавлен.',
+    monthAdded: 'Месячный абонемент добавлен.',
+    purchaseAdded: 'Покупка добавлена.',
+    noCustomers: 'Клиенты не найдены.',
+    noContact: 'Нет контакта',
+    activeUntil: 'АКТИВЕН ДО',
+    noActiveMonth: 'НЕТ АКТИВНОГО АБОНЕМЕНТА',
+    addPurchase: 'ДОБАВИТЬ ПОКУПКУ',
+    toBuy: '🛒 НУЖНО КУПИТЬ\n\nНажмите на товар после покупки.',
+    notifications: '⚙️ УВЕДОМЛЕНИЯ',
+    purchases: 'Покупки',
+    on: 'ВКЛ',
+    off: 'ВЫКЛ',
+    updated: 'Обновлено.',
+    bookingAcceptedCallback: 'Бронь принята.',
+    bookingDeclinedCallback: 'Бронь отклонена.',
+    bookingCancelledCallback: 'Бронь отменена.',
+    checkedIn: 'Клиент отмечен.',
+    markedBought: 'Отмечено как купленное.',
+    invalidBooking: 'Некорректная бронь.',
+    notLinkedAdmin: 'Telegram не подключён к подтверждённому администратору.',
+    bookingNotYours: 'Эта бронь не привязана к вашему Telegram.',
+    bookingExpired: 'Эта бронь уже истекла.',
+    wifiAfterAccept: 'Wi-Fi доступен после подтверждения брони.',
+    wifiNotConfigured: 'Wi-Fi пока не настроен.',
+    wifiSent: 'Данные Wi-Fi отправлены.',
+    network: 'Сеть',
+    password: 'Пароль',
+    languageTitle: '🌐 <b>ЯЗЫК</b>\n\nВыберите язык бота.',
+    languageChanged: 'Язык изменён.',
+    bookingAlreadyActive: 'У вас уже есть активный запрос на сегодня.',
+    purchaseNotification: '🛒 <b>НОВАЯ ПОКУПКА</b>',
+    purchaseNotificationCopy: 'Откройте /buy для общего списка покупок.',
+    help: 'EVIL SPACE ADMIN\n\n/menu — меню\n/today — сегодня\n/bookings — ожидающие брони\n/day Имя — дневной пропуск\n/month Имя — месячный абонемент\n/customer Alex — поиск клиентов\n/income — доход\n/buy Товар — список покупок\n/settings — уведомления\n/language — язык\n/cancel — отменить текущее действие',
+  },
+  vi: {
+    adminConnected: '✅ <b>ĐÃ KẾT NỐI TELEGRAM QUẢN TRỊ</b>',
+    adminConnectedCopy: 'Bạn có thể quản lý Evil Space trực tiếp từ cuộc trò chuyện này.',
+    customerConnected: '✅ <b>ĐÃ KẾT NỐI CẬP NHẬT ĐẶT BÀN</b>',
+    customerConnectedCopy: 'Chúng tôi sẽ nhắn tại đây khi Evil Space chấp nhận hoặc từ chối yêu cầu của bạn.',
+    customerPending: '⏳ <b>ĐÃ GỬI YÊU CẦU ĐẶT BÀN</b>',
+    customerPendingCopy: 'Yêu cầu đang chờ quản trị viên Evil Space xác nhận.',
+    customerAccepted: '✅ <b>ĐÃ XÁC NHẬN ĐẶT BÀN</b>',
+    customerAcceptedCopy: 'Bàn của bạn tại Evil Space đã được xác nhận cho hôm nay.\nMở cửa hằng ngày 11:00–23:00.\n\nBạn có thể hủy tại đây nếu kế hoạch thay đổi.',
+    customerDeclined: '❌ <b>YÊU CẦU ĐÃ BỊ TỪ CHỐI</b>',
+    customerDeclinedCopy: 'Chúng tôi chưa thể xác nhận yêu cầu này. Bạn có thể gửi yêu cầu mới bất cứ lúc nào tại evils.space.',
+    customerCancelled: '🚫 <b>ĐÃ HỦY ĐẶT BÀN</b>',
+    customerCancelledCopy: 'Bàn của bạn không còn được tính là đang sử dụng.',
+    customerNoBooking: 'Hôm nay bạn không có yêu cầu đặt bàn đang hoạt động.',
+    unlinked: 'Tài khoản Telegram này chưa được kết nối.\n\nQuản trị viên: mở evils.space/admin → Telegram.\nKhách: mở evils.space và nhấn TG khi đặt bàn.',
+    today: 'HÔM NAY',
+    bookings: 'ĐẶT BÀN',
+    dayPass: 'VÉ NGÀY',
+    month: 'THÁNG',
+    customers: 'KHÁCH HÀNG',
+    income: 'DOANH THU',
+    buy: 'MUA',
+    settings: 'CÀI ĐẶT',
+    language: 'NGÔN NGỮ',
+    back: 'QUAY LẠI',
+    accept: 'CHẤP NHẬN',
+    decline: 'TỪ CHỐI',
+    openAdmin: 'MỞ ADMIN',
+    openSite: 'MỞ EVIL SPACE',
+    cancelBooking: 'HỦY ĐẶT BÀN',
+    cancelRequest: 'HỦY YÊU CẦU',
+    directions: 'CHỈ ĐƯỜNG',
+    wifi: 'WI-FI',
+    copyNetwork: 'SAO CHÉP MẠNG',
+    copyPassword: 'SAO CHÉP MẬT KHẨU',
+    occupied: 'Đang dùng',
+    pendingBookings: 'Yêu cầu đang chờ',
+    nobody: 'Chưa có ai.',
+    noPending: '✅ Không có yêu cầu đặt bàn đang chờ.',
+    newDeskRequest: '🔔 YÊU CẦU ĐẶT BÀN MỚI',
+    bookingAcceptedTitle: '✅ ĐÃ CHẤP NHẬN ĐẶT BÀN',
+    bookingDeclinedTitle: '❌ ĐÃ TỪ CHỐI ĐẶT BÀN',
+    bookingCancelledTitle: '🚫 ĐÃ HỦY ĐẶT BÀN',
+    phone: 'ĐT',
+    time: 'Giờ',
+    by: 'Bởi',
+    dayPrompt: 'VÉ NGÀY · gửi tên khách hàng.\n\n/cancel để hủy.',
+    monthPrompt: 'GÓI THÁNG MỚI · gửi tên khách hàng.\n\n/cancel để hủy.',
+    customerPrompt: 'KHÁCH HÀNG · gửi tên, điện thoại, Telegram hoặc email để tìm.\n\n/cancel để hủy.',
+    purchasePrompt: 'MUA HÀNG · gửi nội dung cần mua.\n\n/cancel để hủy.',
+    cancelled: 'Đã hủy.',
+    confirm: 'XÁC NHẬN',
+    cancel: 'HỦY',
+    confirmQuestion: 'Xác nhận?',
+    newMonthPass: 'GÓI THÁNG MỚI',
+    checkInActive: 'CHECK-IN THÀNH VIÊN',
+    noActiveMembers: 'Không có gói tháng đang hoạt động.',
+    activeMembers: 'THÀNH VIÊN ĐANG HOẠT ĐỘNG · nhấn để check-in',
+    nameRequired: 'Cần tên khách hàng.',
+    purchaseRequired: 'Cần nội dung mua hàng.',
+    actionExpired: 'Thao tác đã hết hạn. Hãy bắt đầu lại.',
+    dayAdded: 'Đã thêm vé ngày.',
+    monthAdded: 'Đã thêm gói tháng.',
+    purchaseAdded: 'Đã thêm mục cần mua.',
+    noCustomers: 'Không tìm thấy khách hàng.',
+    noContact: 'Không có liên hệ',
+    activeUntil: 'HOẠT ĐỘNG ĐẾN',
+    noActiveMonth: 'KHÔNG CÓ GÓI THÁNG',
+    addPurchase: 'THÊM MỤC CẦN MUA',
+    toBuy: '🛒 CẦN MUA\n\nNhấn vào mục sau khi đã mua.',
+    notifications: '⚙️ THÔNG BÁO',
+    purchases: 'Mua hàng',
+    on: 'BẬT',
+    off: 'TẮT',
+    updated: 'Đã cập nhật.',
+    bookingAcceptedCallback: 'Đã chấp nhận đặt bàn.',
+    bookingDeclinedCallback: 'Đã từ chối đặt bàn.',
+    bookingCancelledCallback: 'Đã hủy đặt bàn.',
+    checkedIn: 'Đã check-in.',
+    markedBought: 'Đã đánh dấu đã mua.',
+    invalidBooking: 'Đặt bàn không hợp lệ.',
+    notLinkedAdmin: 'Telegram chưa được kết nối với quản trị viên đã duyệt.',
+    bookingNotYours: 'Đặt bàn này không được liên kết với Telegram của bạn.',
+    bookingExpired: 'Đặt bàn này đã hết hạn.',
+    wifiAfterAccept: 'Wi-Fi có sau khi đặt bàn được chấp nhận.',
+    wifiNotConfigured: 'Wi-Fi chưa được cấu hình.',
+    wifiSent: 'Đã gửi thông tin Wi-Fi.',
+    network: 'Mạng',
+    password: 'Mật khẩu',
+    languageTitle: '🌐 <b>NGÔN NGỮ</b>\n\nChọn ngôn ngữ cho bot.',
+    languageChanged: 'Đã đổi ngôn ngữ.',
+    bookingAlreadyActive: 'Bạn đã có một yêu cầu đặt bàn đang hoạt động hôm nay.',
+    purchaseNotification: '🛒 <b>YÊU CẦU MUA HÀNG MỚI</b>',
+    purchaseNotificationCopy: 'Mở /buy để quản lý danh sách chung.',
+    help: 'EVIL SPACE ADMIN\n\n/menu — menu\n/today — hôm nay\n/bookings — đặt bàn đang chờ\n/day Tên — vé ngày\n/month Tên — gói tháng\n/customer Alex — tìm khách hàng\n/income — doanh thu\n/buy Mục — danh sách mua\n/settings — thông báo\n/language — ngôn ngữ\n/cancel — hủy thao tác hiện tại',
+  },
+};
+
+function normalizeLanguage(value) {
+  const code = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  return LANGUAGES.has(code) ? code : 'en';
+}
+
+function tr(language, key) {
+  const lang = normalizeLanguage(language);
+  return TEXT[lang]?.[key] ?? TEXT.en[key] ?? key;
+}
 
 export async function handleAdminTelegramStatus(request, env) {
   const admin = await authenticatedWebAdmin(request, env);
@@ -16,7 +318,7 @@ export async function handleAdminTelegramStatus(request, env) {
   const link = await env.evil_space
     .prepare(`
       SELECT telegram_username, notifications_enabled,
-             booking_notifications, purchase_notifications, linked_at
+             booking_notifications, purchase_notifications, linked_at, language
       FROM admin_telegram_links
       WHERE admin_id = ?
     `)
@@ -31,6 +333,7 @@ export async function handleAdminTelegramStatus(request, env) {
     bookingNotifications: Number(link?.booking_notifications ?? 1) === 1,
     purchaseNotifications: Number(link?.purchase_notifications ?? 1) === 1,
     linkedAt: Number(link?.linked_at ?? 0),
+    language: normalizeLanguage(link?.language),
     botUsername: BOT_USERNAME,
   });
 }
@@ -38,6 +341,8 @@ export async function handleAdminTelegramStatus(request, env) {
 export async function handleAdminTelegramLink(request, env) {
   const admin = await authenticatedWebAdmin(request, env);
   if (!admin) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  const language = normalizeLanguage(body?.language);
 
   const now = nowSeconds();
   const token = randomToken(24);
@@ -49,10 +354,10 @@ export async function handleAdminTelegramLink(request, env) {
     env.evil_space
       .prepare(`
         INSERT INTO admin_telegram_link_tokens
-          (token_hash, admin_id, created_at, expires_at, used_at)
-        VALUES (?, ?, ?, ?, NULL)
+          (token_hash, admin_id, created_at, expires_at, used_at, language)
+        VALUES (?, ?, ?, ?, NULL, ?)
       `)
-      .bind(tokenHash, admin.id, now, now + ADMIN_LINK_TTL),
+      .bind(tokenHash, admin.id, now, now + ADMIN_LINK_TTL, language),
   ]);
 
   return json({
@@ -106,13 +411,14 @@ export async function handleAdminTelegramPreferences(request, env) {
   return handleAdminTelegramStatus(request, env);
 }
 
-export async function createCustomerTelegramLink(env, bookingId) {
+export async function createCustomerTelegramLink(env, bookingId, rawLanguage = 'en') {
   const id = toPositiveInt(bookingId);
   if (!id) return null;
   const now = nowSeconds();
   const { end } = nhaTrangDayBounds(now);
   const expiresAt = Math.min(end, now + CUSTOMER_LINK_TTL);
   if (expiresAt <= now) return null;
+  const language = normalizeLanguage(rawLanguage);
 
   const token = randomToken(24);
   const tokenHash = await hashToken(token);
@@ -123,10 +429,10 @@ export async function createCustomerTelegramLink(env, bookingId) {
     env.evil_space
       .prepare(`
         INSERT INTO customer_telegram_link_tokens
-          (token_hash, booking_id, created_at, expires_at, used_at)
-        VALUES (?, ?, ?, ?, NULL)
+          (token_hash, booking_id, created_at, expires_at, used_at, language)
+        VALUES (?, ?, ?, ?, NULL, ?)
       `)
-      .bind(tokenHash, id, now, expiresAt),
+      .bind(tokenHash, id, now, expiresAt, language),
   ]);
   return `https://t.me/${BOT_USERNAME}?start=c_${token}`;
 }
@@ -196,7 +502,7 @@ export async function notifyAdminsNewBooking(env, bookingId) {
 
   const links = await env.evil_space
     .prepare(`
-      SELECT l.telegram_chat_id
+      SELECT l.telegram_chat_id, l.language
       FROM admin_telegram_links l
       JOIN admins a ON a.id = l.admin_id
       WHERE a.status = 'approved'
@@ -208,7 +514,7 @@ export async function notifyAdminsNewBooking(env, bookingId) {
   await Promise.all(
     (links.results ?? []).map(async (link) => {
       try {
-        await sendBookingToAdmin(env, link.telegram_chat_id, booking);
+        await sendBookingToAdmin(env, link.telegram_chat_id, booking, link.language);
       } catch (error) {
         console.error('Telegram booking notification failed', safeError(error));
       }
@@ -223,7 +529,7 @@ export async function notifyAdminsPurchase(env, title) {
 
   const links = await env.evil_space
     .prepare(`
-      SELECT l.telegram_chat_id
+      SELECT l.telegram_chat_id, l.language
       FROM admin_telegram_links l
       JOIN admins a ON a.id = l.admin_id
       WHERE a.status = 'approved'
@@ -232,18 +538,18 @@ export async function notifyAdminsPurchase(env, title) {
     `)
     .all();
 
-  const text = `🛒 <b>NEW PURCHASE REQUEST</b>\n\n${escapeHtml(clean)}\n\nOpen /buy to manage the shared list.`;
   await Promise.all(
-    (links.results ?? []).map((link) =>
-      telegramApi(env, 'sendMessage', {
+    (links.results ?? []).map((link) => {
+      const lang = normalizeLanguage(link.language);
+      return telegramApi(env, 'sendMessage', {
         chat_id: link.telegram_chat_id,
-        text,
+        text: `${tr(lang, 'purchaseNotification')}\n\n${escapeHtml(clean)}\n\n${tr(lang, 'purchaseNotificationCopy')}`,
         parse_mode: 'HTML',
-        reply_markup: adminMenuKeyboard(),
+        reply_markup: adminMenuKeyboard(lang),
       }).catch((error) =>
         console.error('Telegram purchase notification failed', safeError(error)),
-      ),
-    ),
+      );
+    }),
   );
 }
 
@@ -288,32 +594,44 @@ async function handleMessage(env, message) {
       await pairCustomer(env, user, chatId, payload.slice(2));
       return;
     }
+    if (payload.startsWith('book_')) {
+      await bookViaTelegram(env, user, chatId, payload.slice(5));
+      return;
+    }
   }
 
   const admin = await linkedAdmin(env, user.id);
-  if (!admin) {
-    await telegramApi(env, 'sendMessage', {
-      chat_id: chatId,
-      text: 'This Telegram account is not linked.\n\nAdmins: open evils.space/admin → Telegram.\nCustomers: request a desk on evils.space and press CONNECT TELEGRAM.',
-    });
+  if (admin) {
+    if (command) {
+      await handleAdminCommand(env, admin, chatId, command);
+      return;
+    }
+    const session = await adminState(env, user.id);
+    if (!session) {
+      await sendAdminMenu(env, admin, chatId);
+      return;
+    }
+    await handleAdminStateText(env, admin, chatId, session, text);
     return;
   }
 
-  if (command) {
-    await handleAdminCommand(env, admin, chatId, command);
+  const customer = await linkedCustomer(env, user.id);
+  if (customer) {
+    if (command?.name === 'language' || command?.name === 'lang') {
+      await sendLanguageMenu(env, chatId, customer.language, 'customer');
+      return;
+    }
+    await sendCustomerHome(env, customer, chatId);
     return;
   }
 
-  const session = await adminState(env, user.id);
-  if (!session) {
-    await sendAdminMenu(env, admin, chatId);
-    return;
-  }
-  await handleAdminStateText(env, admin, chatId, session, text);
+  const lang = normalizeLanguage(user.language_code?.slice(0, 2));
+  await sendText(env, chatId, tr(lang, 'unlinked'));
 }
 
 async function handleAdminCommand(env, admin, chatId, command) {
   const args = command.args.trim();
+  const lang = normalizeLanguage(admin.language);
   switch (command.name) {
     case 'start':
     case 'menu':
@@ -324,34 +642,32 @@ async function handleAdminCommand(env, admin, chatId, command) {
     case 'bookings':
       return sendPendingBookings(env, admin, chatId);
     case 'income':
-      return sendIncome(env, chatId);
+      return sendIncome(env, admin, chatId);
     case 'day':
       if (args) return prepareNamedOperation(env, admin, chatId, 'confirm_day', args);
       await setAdminState(env, admin, 'wait_day_name', {});
-      return sendText(env, chatId, 'DAY PASS · send the customer name.\n\n/cancel to stop.');
+      return sendText(env, chatId, tr(lang, 'dayPrompt'));
     case 'month':
       if (args) return prepareNamedOperation(env, admin, chatId, 'confirm_month', args);
-      return sendMonthMenu(env, chatId);
+      return sendMonthMenu(env, admin, chatId);
     case 'customer':
     case 'customers':
-      if (args) return sendCustomerSearch(env, chatId, args);
+      if (args) return sendCustomerSearch(env, admin, chatId, args);
       await setAdminState(env, admin, 'wait_customer_search', {});
-      return sendText(env, chatId, 'CUSTOMERS · send a name, phone, Telegram or email to search.\n\n/cancel to stop.');
+      return sendText(env, chatId, tr(lang, 'customerPrompt'));
     case 'buy':
       if (args) return preparePurchase(env, admin, chatId, args);
-      return sendBuy(env, chatId);
+      return sendBuy(env, admin, chatId);
     case 'settings':
       return sendSettings(env, admin, chatId);
+    case 'language':
+    case 'lang':
+      return sendLanguageMenu(env, chatId, lang, 'admin');
     case 'cancel':
       await clearAdminState(env, admin.telegram_user_id);
-      return sendText(env, chatId, 'Cancelled.', adminMenuKeyboard());
+      return sendText(env, chatId, tr(lang, 'cancelled'), adminMenuKeyboard(lang));
     case 'help':
-      return sendText(
-        env,
-        chatId,
-        'EVIL SPACE ADMIN\n\n/menu — main menu\n/today — today\n/bookings — pending desk requests\n/day Name — day pass\n/month Name — new month pass\n/customer Alex — search customers\n/income — income\n/buy Item — add purchase request\n/settings — notifications\n/cancel — cancel current action',
-        adminMenuKeyboard(),
-      );
+      return sendText(env, chatId, tr(lang, 'help'), adminMenuKeyboard(lang));
     default:
       return sendAdminMenu(env, admin, chatId);
   }
@@ -367,7 +683,7 @@ async function handleAdminStateText(env, admin, chatId, session, text) {
       return preparePurchase(env, admin, chatId, text);
     case 'wait_customer_search':
       await clearAdminState(env, admin.telegram_user_id);
-      return sendCustomerSearch(env, chatId, text);
+      return sendCustomerSearch(env, admin, chatId, text);
     default:
       await clearAdminState(env, admin.telegram_user_id);
       return sendAdminMenu(env, admin, chatId);
@@ -381,6 +697,24 @@ async function handleCallback(env, callback) {
   if (!userId || !chatId || !data) return;
 
   try {
+    if (data.startsWith('cl:')) {
+      const customer = await linkedCustomer(env, userId);
+      if (!customer) return answerCallback(env, callback.id, 'Not linked.', true);
+      const language = normalizeLanguage(data.slice(3));
+      await setCustomerLanguage(env, userId, language);
+      await answerCallback(env, callback.id, tr(language, 'languageChanged'));
+      return sendCustomerHome(env, await linkedCustomer(env, userId), chatId);
+    }
+
+    if (data.startsWith('al:')) {
+      const admin = await linkedAdmin(env, userId);
+      if (!admin) return answerCallback(env, callback.id, 'Not linked.', true);
+      const language = normalizeLanguage(data.slice(3));
+      await setAdminLanguage(env, admin.id, language);
+      await answerCallback(env, callback.id, tr(language, 'languageChanged'));
+      return sendAdminMenu(env, await linkedAdmin(env, userId), chatId);
+    }
+
     if (data.startsWith('cc:') || data.startsWith('cw:')) {
       await handleCustomerCallback(env, callback, userId, chatId, data);
       return;
@@ -388,16 +722,17 @@ async function handleCallback(env, callback) {
 
     const admin = await linkedAdmin(env, userId);
     if (!admin) {
-      await answerCallback(env, callback.id, 'Telegram is not linked to an approved admin.', true);
+      await answerCallback(env, callback.id, tr('en', 'notLinkedAdmin'), true);
       return;
     }
+    const lang = normalizeLanguage(admin.language);
 
     if (data.startsWith('ba:')) {
       const id = toPositiveInt(data.slice(3));
-      if (!id) return answerCallback(env, callback.id, 'Invalid booking.', true);
+      if (!id) return answerCallback(env, callback.id, tr(lang, 'invalidBooking'), true);
       try {
         const booking = await acceptBooking(env, id, admin);
-        await answerCallback(env, callback.id, 'Booking accepted.');
+        await answerCallback(env, callback.id, tr(lang, 'bookingAcceptedCallback'));
         await notifyBookingOutcome(env, booking.id, 'accepted');
       } catch (error) {
         await answerCallback(env, callback.id, userMessage(error), true);
@@ -407,10 +742,10 @@ async function handleCallback(env, callback) {
 
     if (data.startsWith('bd:')) {
       const id = toPositiveInt(data.slice(3));
-      if (!id) return answerCallback(env, callback.id, 'Invalid booking.', true);
+      if (!id) return answerCallback(env, callback.id, tr(lang, 'invalidBooking'), true);
       try {
         const booking = await declineBooking(env, id, admin);
-        await answerCallback(env, callback.id, 'Booking declined.');
+        await answerCallback(env, callback.id, tr(lang, 'bookingDeclinedCallback'));
         await notifyBookingOutcome(env, booking.id, 'declined');
       } catch (error) {
         await answerCallback(env, callback.id, userMessage(error), true);
@@ -423,7 +758,7 @@ async function handleCallback(env, callback) {
       if (!id) return answerCallback(env, callback.id, 'Invalid membership.', true);
       try {
         await checkInMembership(env, id, admin);
-        await answerCallback(env, callback.id, 'Checked in.');
+        await answerCallback(env, callback.id, tr(lang, 'checkedIn'));
         await sendToday(env, admin, chatId);
       } catch (error) {
         await answerCallback(env, callback.id, userMessage(error), true);
@@ -434,14 +769,14 @@ async function handleCallback(env, callback) {
     if (data.startsWith('cust:')) {
       const id = toPositiveInt(data.slice(5));
       await answerCallback(env, callback.id);
-      if (id) await sendCustomer(env, chatId, id);
+      if (id) await sendCustomer(env, admin, chatId, id);
       return;
     }
 
     if (data.startsWith('cd:') || data.startsWith('cm:')) {
       const id = toPositiveInt(data.slice(3));
       const customer = id ? await customerById(env, id) : null;
-      if (!customer) return answerCallback(env, callback.id, 'Customer not found.', true);
+      if (!customer) return answerCallback(env, callback.id, tr(lang, 'noCustomers'), true);
       const state = data.startsWith('cd:') ? 'confirm_day' : 'confirm_month';
       await answerCallback(env, callback.id);
       return prepareNamedOperation(env, admin, chatId, state, customer.name);
@@ -452,8 +787,8 @@ async function handleCallback(env, callback) {
       if (!id) return answerCallback(env, callback.id, 'Invalid purchase.', true);
       try {
         await markPurchaseBought(env, id, admin);
-        await answerCallback(env, callback.id, 'Marked bought.');
-        await sendBuy(env, chatId);
+        await answerCallback(env, callback.id, tr(lang, 'markedBought'));
+        await sendBuy(env, admin, chatId);
       } catch (error) {
         await answerCallback(env, callback.id, userMessage(error), true);
       }
@@ -470,36 +805,39 @@ async function handleCallback(env, callback) {
       case 'm:day':
         await answerCallback(env, callback.id);
         await setAdminState(env, admin, 'wait_day_name', {});
-        return sendText(env, chatId, 'DAY PASS · send the customer name.\n\n/cancel to stop.');
+        return sendText(env, chatId, tr(lang, 'dayPrompt'));
       case 'm:month':
         await answerCallback(env, callback.id);
-        return sendMonthMenu(env, chatId);
+        return sendMonthMenu(env, admin, chatId);
       case 'm:customers':
         await answerCallback(env, callback.id);
         await setAdminState(env, admin, 'wait_customer_search', {});
-        return sendText(env, chatId, 'CUSTOMERS · send a search value.\n\n/cancel to stop.');
+        return sendText(env, chatId, tr(lang, 'customerPrompt'));
       case 'm:income':
         await answerCallback(env, callback.id);
-        return sendIncome(env, chatId);
+        return sendIncome(env, admin, chatId);
       case 'm:buy':
         await answerCallback(env, callback.id);
-        return sendBuy(env, chatId);
+        return sendBuy(env, admin, chatId);
       case 'm:settings':
         await answerCallback(env, callback.id);
         return sendSettings(env, admin, chatId);
+      case 'm:language':
+        await answerCallback(env, callback.id);
+        return sendLanguageMenu(env, chatId, lang, 'admin');
       case 'month:new':
         await answerCallback(env, callback.id);
         await setAdminState(env, admin, 'wait_month_name', {});
-        return sendText(env, chatId, 'NEW MONTH PASS · send the customer name.\n\n/cancel to stop.');
+        return sendText(env, chatId, tr(lang, 'monthPrompt'));
       case 'month:active':
         await answerCallback(env, callback.id);
-        return sendActiveMemberships(env, chatId);
+        return sendActiveMemberships(env, admin, chatId);
       case 'buy:add':
         await answerCallback(env, callback.id);
         await setAdminState(env, admin, 'wait_purchase_title', {});
-        return sendText(env, chatId, 'PURCHASE · send what needs to be bought.\n\n/cancel to stop.');
+        return sendText(env, chatId, tr(lang, 'purchasePrompt'));
       case 'op:cancel':
-        await answerCallback(env, callback.id, 'Cancelled.');
+        await answerCallback(env, callback.id, tr(lang, 'cancelled'));
         await clearAdminState(env, admin.telegram_user_id);
         return sendAdminMenu(env, admin, chatId);
       case 'op:day:ok':
@@ -511,7 +849,7 @@ async function handleCallback(env, callback) {
       case 'set:book':
       case 'set:buy':
         await toggleSetting(env, admin, data);
-        await answerCallback(env, callback.id, 'Updated.');
+        await answerCallback(env, callback.id, tr(lang, 'updated'));
         return sendSettings(env, await linkedAdmin(env, userId), chatId);
       default:
         await answerCallback(env, callback.id);
@@ -524,8 +862,10 @@ async function handleCallback(env, callback) {
 }
 
 async function handleCustomerCallback(env, callback, userId, chatId, data) {
+  const customer = await linkedCustomer(env, userId);
+  const lang = normalizeLanguage(customer?.language);
   const bookingId = toPositiveInt(data.slice(3));
-  if (!bookingId) return answerCallback(env, callback.id, 'Invalid booking.', true);
+  if (!bookingId) return answerCallback(env, callback.id, tr(lang, 'invalidBooking'), true);
   const booking = await env.evil_space
     .prepare(`
       SELECT b.id, b.status, b.customer_id, b.accepted_visit_id, b.created_at
@@ -535,19 +875,19 @@ async function handleCustomerCallback(env, callback, userId, chatId, data) {
     `)
     .bind(bookingId, userId)
     .first();
-  if (!booking) return answerCallback(env, callback.id, 'This booking is not linked to you.', true);
+  if (!booking) return answerCallback(env, callback.id, tr(lang, 'bookingNotYours'), true);
 
   const { start, end } = nhaTrangDayBounds(nowSeconds());
   const createdAt = Number(booking.created_at ?? 0);
   if (createdAt < start || createdAt >= end) {
-    return answerCallback(env, callback.id, 'This booking has expired.', true);
+    return answerCallback(env, callback.id, tr(lang, 'bookingExpired'), true);
   }
 
   if (data.startsWith('cc:')) {
     try {
       const cancelled = await cancelBookingRecord(env, booking, 'telegram');
-      await answerCallback(env, callback.id, 'Booking cancelled.');
-      await sendText(env, chatId, '❌ <b>BOOKING CANCELLED</b>\n\nYou can request another desk anytime at evils.space.', null, true);
+      await answerCallback(env, callback.id, tr(lang, 'bookingCancelledCallback'));
+      await sendCustomerCancelled(env, chatId, lang);
       await notifyBookingOutcome(env, cancelled.id, 'cancelled');
     } catch (error) {
       await answerCallback(env, callback.id, userMessage(error), true);
@@ -556,23 +896,24 @@ async function handleCustomerCallback(env, callback, userId, chatId, data) {
   }
 
   if (booking.status !== 'accepted') {
-    return answerCallback(env, callback.id, 'Wi-Fi is available after the booking is accepted.', true);
+    return answerCallback(env, callback.id, tr(lang, 'wifiAfterAccept'), true);
   }
   if (typeof env.WIFI_PASSWORD !== 'string' || !env.WIFI_PASSWORD) {
-    return answerCallback(env, callback.id, 'Wi-Fi access is not configured yet.', true);
+    return answerCallback(env, callback.id, tr(lang, 'wifiNotConfigured'), true);
   }
 
-  await answerCallback(env, callback.id, 'Wi-Fi details sent.');
+  await answerCallback(env, callback.id, tr(lang, 'wifiSent'));
   await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: `📶 <b>EVIL SPACE WI-FI</b>\n\nNetwork: <code>${escapeHtml(WIFI_SSID)}</code>\nPassword: <code>${escapeHtml(env.WIFI_PASSWORD)}</code>`,
+    text: `📶 <b>EVIL SPACE WI-FI</b>\n\n${tr(lang, 'network')}: <code>${escapeHtml(WIFI_SSID)}</code>\n${tr(lang, 'password')}: <code>${escapeHtml(env.WIFI_PASSWORD)}</code>`,
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
         [
-          { text: 'COPY NETWORK', copy_text: { text: WIFI_SSID } },
-          { text: 'COPY PASSWORD', copy_text: { text: env.WIFI_PASSWORD } },
+          { text: tr(lang, 'copyNetwork'), copy_text: { text: WIFI_SSID } },
+          { text: tr(lang, 'copyPassword'), copy_text: { text: env.WIFI_PASSWORD } },
         ],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
       ],
     },
   });
@@ -584,7 +925,7 @@ async function pairAdmin(env, user, chatId, token) {
   const now = nowSeconds();
   const pending = await env.evil_space
     .prepare(`
-      SELECT t.admin_id, t.expires_at, a.email
+      SELECT t.admin_id, t.expires_at, t.language, a.email
       FROM admin_telegram_link_tokens t
       JOIN admins a ON a.id = t.admin_id
       WHERE t.token_hash = ? AND t.used_at IS NULL AND a.status = 'approved'
@@ -595,6 +936,7 @@ async function pairAdmin(env, user, chatId, token) {
     return sendText(env, chatId, 'This admin link expired. Open the Evil Space admin panel and generate a new one.');
   }
 
+  const language = normalizeLanguage(pending.language);
   const username = user.username ? `@${user.username}` : '';
   await env.evil_space.batch([
     env.evil_space.prepare('DELETE FROM admin_telegram_links WHERE admin_id = ? OR telegram_user_id = ?').bind(pending.admin_id, user.id),
@@ -603,16 +945,22 @@ async function pairAdmin(env, user, chatId, token) {
         INSERT INTO admin_telegram_links
           (admin_id, telegram_user_id, telegram_chat_id, telegram_username,
            notifications_enabled, booking_notifications, purchase_notifications,
-           linked_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, 1, 1, ?, ?)
+           linked_at, updated_at, language)
+        VALUES (?, ?, ?, ?, 1, 1, 1, ?, ?, ?)
       `)
-      .bind(pending.admin_id, user.id, chatId, username, now, now),
+      .bind(pending.admin_id, user.id, chatId, username, now, now, language),
     env.evil_space.prepare('UPDATE admin_telegram_link_tokens SET used_at = ? WHERE token_hash = ?').bind(now, tokenHash),
   ]);
 
   const admin = await linkedAdmin(env, user.id);
   await audit(env, admin, 'telegram.link', 'admin', admin.id, username);
-  await sendText(env, chatId, `✅ <b>TELEGRAM ADMIN CONNECTED</b>\n\n${escapeHtml(pending.email)}\n\nYou can operate Evil Space from this chat.`, adminMenuKeyboard(), true);
+  await sendText(
+    env,
+    chatId,
+    `${tr(language, 'adminConnected')}\n\n${escapeHtml(pending.email)}\n\n${tr(language, 'adminConnectedCopy')}`,
+    adminMenuKeyboard(language),
+    true,
+  );
   await sendAdminMenu(env, admin, chatId);
 }
 
@@ -622,7 +970,7 @@ async function pairCustomer(env, user, chatId, token) {
   const now = nowSeconds();
   const pending = await env.evil_space
     .prepare(`
-      SELECT t.booking_id, t.expires_at,
+      SELECT t.booking_id, t.expires_at, t.language,
              b.id, b.name, b.contact_type, b.contact_value, b.status, b.customer_id, b.created_at
       FROM customer_telegram_link_tokens t
       JOIN booking_requests b ON b.id = t.booking_id
@@ -639,73 +987,175 @@ async function pairCustomer(env, user, chatId, token) {
     return sendText(env, chatId, 'This booking is no longer active.');
   }
 
-  const username = user.username ? `@${user.username}` : '';
-  const customer = await ensureCustomer(env, {
-    name: pending.name,
-    telegram: username || (pending.contact_type === 'telegram' ? pending.contact_value : ''),
-  });
-
+  const language = normalizeLanguage(pending.language);
+  const identity = telegramBookingIdentity(user);
+  const customer = await ensureTelegramCustomer(env, user, identity);
+  await upsertCustomerTelegramLink(env, customer.id, user, chatId, language);
   await env.evil_space.batch([
-    env.evil_space.prepare('DELETE FROM customer_telegram_links WHERE customer_id = ? OR telegram_user_id = ?').bind(customer.id, user.id),
-    env.evil_space
-      .prepare(`
-        INSERT INTO customer_telegram_links
-          (customer_id, telegram_user_id, telegram_chat_id, telegram_username, linked_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `)
-      .bind(customer.id, user.id, chatId, username, now, now),
     env.evil_space.prepare('UPDATE booking_requests SET customer_id = ? WHERE id = ?').bind(customer.id, pending.id),
     env.evil_space.prepare('UPDATE customer_telegram_link_tokens SET used_at = ? WHERE token_hash = ?').bind(now, tokenHash),
   ]);
 
   if (pending.status === 'accepted') {
-    await sendCustomerAccepted(env, chatId, pending.id);
+    await sendCustomerAccepted(env, chatId, pending.id, language);
   } else {
-    await telegramApi(env, 'sendMessage', {
-      chat_id: chatId,
-      text: '✅ <b>BOOKING UPDATES CONNECTED</b>\n\nWe will message you here when Evil Space accepts or declines your desk request.',
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [[{ text: 'CANCEL REQUEST', callback_data: `cc:${pending.id}` }]],
-      },
-    });
+    await sendCustomerPending(env, chatId, pending.id, language, true);
   }
 }
 
+async function bookViaTelegram(env, user, chatId, rawLanguage) {
+  const language = normalizeLanguage(rawLanguage);
+  const identity = telegramBookingIdentity(user);
+  const customer = await ensureTelegramCustomer(env, user, identity);
+  await upsertCustomerTelegramLink(env, customer.id, user, chatId, language);
+
+  const now = nowSeconds();
+  const { start, end } = nhaTrangDayBounds(now);
+  const existing = await env.evil_space
+    .prepare(`
+      SELECT id, status
+      FROM booking_requests
+      WHERE customer_id = ?
+        AND created_at >= ? AND created_at < ?
+        AND status IN ('new', 'processing', 'accepted')
+      ORDER BY id DESC
+      LIMIT 1
+    `)
+    .bind(customer.id, start, end)
+    .first();
+
+  if (existing?.id) {
+    if (existing.status === 'accepted') {
+      await sendCustomerAccepted(env, chatId, existing.id, language);
+    } else {
+      await sendCustomerPending(env, chatId, existing.id, language);
+    }
+    return;
+  }
+
+  const created = await env.evil_space
+    .prepare(`
+      INSERT INTO booking_requests
+        (name, contact_type, contact_value, status, created_at, customer_id)
+      VALUES (?, 'telegram', ?, 'new', ?, ?)
+      RETURNING id
+    `)
+    .bind(identity.name, identity.contact, now, customer.id)
+    .first();
+  if (!created?.id) throw new Error('Could not create Telegram booking.');
+
+  await Promise.all([
+    notifyAdminsNewBooking(env, created.id),
+    sendCustomerPending(env, chatId, created.id, language),
+  ]);
+}
+
+function telegramBookingIdentity(user) {
+  const username = cleanOptionalText(user?.username, MAX_NAME_LENGTH);
+  if (username) {
+    const value = `@${username}`;
+    return { name: value, contact: value };
+  }
+  const first = cleanOptionalText(user?.first_name, MAX_NAME_LENGTH);
+  const last = cleanOptionalText(user?.last_name, MAX_NAME_LENGTH);
+  const display = cleanText([first, last].filter(Boolean).join(' '), MAX_NAME_LENGTH) || 'Telegram';
+  return { name: display, contact: display };
+}
+
+async function ensureTelegramCustomer(env, user, identity) {
+  const linked = await linkedCustomer(env, user.id);
+  if (linked?.customer_id) {
+    await env.evil_space
+      .prepare(`
+        UPDATE customers
+        SET name = ?, telegram = CASE WHEN ? LIKE '@%' THEN ? ELSE telegram END, updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(identity.name, identity.contact, identity.contact, nowSeconds(), linked.customer_id)
+      .run();
+    return { id: Number(linked.customer_id), name: identity.name };
+  }
+
+  if (identity.contact.startsWith('@')) {
+    const existing = await env.evil_space
+      .prepare('SELECT id FROM customers WHERE lower(telegram) = lower(?) LIMIT 1')
+      .bind(identity.contact)
+      .first();
+    if (existing?.id) {
+      await env.evil_space
+        .prepare('UPDATE customers SET name = ?, telegram = ?, updated_at = ? WHERE id = ?')
+        .bind(identity.name, identity.contact, nowSeconds(), existing.id)
+        .run();
+      return { id: Number(existing.id), name: identity.name };
+    }
+  }
+
+  const now = nowSeconds();
+  const created = await env.evil_space
+    .prepare(`
+      INSERT INTO customers
+        (name, phone, email, telegram, contact_other, notes, created_at, updated_at)
+      VALUES (?, '', '', ?, '', '', ?, ?)
+      RETURNING id
+    `)
+    .bind(identity.name, identity.contact.startsWith('@') ? identity.contact : '', now, now)
+    .first();
+  return { id: Number(created.id), name: identity.name };
+}
+
+async function upsertCustomerTelegramLink(env, customerId, user, chatId, language) {
+  const username = user.username ? `@${user.username}` : '';
+  const now = nowSeconds();
+  await env.evil_space.batch([
+    env.evil_space.prepare('DELETE FROM customer_telegram_links WHERE customer_id = ? OR telegram_user_id = ?').bind(customerId, user.id),
+    env.evil_space
+      .prepare(`
+        INSERT INTO customer_telegram_links
+          (customer_id, telegram_user_id, telegram_chat_id, telegram_username, linked_at, updated_at, language)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(customerId, user.id, chatId, username, now, now, normalizeLanguage(language)),
+  ]);
+}
+
 async function sendAdminMenu(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const summary = await todaySummary(env);
   await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: `🗞 <b>EVIL SPACE ADMIN</b>\n\nToday: <b>${summary.occupied}/${summary.total}</b> desks\nPending bookings: <b>${summary.pending}</b>\nIncome: <b>${formatMoney(summary.income)}</b>`,
+    text: `🗞 <b>EVIL SPACE ADMIN</b>\n\n${tr(lang, 'today')}: <b>${summary.occupied}/${summary.total}</b>\n${tr(lang, 'pendingBookings')}: <b>${summary.pending}</b>\n${tr(lang, 'income')}: <b>${formatMoney(summary.income)}</b>`,
     parse_mode: 'HTML',
-    reply_markup: adminMenuKeyboard(),
+    reply_markup: adminMenuKeyboard(lang),
   });
 }
 
-function adminMenuKeyboard() {
+function adminMenuKeyboard(language) {
+  const lang = normalizeLanguage(language);
   return {
     inline_keyboard: [
       [
-        { text: 'TODAY', callback_data: 'm:today' },
-        { text: 'BOOKINGS', callback_data: 'm:bookings' },
+        { text: tr(lang, 'today'), callback_data: 'm:today' },
+        { text: tr(lang, 'bookings'), callback_data: 'm:bookings' },
       ],
       [
-        { text: 'DAY PASS', callback_data: 'm:day' },
-        { text: 'MONTH', callback_data: 'm:month' },
+        { text: tr(lang, 'dayPass'), callback_data: 'm:day' },
+        { text: tr(lang, 'month'), callback_data: 'm:month' },
       ],
       [
-        { text: 'CUSTOMERS', callback_data: 'm:customers' },
-        { text: 'INCOME', callback_data: 'm:income' },
+        { text: tr(lang, 'customers'), callback_data: 'm:customers' },
+        { text: tr(lang, 'income'), callback_data: 'm:income' },
       ],
       [
-        { text: 'BUY', callback_data: 'm:buy' },
-        { text: 'SETTINGS', callback_data: 'm:settings' },
+        { text: tr(lang, 'buy'), callback_data: 'm:buy' },
+        { text: tr(lang, 'settings'), callback_data: 'm:settings' },
       ],
+      [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: 'm:language' }],
     ],
   };
 }
 
 async function sendToday(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const now = nowSeconds();
   const { start, end } = nhaTrangDayBounds(now);
   const [summary, visits] = await Promise.all([
@@ -722,21 +1172,22 @@ async function sendToday(env, admin, chatId) {
       .all(),
   ]);
   const lines = (visits.results ?? []).map(
-    (visit) => `• ${escapeHtml(visit.name)} · ${visit.kind === 'month' ? 'MONTH' : 'DAY'} · ${formatLocalTime(visit.created_at)}`,
+    (visit) => `• ${escapeHtml(visit.name)} · ${visit.kind === 'month' ? tr(lang, 'month') : tr(lang, 'dayPass')} · ${formatLocalTime(visit.created_at)}`,
   );
   const text = [
-    '📋 <b>TODAY</b>',
+    `📋 <b>${tr(lang, 'today')}</b>`,
     '',
-    `Occupied: <b>${summary.occupied}/${summary.total}</b>`,
-    `Income: <b>${formatMoney(summary.income)}</b>`,
-    `Pending bookings: <b>${summary.pending}</b>`,
+    `${tr(lang, 'occupied')}: <b>${summary.occupied}/${summary.total}</b>`,
+    `${tr(lang, 'income')}: <b>${formatMoney(summary.income)}</b>`,
+    `${tr(lang, 'pendingBookings')}: <b>${summary.pending}</b>`,
     '',
-    ...(lines.length ? lines : ['Nobody yet.']),
+    ...(lines.length ? lines : [tr(lang, 'nobody')]),
   ].join('\n');
-  await sendText(env, chatId, text, adminMenuKeyboard(), true);
+  await sendText(env, chatId, text, adminMenuKeyboard(lang), true);
 }
 
 async function sendPendingBookings(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const { start, end } = nhaTrangDayBounds(nowSeconds());
   const result = await env.evil_space
     .prepare(`
@@ -750,20 +1201,21 @@ async function sendPendingBookings(env, admin, chatId) {
     .all();
   const bookings = result.results ?? [];
   if (!bookings.length) {
-    await sendText(env, chatId, '✅ No pending bookings.', adminMenuKeyboard());
+    await sendText(env, chatId, tr(lang, 'noPending'), adminMenuKeyboard(lang));
     return;
   }
   for (const booking of bookings) {
-    await sendBookingToAdmin(env, chatId, booking);
+    await sendBookingToAdmin(env, chatId, booking, lang);
   }
 }
 
-async function sendBookingToAdmin(env, chatId, booking) {
+async function sendBookingToAdmin(env, chatId, booking, language) {
+  const lang = normalizeLanguage(language);
   const response = await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: bookingAdminText(booking, 'new'),
+    text: bookingAdminText(booking, 'new', '', lang),
     parse_mode: 'HTML',
-    reply_markup: bookingAdminKeyboard(booking.id),
+    reply_markup: bookingAdminKeyboard(booking.id, lang),
   });
   const messageId = toPositiveInt(response?.result?.message_id);
   if (messageId) {
@@ -781,48 +1233,52 @@ async function sendBookingToAdmin(env, chatId, booking) {
   }
 }
 
-function bookingAdminText(booking, status, actor = '') {
-  const contact = booking.contact_type === 'telegram' ? 'TG' : 'PHONE';
+function bookingAdminText(booking, status, actor = '', language = 'en') {
+  const lang = normalizeLanguage(language);
+  const contact = booking.contact_type === 'telegram' ? 'TG' : tr(lang, 'phone');
   const heading = status === 'accepted'
-    ? '✅ BOOKING ACCEPTED'
+    ? tr(lang, 'bookingAcceptedTitle')
     : status === 'declined'
-      ? '❌ BOOKING DECLINED'
+      ? tr(lang, 'bookingDeclinedTitle')
       : status === 'cancelled'
-        ? '🚫 BOOKING CANCELLED'
-        : '🔔 NEW DESK REQUEST';
+        ? tr(lang, 'bookingCancelledTitle')
+        : tr(lang, 'newDeskRequest');
   return [
     `<b>${heading}</b>`,
     '',
     `<b>${escapeHtml(booking.name ?? '')}</b>`,
     `${contact}: ${escapeHtml(booking.contact_value ?? '')}`,
-    `Time: ${formatLocalTime(booking.created_at)}`,
-    actor ? `By: ${escapeHtml(actor)}` : '',
+    `${tr(lang, 'time')}: ${formatLocalTime(booking.created_at)}`,
+    actor ? `${tr(lang, 'by')}: ${escapeHtml(actor)}` : '',
   ].filter(Boolean).join('\n');
 }
 
-function bookingAdminKeyboard(id) {
+function bookingAdminKeyboard(id, language) {
+  const lang = normalizeLanguage(language);
   return {
     inline_keyboard: [
       [
-        { text: '✅ ACCEPT', callback_data: `ba:${id}` },
-        { text: '❌ DECLINE', callback_data: `bd:${id}` },
+        { text: `✅ ${tr(lang, 'accept')}`, callback_data: `ba:${id}` },
+        { text: `❌ ${tr(lang, 'decline')}`, callback_data: `bd:${id}` },
       ],
-      [{ text: 'OPEN ADMIN', url: 'https://evils.space/admin' }],
+      [{ text: tr(lang, 'openAdmin'), url: 'https://evils.space/admin' }],
     ],
   };
 }
 
-async function sendMonthMenu(env, chatId) {
-  return sendText(env, chatId, 'MONTH PASS', {
+async function sendMonthMenu(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
+  return sendText(env, chatId, tr(lang, 'month'), {
     inline_keyboard: [
-      [{ text: 'NEW MONTH PASS', callback_data: 'month:new' }],
-      [{ text: 'CHECK IN ACTIVE MEMBER', callback_data: 'month:active' }],
-      [{ text: 'BACK', callback_data: 'm:today' }],
+      [{ text: tr(lang, 'newMonthPass'), callback_data: 'month:new' }],
+      [{ text: tr(lang, 'checkInActive'), callback_data: 'month:active' }],
+      [{ text: tr(lang, 'back'), callback_data: 'm:today' }],
     ],
   });
 }
 
-async function sendActiveMemberships(env, chatId) {
+async function sendActiveMemberships(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const result = await env.evil_space
     .prepare(`
       SELECT id, name, expires_at
@@ -836,54 +1292,61 @@ async function sendActiveMemberships(env, chatId) {
   const rows = (result.results ?? []).map((membership) => [
     { text: `${membership.name} · ${formatLocalDate(membership.expires_at)}`, callback_data: `mi:${membership.id}` },
   ]);
-  if (!rows.length) return sendText(env, chatId, 'No active memberships.', adminMenuKeyboard());
-  rows.push([{ text: 'BACK', callback_data: 'm:month' }]);
-  return sendText(env, chatId, 'ACTIVE MEMBERS · tap to check in', { inline_keyboard: rows });
+  if (!rows.length) return sendText(env, chatId, tr(lang, 'noActiveMembers'), adminMenuKeyboard(lang));
+  rows.push([{ text: tr(lang, 'back'), callback_data: 'm:month' }]);
+  return sendText(env, chatId, tr(lang, 'activeMembers'), { inline_keyboard: rows });
 }
 
 async function prepareNamedOperation(env, admin, chatId, state, value) {
+  const lang = normalizeLanguage(admin.language);
   const name = cleanText(value, MAX_NAME_LENGTH);
-  if (!name) return sendText(env, chatId, 'Name is required.');
+  if (!name) return sendText(env, chatId, tr(lang, 'nameRequired'));
   await setAdminState(env, admin, state, { name });
   const isMonth = state === 'confirm_month';
-  return sendText(env, chatId, `${isMonth ? 'MONTH PASS' : 'DAY PASS'}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : '250K VND'}\n\nConfirm?`, {
-    inline_keyboard: [
-      [
-        { text: 'CONFIRM', callback_data: isMonth ? 'op:month:ok' : 'op:day:ok' },
-        { text: 'CANCEL', callback_data: 'op:cancel' },
-      ],
-    ],
-  }, true);
+  return sendText(
+    env,
+    chatId,
+    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : '250K VND'}\n\n${tr(lang, 'confirmQuestion')}`,
+    {
+      inline_keyboard: [[
+        { text: tr(lang, 'confirm'), callback_data: isMonth ? 'op:month:ok' : 'op:day:ok' },
+        { text: tr(lang, 'cancel'), callback_data: 'op:cancel' },
+      ]],
+    },
+    true,
+  );
 }
 
 async function preparePurchase(env, admin, chatId, value) {
+  const lang = normalizeLanguage(admin.language);
   const title = cleanText(value, MAX_TEXT_LENGTH);
-  if (!title) return sendText(env, chatId, 'Purchase title is required.');
+  if (!title) return sendText(env, chatId, tr(lang, 'purchaseRequired'));
   await setAdminState(env, admin, 'confirm_buy', { title });
-  return sendText(env, chatId, `ADD PURCHASE REQUEST\n\n<b>${escapeHtml(title)}</b>\n\nConfirm?`, {
+  return sendText(env, chatId, `${tr(lang, 'addPurchase')}\n\n<b>${escapeHtml(title)}</b>\n\n${tr(lang, 'confirmQuestion')}`, {
     inline_keyboard: [[
-      { text: 'CONFIRM', callback_data: 'op:buy:ok' },
-      { text: 'CANCEL', callback_data: 'op:cancel' },
+      { text: tr(lang, 'confirm'), callback_data: 'op:buy:ok' },
+      { text: tr(lang, 'cancel'), callback_data: 'op:cancel' },
     ]],
   }, true);
 }
 
 async function confirmStateOperation(env, callback, admin, chatId, expectedState) {
+  const lang = normalizeLanguage(admin.language);
   const session = await adminState(env, admin.telegram_user_id);
   if (!session || session.state !== expectedState) {
-    return answerCallback(env, callback.id, 'This action expired. Start again.', true);
+    return answerCallback(env, callback.id, tr(lang, 'actionExpired'), true);
   }
   const payload = safeJson(session.payload_json);
   try {
     if (expectedState === 'confirm_day') {
       await addDayPass(env, payload.name, admin);
-      await answerCallback(env, callback.id, 'Day pass added.');
+      await answerCallback(env, callback.id, tr(lang, 'dayAdded'));
     } else if (expectedState === 'confirm_month') {
       await addMonthPass(env, payload.name, admin);
-      await answerCallback(env, callback.id, 'Month pass added.');
+      await answerCallback(env, callback.id, tr(lang, 'monthAdded'));
     } else if (expectedState === 'confirm_buy') {
       await addPurchase(env, payload.title, admin);
-      await answerCallback(env, callback.id, 'Purchase request added.');
+      await answerCallback(env, callback.id, tr(lang, 'purchaseAdded'));
       await notifyAdminsPurchase(env, payload.title);
     }
     await clearAdminState(env, admin.telegram_user_id);
@@ -893,7 +1356,8 @@ async function confirmStateOperation(env, callback, admin, chatId, expectedState
   }
 }
 
-async function sendCustomerSearch(env, chatId, raw) {
+async function sendCustomerSearch(env, admin, chatId, raw) {
+  const lang = normalizeLanguage(admin.language);
   const query = cleanText(raw, MAX_TEXT_LENGTH);
   if (!query) return sendText(env, chatId, 'Search value is required.');
   const like = `%${query.toLowerCase()}%`;
@@ -914,36 +1378,38 @@ async function sendCustomerSearch(env, chatId, raw) {
     .bind(nowSeconds(), like, like, like, like)
     .all();
   const customers = result.results ?? [];
-  if (!customers.length) return sendText(env, chatId, 'No customers found.', adminMenuKeyboard());
-  return sendText(env, chatId, `CUSTOMERS · ${customers.length} result(s)`, {
+  if (!customers.length) return sendText(env, chatId, tr(lang, 'noCustomers'), adminMenuKeyboard(lang));
+  return sendText(env, chatId, `${tr(lang, 'customers')} · ${customers.length}`, {
     inline_keyboard: [
       ...customers.map((customer) => [
         { text: customer.name, callback_data: `cust:${customer.id}` },
       ]),
-      [{ text: 'BACK', callback_data: 'm:customers' }],
+      [{ text: tr(lang, 'back'), callback_data: 'm:customers' }],
     ],
   });
 }
 
-async function sendCustomer(env, chatId, customerId) {
+async function sendCustomer(env, admin, chatId, customerId) {
+  const lang = normalizeLanguage(admin.language);
   const customer = await customerById(env, customerId);
-  if (!customer) return sendText(env, chatId, 'Customer not found.', adminMenuKeyboard());
-  const contact = [customer.phone, customer.telegram, customer.email].filter(Boolean).join(' · ') || 'No contact';
+  if (!customer) return sendText(env, chatId, tr(lang, 'noCustomers'), adminMenuKeyboard(lang));
+  const contact = [customer.phone, customer.telegram, customer.email].filter(Boolean).join(' · ') || tr(lang, 'noContact');
   const membership = customer.active_until
-    ? `ACTIVE UNTIL ${formatLocalDate(customer.active_until)}`
-    : 'NO ACTIVE MONTH PASS';
+    ? `${tr(lang, 'activeUntil')} ${formatLocalDate(customer.active_until)}`
+    : tr(lang, 'noActiveMonth');
   return sendText(env, chatId, `<b>${escapeHtml(customer.name)}</b>\n${escapeHtml(contact)}\n${membership}`, {
     inline_keyboard: [
       [
-        { text: 'DAY PASS', callback_data: `cd:${customer.id}` },
-        { text: 'MONTH PASS', callback_data: `cm:${customer.id}` },
+        { text: tr(lang, 'dayPass'), callback_data: `cd:${customer.id}` },
+        { text: tr(lang, 'month'), callback_data: `cm:${customer.id}` },
       ],
-      [{ text: 'BACK', callback_data: 'm:customers' }],
+      [{ text: tr(lang, 'back'), callback_data: 'm:customers' }],
     ],
   }, true);
 }
 
-async function sendIncome(env, chatId) {
+async function sendIncome(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const now = nowSeconds();
   const { start, end } = nhaTrangDayBounds(now);
   const seven = start - 6 * 86400;
@@ -959,10 +1425,17 @@ async function sendIncome(env, chatId) {
     `)
     .bind(start, end, seven, thirty)
     .first();
-  return sendText(env, chatId, `💰 <b>INCOME</b>\n\nToday: <b>${formatMoney(row?.today)}</b>\n7 days: <b>${formatMoney(row?.seven)}</b>\n30 days: <b>${formatMoney(row?.thirty)}</b>\nAll: <b>${formatMoney(row?.total)}</b>`, adminMenuKeyboard(), true);
+  return sendText(
+    env,
+    chatId,
+    `💰 <b>${tr(lang, 'income')}</b>\n\n${tr(lang, 'today')}: <b>${formatMoney(row?.today)}</b>\n7: <b>${formatMoney(row?.seven)}</b>\n30: <b>${formatMoney(row?.thirty)}</b>\nALL: <b>${formatMoney(row?.total)}</b>`,
+    adminMenuKeyboard(lang),
+    true,
+  );
 }
 
-async function sendBuy(env, chatId) {
+async function sendBuy(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const result = await env.evil_space
     .prepare(`
       SELECT id, title, created_at
@@ -975,21 +1448,37 @@ async function sendBuy(env, chatId) {
   const rows = (result.results ?? []).map((item) => [
     { text: `✓ ${item.title}`, callback_data: `pb:${item.id}` },
   ]);
-  rows.unshift([{ text: 'ADD PURCHASE', callback_data: 'buy:add' }]);
-  rows.push([{ text: 'BACK', callback_data: 'm:today' }]);
-  return sendText(env, chatId, '🛒 TO BUY\n\nTap an item after it has been bought.', { inline_keyboard: rows });
+  rows.unshift([{ text: tr(lang, 'addPurchase'), callback_data: 'buy:add' }]);
+  rows.push([{ text: tr(lang, 'back'), callback_data: 'm:today' }]);
+  return sendText(env, chatId, tr(lang, 'toBuy'), { inline_keyboard: rows });
 }
 
 async function sendSettings(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
   const book = Number(admin.booking_notifications) === 1;
   const buy = Number(admin.purchase_notifications) === 1;
-  return sendText(env, chatId, '⚙️ NOTIFICATIONS', {
+  return sendText(env, chatId, tr(lang, 'notifications'), {
     inline_keyboard: [
-      [{ text: `Bookings ${book ? 'ON' : 'OFF'}`, callback_data: 'set:book' }],
-      [{ text: `Purchases ${buy ? 'ON' : 'OFF'}`, callback_data: 'set:buy' }],
-      [{ text: 'BACK', callback_data: 'm:today' }],
+      [{ text: `${tr(lang, 'bookings')} ${book ? tr(lang, 'on') : tr(lang, 'off')}`, callback_data: 'set:book' }],
+      [{ text: `${tr(lang, 'purchases')} ${buy ? tr(lang, 'on') : tr(lang, 'off')}`, callback_data: 'set:buy' }],
+      [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: 'm:language' }],
+      [{ text: tr(lang, 'back'), callback_data: 'm:today' }],
     ],
   });
+}
+
+async function sendLanguageMenu(env, chatId, language, role) {
+  const lang = normalizeLanguage(language);
+  const prefix = role === 'admin' ? 'al' : 'cl';
+  return sendText(env, chatId, tr(lang, 'languageTitle'), {
+    inline_keyboard: [
+      [
+        { text: 'ENGLISH', callback_data: `${prefix}:en` },
+        { text: 'РУССКИЙ', callback_data: `${prefix}:ru` },
+      ],
+      [{ text: 'TIẾNG VIỆT', callback_data: `${prefix}:vi` }],
+    ],
+  }, true);
 }
 
 async function toggleSetting(env, admin, data) {
@@ -1004,6 +1493,20 @@ async function toggleSetting(env, admin, data) {
       .bind(nowSeconds(), admin.id)
       .run();
   }
+}
+
+async function setAdminLanguage(env, adminId, language) {
+  await env.evil_space
+    .prepare('UPDATE admin_telegram_links SET language = ?, updated_at = ? WHERE admin_id = ?')
+    .bind(normalizeLanguage(language), nowSeconds(), adminId)
+    .run();
+}
+
+async function setCustomerLanguage(env, telegramUserId, language) {
+  await env.evil_space
+    .prepare('UPDATE customer_telegram_links SET language = ?, updated_at = ? WHERE telegram_user_id = ?')
+    .bind(normalizeLanguage(language), nowSeconds(), telegramUserId)
+    .run();
 }
 
 async function acceptBooking(env, bookingId, admin) {
@@ -1031,13 +1534,15 @@ async function acceptBooking(env, bookingId, admin) {
       phone: claimed.contact_type === 'phone' ? claimed.contact_value : '',
       telegram: claimed.contact_type === 'telegram' ? claimed.contact_value : '',
     });
+    const current = await bookingById(env, bookingId);
+    const customerId = toPositiveInt(current?.customer_id) ?? customer.id;
     const already = await env.evil_space
       .prepare(`
         SELECT id FROM visits
         WHERE customer_id = ? AND created_at >= ? AND created_at < ?
         LIMIT 1
       `)
-      .bind(customer.id, start, end)
+      .bind(customerId, start, end)
       .first();
 
     let acceptedVisitId = null;
@@ -1049,7 +1554,7 @@ async function acceptBooking(env, bookingId, admin) {
           VALUES (?, 'day', NULL, ?, ?, ?, ?)
           RETURNING id
         `)
-        .bind(claimed.name, DAY_PASS_VND, now, admin.email, customer.id)
+        .bind(claimed.name, DAY_PASS_VND, now, admin.email, customerId)
         .first();
       acceptedVisitId = toPositiveInt(visit?.id);
     }
@@ -1060,10 +1565,10 @@ async function acceptBooking(env, bookingId, admin) {
         SET status = 'accepted', customer_id = ?, accepted_visit_id = ?
         WHERE id = ? AND status = 'processing'
       `)
-      .bind(customer.id, acceptedVisitId, bookingId)
+      .bind(customerId, acceptedVisitId, bookingId)
       .run();
     await audit(env, admin, 'booking.accept', 'booking', bookingId, claimed.name);
-    return { ...claimed, id: bookingId, customer_id: customer.id, accepted_visit_id: acceptedVisitId };
+    return { ...claimed, id: bookingId, customer_id: customerId, accepted_visit_id: acceptedVisitId };
   } catch (error) {
     await env.evil_space
       .prepare("UPDATE booking_requests SET status = 'new', handled_at = NULL, handled_by_email = NULL WHERE id = ? AND status = 'processing'")
@@ -1227,62 +1732,139 @@ async function notifyBookingOutcome(env, bookingId, status) {
 
   const actor = booking.handled_by_email ?? '';
   const messages = await env.evil_space
-    .prepare('SELECT telegram_chat_id, telegram_message_id FROM telegram_booking_messages WHERE booking_id = ?')
+    .prepare(`
+      SELECT m.telegram_chat_id, m.telegram_message_id,
+             COALESCE(l.language, 'en') AS language
+      FROM telegram_booking_messages m
+      LEFT JOIN admin_telegram_links l
+        ON l.telegram_chat_id = m.telegram_chat_id
+      WHERE m.booking_id = ?
+    `)
     .bind(bookingId)
     .all();
   await Promise.all(
-    (messages.results ?? []).map((message) =>
-      telegramApi(env, 'editMessageText', {
+    (messages.results ?? []).map((message) => {
+      const lang = normalizeLanguage(message.language);
+      return telegramApi(env, 'editMessageText', {
         chat_id: message.telegram_chat_id,
         message_id: message.telegram_message_id,
-        text: bookingAdminText(booking, status, actor),
+        text: bookingAdminText(booking, status, actor, lang),
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: 'OPEN ADMIN', url: 'https://evils.space/admin' }]] },
-      }).catch(() => null),
-    ),
+        reply_markup: { inline_keyboard: [[{ text: tr(lang, 'openAdmin'), url: 'https://evils.space/admin' }]] },
+      }).catch(() => null);
+    }),
   );
 
   const customer = await customerTelegramForBooking(env, bookingId);
   if (!customer) return;
+  const lang = normalizeLanguage(customer.language);
   if (status === 'accepted') {
-    await sendCustomerAccepted(env, customer.telegram_chat_id, bookingId);
+    await sendCustomerAccepted(env, customer.telegram_chat_id, bookingId, lang);
   } else if (status === 'declined') {
-    await telegramApi(env, 'sendMessage', {
-      chat_id: customer.telegram_chat_id,
-      text: '❌ <b>BOOKING DECLINED</b>\n\nWe could not confirm this desk request. You can make another request anytime at evils.space.',
-      parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: 'OPEN EVIL SPACE', url: 'https://evils.space' }]] },
-    });
+    await sendCustomerDeclined(env, customer.telegram_chat_id, lang);
   } else if (status === 'cancelled') {
-    await telegramApi(env, 'sendMessage', {
-      chat_id: customer.telegram_chat_id,
-      text: '🚫 <b>BOOKING CANCELLED</b>\n\nYour desk is no longer counted as occupied.',
-      parse_mode: 'HTML',
-    });
+    await sendCustomerCancelled(env, customer.telegram_chat_id, lang);
   }
 }
 
-async function sendCustomerAccepted(env, chatId, bookingId) {
+async function sendCustomerPending(env, chatId, bookingId, language, connected = false) {
+  const lang = normalizeLanguage(language);
+  const heading = connected ? tr(lang, 'customerConnected') : tr(lang, 'customerPending');
+  const copy = connected ? tr(lang, 'customerConnectedCopy') : tr(lang, 'customerPendingCopy');
   await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: '✅ <b>BOOKING ACCEPTED</b>\n\nYour desk at Evil Space is confirmed for today.\nOpen daily 11:00–23:00.\n\nYou can cancel here anytime if your plans change.',
+    text: `${heading}\n\n${copy}`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: tr(lang, 'cancelRequest'), callback_data: `cc:${bookingId}` }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    },
+  });
+}
+
+async function sendCustomerAccepted(env, chatId, bookingId, language) {
+  const lang = normalizeLanguage(language);
+  await telegramApi(env, 'sendMessage', {
+    chat_id: chatId,
+    text: `${tr(lang, 'customerAccepted')}\n\n${tr(lang, 'customerAcceptedCopy')}`,
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '❌ CANCEL BOOKING', callback_data: `cc:${bookingId}` },
-          { text: '📶 WI-FI', callback_data: `cw:${bookingId}` },
+          { text: `❌ ${tr(lang, 'cancelBooking')}`, callback_data: `cc:${bookingId}` },
+          { text: `📶 ${tr(lang, 'wifi')}`, callback_data: `cw:${bookingId}` },
         ],
-        [{ text: 'DIRECTIONS', url: 'https://www.google.com/maps/dir/?api=1&destination=Evil%20Space%2C%2060%20Cao%20V%C4%83n%20B%C3%A9%2C%20Nha%20Trang' }],
+        [{ text: tr(lang, 'directions'), url: 'https://www.google.com/maps/dir/?api=1&destination=Evil%20Space%2C%2060%20Cao%20V%C4%83n%20B%C3%A9%2C%20Nha%20Trang' }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
       ],
     },
+  });
+}
+
+async function sendCustomerDeclined(env, chatId, language) {
+  const lang = normalizeLanguage(language);
+  await telegramApi(env, 'sendMessage', {
+    chat_id: chatId,
+    text: `${tr(lang, 'customerDeclined')}\n\n${tr(lang, 'customerDeclinedCopy')}`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: tr(lang, 'openSite'), url: 'https://evils.space' }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    },
+  });
+}
+
+async function sendCustomerCancelled(env, chatId, language) {
+  const lang = normalizeLanguage(language);
+  await telegramApi(env, 'sendMessage', {
+    chat_id: chatId,
+    text: `${tr(lang, 'customerCancelled')}\n\n${tr(lang, 'customerCancelledCopy')}`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: tr(lang, 'openSite'), url: 'https://evils.space' }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    },
+  });
+}
+
+async function sendCustomerHome(env, customer, chatId) {
+  const lang = normalizeLanguage(customer?.language);
+  const { start, end } = nhaTrangDayBounds(nowSeconds());
+  const booking = await env.evil_space
+    .prepare(`
+      SELECT id, status
+      FROM booking_requests
+      WHERE customer_id = ? AND created_at >= ? AND created_at < ?
+      ORDER BY id DESC
+      LIMIT 1
+    `)
+    .bind(customer.customer_id, start, end)
+    .first();
+
+  if (booking?.status === 'accepted') {
+    return sendCustomerAccepted(env, chatId, booking.id, lang);
+  }
+  if (booking?.status === 'new' || booking?.status === 'processing') {
+    return sendCustomerPending(env, chatId, booking.id, lang);
+  }
+  return sendText(env, chatId, tr(lang, 'customerNoBooking'), {
+    inline_keyboard: [
+      [{ text: tr(lang, 'openSite'), url: 'https://evils.space' }],
+      [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+    ],
   });
 }
 
 async function customerTelegramForBooking(env, bookingId) {
   return env.evil_space
     .prepare(`
-      SELECT l.telegram_chat_id, l.telegram_user_id
+      SELECT l.telegram_chat_id, l.telegram_user_id, l.language
       FROM booking_requests b
       JOIN customer_telegram_links l ON l.customer_id = b.customer_id
       WHERE b.id = ?
@@ -1317,10 +1899,25 @@ async function linkedAdmin(env, telegramUserId) {
   return env.evil_space
     .prepare(`
       SELECT a.id, a.email, l.telegram_user_id, l.telegram_chat_id,
-             l.telegram_username, l.booking_notifications, l.purchase_notifications
+             l.telegram_username, l.booking_notifications, l.purchase_notifications,
+             l.language
       FROM admin_telegram_links l
       JOIN admins a ON a.id = l.admin_id
       WHERE l.telegram_user_id = ? AND a.status = 'approved'
+      LIMIT 1
+    `)
+    .bind(telegramUserId)
+    .first();
+}
+
+async function linkedCustomer(env, telegramUserId) {
+  return env.evil_space
+    .prepare(`
+      SELECT l.customer_id, l.telegram_user_id, l.telegram_chat_id,
+             l.telegram_username, l.language, c.name
+      FROM customer_telegram_links l
+      JOIN customers c ON c.id = l.customer_id
+      WHERE l.telegram_user_id = ?
       LIMIT 1
     `)
     .bind(telegramUserId)
@@ -1663,4 +2260,6 @@ export const telegramTest = {
   formatMoney,
   constantTimeEqual,
   nhaTrangDayBounds,
+  normalizeLanguage,
+  telegramBookingIdentity,
 };
