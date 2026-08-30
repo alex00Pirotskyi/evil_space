@@ -169,7 +169,11 @@ async function handlePublicBooking(request, env, ctx) {
 
   let telegramLinkUrl = null;
   if (contactType === 'telegram') {
-    telegramLinkUrl = await createCustomerTelegramLink(env, created.id);
+    telegramLinkUrl = await createCustomerTelegramLink(
+      env,
+      created.id,
+      body.language,
+    );
   }
 
   ctx.waitUntil(notifyAdminsNewBooking(env, created.id));
