@@ -36,3 +36,22 @@ test('Nha Trang day boundary is midnight UTC+7', () => {
   );
   assert.equal(bounds.end - bounds.start, 86400);
 });
+
+test('Telegram languages preserve EN RU VI and fall back to English', () => {
+  assert.equal(telegramTest.normalizeLanguage('en'), 'en');
+  assert.equal(telegramTest.normalizeLanguage('RU'), 'ru');
+  assert.equal(telegramTest.normalizeLanguage('vi'), 'vi');
+  assert.equal(telegramTest.normalizeLanguage('de'), 'en');
+  assert.equal(telegramTest.normalizeLanguage(null), 'en');
+});
+
+test('one-tap Telegram booking uses the verified Telegram identity', () => {
+  assert.deepEqual(
+    telegramTest.telegramBookingIdentity({ username: 'alex' }),
+    { name: '@alex', contact: '@alex' },
+  );
+  assert.deepEqual(
+    telegramTest.telegramBookingIdentity({ first_name: 'Alex', last_name: 'P' }),
+    { name: 'Alex P', contact: 'Alex P' },
+  );
+});
