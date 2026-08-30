@@ -5,6 +5,7 @@ import 'package:evil_space/admin_portal.dart' deferred as admin_portal;
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_shell.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/public_telegram_connector.dart';
 
 class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
   const EvilSpaceRouteParser();
@@ -54,10 +55,13 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
       activePage = MaterialPage<void>(
         key: ValueKey('public-${publicRoute.path}'),
         name: publicRoute.path,
-        child: DailyScreen(
-          currentRoute: publicRoute,
+        child: PublicTelegramConnector(
           localization: localization,
-          onNavigate: navigate,
+          child: DailyScreen(
+            currentRoute: publicRoute,
+            localization: localization,
+            onNavigate: navigate,
+          ),
         ),
       );
     }
