@@ -47,6 +47,10 @@ Future<void> main() async {
     await _putWranglerSecret('TELEGRAM_WEBHOOK_SECRET', webhookSecret);
     await _putWranglerSecret('WIFI_PASSWORD', wifiPassword);
 
+    stdout.writeln('');
+    stdout.writeln('> building, migrating and deploying Evil Space before webhook activation');
+    await _run('dart', ['run', 'tool/release.dart']);
+
     await _telegram(client, botToken, 'setWebhook', {
       'url': _webhookUrl,
       'secret_token': webhookSecret,
@@ -70,7 +74,7 @@ Future<void> main() async {
     });
 
     stdout.writeln('');
-    stdout.writeln('Telegram configured successfully.');
+    stdout.writeln('Telegram configured and Evil Space deployed successfully.');
     if (username.isNotEmpty) stdout.writeln('Bot: @$username');
     stdout.writeln('Webhook: $_webhookUrl');
     stdout.writeln('Secrets are stored only in Cloudflare.');
@@ -171,7 +175,7 @@ Future<void> _run(String executable, List<String> arguments) async {
   final exitCode = await process.exitCode;
   await Future.wait([stdoutDone, stderrDone]);
   if (exitCode != 0) {
-    _die('$executable failed with exit code $exitCode. Fix Cloudflare login first.');
+    _die('$executable failed with exit code $exitCode. Fix the error above and rerun.');
   }
 }
 
