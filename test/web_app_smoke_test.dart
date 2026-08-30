@@ -25,14 +25,27 @@ void main() {
     await tester.tap(find.text('GET A DESK TODAY'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2));
-    expect(find.text('TELEGRAM'), findsOneWidget);
-    expect(find.text('PHONE'), findsOneWidget);
-    expect(find.text('SEND REQUEST'), findsOneWidget);
+    final dialog = find.byType(AlertDialog);
+    expect(dialog, findsOneWidget);
+    expect(find.descendant(of: dialog, matching: find.byType(TextField)), findsNWidgets(2));
+    expect(
+      find.descendant(of: dialog, matching: find.text('TELEGRAM')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('PHONE')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('SEND REQUEST')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('PHONE'));
+    await tester.tap(find.descendant(of: dialog, matching: find.text('PHONE')));
     await tester.pump();
-    expect(find.text('PHONE'), findsOneWidget);
+    expect(
+      find.descendant(of: dialog, matching: find.text('PHONE')),
+      findsOneWidget,
+    );
   });
 }

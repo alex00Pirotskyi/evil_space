@@ -16,6 +16,8 @@ class PublicDeskApi {
       'evil_space_bootstrap_status_consumed_v1';
 
   Future<SiteStatus?> status() async {
+    if (web.document.hidden) return null;
+
     final bootstrapStatus = _takeBootstrapStatus();
     if (bootstrapStatus != null) return bootstrapStatus;
 
@@ -45,6 +47,8 @@ class PublicDeskApi {
   }
 
   Future<DeskBookingState?> bookingStatus(DeskBookingState booking) async {
+    if (web.document.hidden) return booking;
+
     try {
       final response = await web.window
           .fetch(
