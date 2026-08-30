@@ -70,8 +70,12 @@ class AdminApi {
     return AdminTelegramStatus.fromJson(data);
   }
 
-  Future<AdminTelegramLink> createTelegramLink() async {
-    final data = await _request('POST', '/api/admin/telegram/link');
+  Future<AdminTelegramLink> createTelegramLink(String languageCode) async {
+    final data = await _request(
+      'POST',
+      '/api/admin/telegram/link',
+      body: {'language': languageCode},
+    );
     return AdminTelegramLink.fromJson(data);
   }
 
