@@ -6,7 +6,7 @@ import 'dart:math';
 const _webhookUrl = 'https://evils.space/api/telegram/webhook';
 
 Future<void> main() async {
-  stdout.writeln('EVIL SPACE · TELEGRAM SETUP');
+  stdout.writeln('EVIL SPACE - TELEGRAM SETUP');
   stdout.writeln('===========================');
   stdout.writeln('This stores secrets in Cloudflare only. Nothing is written to GitHub.');
   stdout.writeln('');
@@ -35,17 +35,17 @@ Future<void> main() async {
   }
 
   final webhookSecret = _randomSecret(32);
-
-  await _putWranglerSecret('TELEGRAM_BOT_TOKEN', botToken);
-  await _putWranglerSecret('TELEGRAM_WEBHOOK_SECRET', webhookSecret);
-  await _putWranglerSecret('WIFI_PASSWORD', wifiPassword);
-
   final client = HttpClient();
   try {
+    stdout.writeln('> validating Telegram bot token');
     final me = await _telegram(client, botToken, 'getMe', const {});
     final username = me['result'] is Map
         ? (me['result'] as Map)['username']?.toString() ?? ''
         : '';
+
+    await _putWranglerSecret('TELEGRAM_BOT_TOKEN', botToken);
+    await _putWranglerSecret('TELEGRAM_WEBHOOK_SECRET', webhookSecret);
+    await _putWranglerSecret('WIFI_PASSWORD', wifiPassword);
 
     await _telegram(client, botToken, 'setWebhook', {
       'url': _webhookUrl,
@@ -73,8 +73,7 @@ Future<void> main() async {
     stdout.writeln('Telegram configured successfully.');
     if (username.isNotEmpty) stdout.writeln('Bot: @$username');
     stdout.writeln('Webhook: $_webhookUrl');
-    stdout.writeln('');
-    stdout.writeln('Next: run `make` to apply migrations and deploy the current app.');
+    stdout.writeln('Secrets are stored only in Cloudflare.');
   } finally {
     client.close(force: true);
   }
