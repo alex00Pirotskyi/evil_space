@@ -6,7 +6,9 @@ import 'package:evil_space/app_shell.dart';
 import 'package:evil_space/localization.dart';
 
 void main() {
-  testWidgets('public web booking flow opens the contact form', (tester) async {
+  testWidgets('public booking offers one-tap TG or name plus phone', (
+    tester,
+  ) async {
     final localization = LocalizationController(AppLanguage.en);
     addTearDown(localization.dispose);
 
@@ -27,9 +29,19 @@ void main() {
 
     final dialog = find.byType(AlertDialog);
     expect(dialog, findsOneWidget);
-    expect(find.descendant(of: dialog, matching: find.byType(TextField)), findsNWidgets(2));
     expect(
-      find.descendant(of: dialog, matching: find.text('TELEGRAM')),
+      find.descendant(of: dialog, matching: find.byType(TextField)),
+      findsNWidgets(2),
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text('TG · BOOK WITH TELEGRAM'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('NAME')),
       findsOneWidget,
     );
     expect(
@@ -40,12 +52,9 @@ void main() {
       find.descendant(of: dialog, matching: find.text('SEND REQUEST')),
       findsOneWidget,
     );
-
-    await tester.tap(find.descendant(of: dialog, matching: find.text('PHONE')));
-    await tester.pump();
     expect(
-      find.descendant(of: dialog, matching: find.text('PHONE')),
-      findsOneWidget,
+      find.descendant(of: dialog, matching: find.text('TELEGRAM')),
+      findsNothing,
     );
   });
 }
