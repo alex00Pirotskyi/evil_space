@@ -1,6 +1,18 @@
 import legacyWorker from './index.js';
+import {
+  createCustomerTelegramLink,
+  handleAdminTelegramDisconnect,
+  handleAdminTelegramLink,
+  handleAdminTelegramPreferences,
+  handleAdminTelegramStatus,
+  handlePublicBookingCancel,
+  handleTelegramWebhook,
+  handleWebAcceptBooking,
+  handleWebDeclineBooking,
+  notifyAdminsNewBooking,
+  notifyAdminsPurchase,
+} from './telegram.js';
 
-const DAY_PASS_VND = 250000;
 const MAX_NAME_LENGTH = 100;
 const MAX_CONTACT_LENGTH = 160;
 
@@ -8,13 +20,17 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    if (request.method === 'POST' && url.pathname === '/api/telegram/webhook') {
+      return handleTelegramWebhook(request, env, ctx);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/public/status') {
       return handlePublicStatus(env);
     }
 
     if (request.method === 'POST' && url.pathname === '/api/public/book') {
       if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
-      return handlePublicBooking(request, env);
+      return handlePublicBooking(request, env, ctx);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/public/booking') {
@@ -26,7 +42,35 @@ export default {
       url.pathname === '/api/public/booking/delete'
     ) {
       if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
-      return handlePublicBookingDelete(request, env);
+      return handlePublicBookingCancel(request, env, ctx);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/admin/telegram') {
+      return handleAdminTelegramStatus(request, env);
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/api/admin/telegram/link'
+    ) {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleAdminTelegramLink(request, env);
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/api/admin/telegram/disconnect'
+    ) {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleAdminTelegramDisconnect(request, env);
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/api/admin/telegram/preferences'
+    ) {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleAdminTelegramPreferences(request, env);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/admin/operations') {
@@ -38,19 +82,28 @@ export default {
       request.method === 'POST' &&
       url.pathname === '/api/admin/booking/accept'
     ) {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleWebAcceptBooking(request, env, ctx);
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/api/admin/booking/decline'
+    ) {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleWebDeclineBooking(request, env, ctx);
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/api/admin/purchases'
+    ) {
       const clone = request.clone();
       const body = await readJson(clone);
-      const bookingId = toPositiveInt(body?.id);
-      if (bookingId) {
-        const stale = await isBookingFromPreviousDay(bookingId, env);
-        if (stale) {
-          return jsonError('This desk request expired at midnight.', 410);
-        }
-      }
-
+      const title = cleanText(body?.title, 180);
       const response = await legacyWorker.fetch(request, env, ctx);
-      if (response.ok && bookingId) {
-        await linkAcceptedVisit(bookingId, env);
+      if (response.ok && title) {
+        ctx.waitUntil(notifyAdminsPurchase(env, title));
       }
       return response;
     }
@@ -84,7 +137,7 @@ async function handlePublicStatus(env) {
   });
 }
 
-async function handlePublicBooking(request, env) {
+async function handlePublicBooking(request, env, ctx) {
   const body = await readJson(request);
   if (!body) return jsonError('Invalid request.', 400);
 
@@ -114,11 +167,19 @@ async function handlePublicBooking(request, env) {
 
   if (!created?.id) return jsonError('Could not create desk request.', 500);
 
+  let telegramLinkUrl = null;
+  if (contactType === 'telegram') {
+    telegramLinkUrl = await createCustomerTelegramLink(env, created.id);
+  }
+
+  ctx.waitUntil(notifyAdminsNewBooking(env, created.id));
+
   return json(
     {
       ok: true,
       token,
       status: 'pending',
+      telegramLinkUrl,
       message: 'Desk request sent. Evil Space staff can now see it.',
     },
     201,
@@ -149,66 +210,15 @@ async function handlePublicBookingStatus(url, env) {
     return jsonError('Booking expired.', 410);
   }
 
-  return json({
-    ok: true,
-    status: booking.status === 'accepted' ? 'accepted' : 'pending',
-  });
-}
+  const status = booking.status === 'accepted'
+    ? 'accepted'
+    : booking.status === 'declined'
+      ? 'declined'
+      : booking.status === 'cancelled'
+        ? 'cancelled'
+        : 'pending';
 
-async function handlePublicBookingDelete(request, env) {
-  const body = await readJson(request);
-  const token = typeof body?.token === 'string' ? body.token : '';
-  if (!isReasonableToken(token)) return jsonError('Invalid booking.', 400);
-
-  const tokenHash = await hashToken(token);
-  const booking = await env.evil_space
-    .prepare(`
-      SELECT id, status, customer_id, handled_at, accepted_visit_id
-      FROM booking_requests
-      WHERE client_token_hash = ?
-      LIMIT 1
-    `)
-    .bind(tokenHash)
-    .first();
-
-  if (!booking) return json({ ok: true });
-
-  let visitId = toPositiveInt(booking.accepted_visit_id);
-  if (!visitId && booking.status === 'accepted') {
-    const customerId = toPositiveInt(booking.customer_id);
-    const handledAt = Number(booking.handled_at ?? 0);
-    if (customerId && handledAt > 0) {
-      const visit = await env.evil_space
-        .prepare(`
-          SELECT id
-          FROM visits
-          WHERE customer_id = ?
-            AND created_at = ?
-            AND kind = 'day'
-            AND amount = ?
-          ORDER BY id DESC
-          LIMIT 1
-        `)
-        .bind(customerId, handledAt, DAY_PASS_VND)
-        .first();
-      visitId = toPositiveInt(visit?.id);
-    }
-  }
-
-  const statements = [];
-  if (visitId) {
-    statements.push(
-      env.evil_space.prepare('DELETE FROM visits WHERE id = ?').bind(visitId),
-    );
-  }
-  statements.push(
-    env.evil_space
-      .prepare('DELETE FROM booking_requests WHERE id = ?')
-      .bind(booking.id),
-  );
-  await env.evil_space.batch(statements);
-
-  return json({ ok: true });
+  return json({ ok: true, status });
 }
 
 async function filterOperationsToToday(response) {
@@ -233,72 +243,6 @@ async function filterOperationsToToday(response) {
   return json(payload, response.status);
 }
 
-async function isBookingFromPreviousDay(bookingId, env) {
-  const booking = await env.evil_space
-    .prepare(`
-      SELECT created_at
-      FROM booking_requests
-      WHERE id = ? AND status = 'new'
-      LIMIT 1
-    `)
-    .bind(bookingId)
-    .first();
-
-  if (!booking) return false;
-  const { start, end } = nhaTrangDayBounds(nowSeconds());
-  const createdAt = Number(booking.created_at ?? 0);
-  return createdAt < start || createdAt >= end;
-}
-
-async function linkAcceptedVisit(bookingId, env) {
-  const booking = await env.evil_space
-    .prepare(`
-      SELECT id, status, customer_id, handled_at, accepted_visit_id
-      FROM booking_requests
-      WHERE id = ?
-    `)
-    .bind(bookingId)
-    .first();
-
-  if (
-    !booking ||
-    booking.status !== 'accepted' ||
-    toPositiveInt(booking.accepted_visit_id)
-  ) {
-    return;
-  }
-
-  const customerId = toPositiveInt(booking.customer_id);
-  const handledAt = Number(booking.handled_at ?? 0);
-  if (!customerId || handledAt <= 0) return;
-
-  const visit = await env.evil_space
-    .prepare(`
-      SELECT id
-      FROM visits
-      WHERE customer_id = ?
-        AND created_at = ?
-        AND kind = 'day'
-        AND amount = ?
-      ORDER BY id DESC
-      LIMIT 1
-    `)
-    .bind(customerId, handledAt, DAY_PASS_VND)
-    .first();
-
-  const visitId = toPositiveInt(visit?.id);
-  if (!visitId) return;
-
-  await env.evil_space
-    .prepare(`
-      UPDATE booking_requests
-      SET accepted_visit_id = ?
-      WHERE id = ? AND accepted_visit_id IS NULL
-    `)
-    .bind(visitId, bookingId)
-    .run();
-}
-
 async function readJson(request) {
   const length = Number(request.headers.get('content-length') ?? 0);
   if (length > 16384) return null;
@@ -315,11 +259,6 @@ function cleanText(value, maxLength) {
   const text = value.trim().replace(/\s+/g, ' ');
   if (!text || text.length > maxLength) return '';
   return text;
-}
-
-function toPositiveInt(value) {
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 function nhaTrangDayBounds(now) {
