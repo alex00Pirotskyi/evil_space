@@ -24,6 +24,8 @@ Future<void> main(List<String> args) async {
   await _run('flutter', ['test', '--no-pub']);
   await _run('node', ['--check', 'worker/index.js']);
   await _run('node', ['--check', 'worker/entry.js']);
+  await _run('node', ['--check', 'worker/telegram.js']);
+  await _run('node', ['--test', 'worker/telegram_test.mjs']);
 
   if (verifyOnly) {
     stdout.writeln('Verification complete. No build or deployment performed.');
