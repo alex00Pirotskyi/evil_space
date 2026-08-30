@@ -10,10 +10,15 @@ Future<void> main(List<String> args) async {
     _die('Choose either --verify-only or --build-only, not both.');
   }
 
-  stdout.writeln('EVIL SPACE · PRODUCTION RELEASE');
+  stdout.writeln('EVIL SPACE - PRODUCTION RELEASE');
   stdout.writeln('===============================');
 
   await _verifyFlutterVersion();
+
+  if (!verifyOnly && !buildOnly) {
+    await _verifyCloudflareAccess();
+  }
+
   await _run('flutter', ['pub', 'get']);
   await _run('flutter', ['analyze', '--no-pub']);
   await _run('flutter', ['test', '--no-pub']);
@@ -84,6 +89,59 @@ Future<void> _verifyFlutterVersion() async {
       'Flutter $_minimumFlutter or newer.',
     );
   }
+}
+
+Future<void> _verifyCloudflareAccess() async {
+  stdout.writeln('');
+  stdout.writeln('> checking Cloudflare authentication and D1 access');
+
+  final whoami = await Process.run(
+    'npx',
+    ['--yes', 'wrangler', 'whoami'],
+    runInShell: Platform.isWindows,
+  );
+  if (whoami.exitCode != 0) {
+    stderr.write(whoami.stdout);
+    stderr.write(whoami.stderr);
+    _cloudflareAuthDie();
+  }
+
+  final d1 = await Process.run(
+    'npx',
+    [
+      '--yes',
+      'wrangler',
+      'd1',
+      'migrations',
+      'list',
+      'evil-space',
+      '--remote',
+    ],
+    runInShell: Platform.isWindows,
+  );
+  if (d1.exitCode != 0) {
+    final output = '${d1.stdout}\n${d1.stderr}';
+    stderr.write(d1.stdout);
+    stderr.write(d1.stderr);
+    if (output.contains('7403') ||
+        output.contains('not valid or is not authorized')) {
+      _cloudflareAuthDie();
+    }
+    _die('Cloudflare D1 preflight failed. Fix Wrangler access and run make again.');
+  }
+
+  stdout.writeln('Cloudflare D1 access: OK');
+}
+
+Never _cloudflareAuthDie() {
+  _die(
+    'Wrangler is not authorized for the Evil Space Cloudflare account.\n'
+    'Run these commands once:\n'
+    '  npx --yes wrangler logout\n'
+    '  npx --yes wrangler login\n'
+    '  npx --yes wrangler whoami\n'
+    'Then run make again.',
+  );
 }
 
 Future<void> _run(
