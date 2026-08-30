@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:evil_space/admin_api.dart';
 import 'package:evil_space/admin_screen.dart';
@@ -115,6 +116,13 @@ class _AdminPortalState extends State<AdminPortal> {
     widget.onExit();
   }
 
+  Future<void> _showTelegram() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _TelegramAdminDialog(api: _api, russian: _russian),
+    );
+  }
+
   Future<void> _showAdmins() async {
     try {
       final admins = await _api.admins();
@@ -188,10 +196,33 @@ class _AdminPortalState extends State<AdminPortal> {
       if (!AdminBuildConfig.previewEnabled) {
         return _disabled();
       }
-      return AdminScreen(
-        api: _api,
-        onExit: _logoutAndExit,
-        onManageAdmins: _showAdmins,
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: AdminScreen(
+              api: _api,
+              onExit: _logoutAndExit,
+              onManageAdmins: _showAdmins,
+            ),
+          ),
+          Positioned(
+            right: 14,
+            bottom: 14,
+            child: SafeArea(
+              child: Tooltip(
+                message: t('Telegram администратора', 'Admin Telegram'),
+                child: FloatingActionButton.small(
+                  heroTag: 'admin-telegram',
+                  onPressed: _showTelegram,
+                  backgroundColor: BrandPalette.ink,
+                  foregroundColor: BrandPalette.paperLift,
+                  shape: const RoundedRectangleBorder(),
+                  child: const Text('TG'),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -368,6 +399,182 @@ class _AdminPortalState extends State<AdminPortal> {
         shape: const RoundedRectangleBorder(),
       ),
       child: Text(label, style: _mono(9.5, color: selected ? BrandPalette.paperLift : BrandPalette.ink)),
+    );
+  }
+}
+
+class _TelegramAdminDialog extends StatefulWidget {
+  const _TelegramAdminDialog({required this.api, required this.russian});
+
+  final AdminApi api;
+  final bool russian;
+
+  @override
+  State<_TelegramAdminDialog> createState() => _TelegramAdminDialogState();
+}
+
+class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
+  AdminTelegramStatus? _status;
+  bool _busy = true;
+  String? _error;
+
+  String t(String ru, String en) => widget.russian ? ru : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    if (mounted) setState(() { _busy = true; _error = null; });
+    try {
+      final status = await widget.api.telegramStatus();
+      if (!mounted) return;
+      setState(() { _status = status; _busy = false; });
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      setState(() { _busy = false; _error = error.message; });
+    }
+  }
+
+  Future<void> _connect() async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final link = await widget.api.createTelegramLink();
+      if (!link.valid) throw const AdminApiException('Could not create Telegram link.');
+      final opened = await launchUrl(Uri.parse(link.url), mode: LaunchMode.platformDefault);
+      if (!opened) throw const AdminApiException('Could not open Telegram.');
+      if (!mounted) return;
+      setState(() => _busy = false);
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      setState(() { _busy = false; _error = error.message; });
+    }
+  }
+
+  Future<void> _disconnect() async {
+    setState(() => _busy = true);
+    try {
+      await widget.api.disconnectTelegram();
+      await _refresh();
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      setState(() { _busy = false; _error = error.message; });
+    }
+  }
+
+  Future<void> _toggle({bool? bookings, bool? purchases}) async {
+    final status = _status;
+    if (status == null || !status.linked) return;
+    setState(() => _busy = true);
+    try {
+      final next = await widget.api.updateTelegramPreferences(
+        bookingNotifications: bookings ?? status.bookingNotifications,
+        purchaseNotifications: purchases ?? status.purchaseNotifications,
+      );
+      if (!mounted) return;
+      setState(() { _status = next; _busy = false; });
+    } on AdminApiException catch (error) {
+      if (!mounted) return;
+      setState(() { _busy = false; _error = error.message; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status;
+    return AlertDialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      title: Text('TELEGRAM ADMIN', style: _serif(28)),
+      content: SizedBox(
+        width: 480,
+        child: _busy && status == null
+            ? const Center(child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(color: BrandPalette.ink),
+              ))
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_error != null) ...[
+                    Text(_error!, style: _mono(10.5)),
+                    const SizedBox(height: 16),
+                  ],
+                  if (status?.linked == true) ...[
+                    Text(
+                      status!.username.isEmpty
+                          ? t('ПОДКЛЮЧЕНО', 'CONNECTED')
+                          : '${t('ПОДКЛЮЧЕНО', 'CONNECTED')} · ${status.username}',
+                      style: _mono(11),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      t(
+                        'Бот может принимать/отклонять брони и выполнять ежедневные операции.',
+                        'The bot can accept/decline bookings and run daily operations.',
+                      ),
+                      style: _serif(16, color: BrandPalette.inkMuted, height: 1.35),
+                    ),
+                    const SizedBox(height: 18),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(t('БРОНИ', 'BOOKINGS'), style: _mono(10)),
+                      value: status.bookingNotifications,
+                      onChanged: _busy ? null : (value) => _toggle(bookings: value),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(t('ПОКУПКИ', 'PURCHASES'), style: _mono(10)),
+                      value: status.purchaseNotifications,
+                      onChanged: _busy ? null : (value) => _toggle(purchases: value),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: _busy ? null : _disconnect,
+                      style: _outlineButton(),
+                      child: Text(t('ОТКЛЮЧИТЬ TELEGRAM', 'DISCONNECT TELEGRAM'), style: _mono(9.5)),
+                    ),
+                  ] else ...[
+                    Text(
+                      t(
+                        'Подключите свой Telegram один раз. После этого можно работать через бота вместо панели.',
+                        'Connect your Telegram once. After that you can operate Evil Space from the bot instead of the panel.',
+                      ),
+                      style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: _busy ? null : _connect,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BrandPalette.ink,
+                        foregroundColor: BrandPalette.paperLift,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Text(t('ПОДКЛЮЧИТЬ TELEGRAM', 'CONNECT TELEGRAM'), style: _mono(10, color: BrandPalette.paperLift)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      t('После START вернитесь сюда и нажмите ОБНОВИТЬ.', 'After pressing START, return here and press REFRESH.'),
+                      style: _mono(9, color: BrandPalette.inkMuted),
+                    ),
+                  ],
+                ],
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : _refresh,
+          child: Text(t('ОБНОВИТЬ', 'REFRESH'), style: _mono(9.5)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t('ЗАКРЫТЬ', 'CLOSE'), style: _mono(9.5)),
+        ),
+      ],
     );
   }
 }
