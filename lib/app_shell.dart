@@ -176,7 +176,10 @@ class _DailyScreenState extends State<DailyScreen>
   bool _sameBooking(DeskBookingState? a, DeskBookingState? b) {
     if (identical(a, b)) return true;
     if (a == null || b == null) return false;
-    return a.token == b.token && a.status == b.status;
+    return a.token == b.token &&
+        a.status == b.status &&
+        a.telegramLinkUrl == b.telegramLinkUrl &&
+        a.telegramLinked == b.telegramLinked;
   }
 
   void _handleLocalizationChanged() {
@@ -292,6 +295,48 @@ class _DailyScreenState extends State<DailyScreen>
           setState(() => _savedProfile = profile);
         }
       }
+
+      if (mounted && profile.contactType == 'telegram' && booking.canConnectTelegram) {
+        final connect = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: BrandPalette.paper,
+            shape: const RoundedRectangleBorder(),
+            title: Text(
+              widget.localization.t('booking_connect_title'),
+              style: _serif(28),
+            ),
+            content: Text(
+              widget.localization.t('booking_connect_copy'),
+              style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(
+                  widget.localization.t('booking_not_now'),
+                  style: _mono(9.5),
+                ),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: BrandPalette.ink,
+                  foregroundColor: BrandPalette.paperLift,
+                  shape: const RoundedRectangleBorder(),
+                ),
+                child: Text(
+                  widget.localization.t('booking_connect_telegram'),
+                  style: _mono(9.5, color: BrandPalette.paperLift),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (connect == true && mounted) {
+          await _connectBookingTelegram(booking);
+        }
+      }
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
@@ -311,6 +356,12 @@ class _DailyScreenState extends State<DailyScreen>
         const SnackBar(content: Text('COULD NOT SEND REQUEST')),
       );
     }
+  }
+
+  Future<void> _connectBookingTelegram(DeskBookingState booking) async {
+    final url = booking.telegramLinkUrl;
+    if (url == null || !booking.canConnectTelegram) return;
+    await _launch(url);
   }
 
   Future<void> _deleteDeskRequest() async {
@@ -344,6 +395,11 @@ class _DailyScreenState extends State<DailyScreen>
         SnackBar(content: Text(error.message)),
       );
     }
+  }
+
+  void _clearFinishedBooking() {
+    _deskApi.clearSavedBooking();
+    setState(() => _booking = null);
   }
 
   void _forgetSavedProfile() {
@@ -500,6 +556,25 @@ class _DailyScreenState extends State<DailyScreen>
     final dayPrice = _priceFor('price_day_pass').price;
     final saved = _savedProfile;
     final booking = _booking;
+    final bookingStatusKey = booking == null
+        ? ''
+        : booking.accepted
+            ? 'booking_accepted'
+            : booking.declined
+                ? 'booking_declined'
+                : booking.cancelled
+                    ? 'booking_cancelled'
+                    : 'booking_pending';
+    final bookingIcon = booking == null
+        ? Icons.hourglass_top_outlined
+        : booking.accepted
+            ? Icons.check_circle_outline
+            : booking.declined
+                ? Icons.cancel_outlined
+                : booking.cancelled
+                    ? Icons.block_outlined
+                    : Icons.hourglass_top_outlined;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -554,20 +629,11 @@ class _DailyScreenState extends State<DailyScreen>
             ),
             child: Row(
               children: [
-                Icon(
-                  booking.accepted
-                      ? Icons.check_circle_outline
-                      : Icons.hourglass_top_outlined,
-                  size: 24,
-                ),
+                Icon(bookingIcon, size: 24),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
-                    widget.localization.t(
-                      booking.accepted
-                          ? 'booking_accepted'
-                          : 'booking_pending',
-                    ),
+                    widget.localization.t(bookingStatusKey),
                     style: _mono(11.5, spacing: 0.55),
                   ),
                 ),
@@ -575,12 +641,51 @@ class _DailyScreenState extends State<DailyScreen>
               ],
             ),
           ),
+          if (booking.telegramLinked) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.notifications_active_outlined, size: 17),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.localization.t('booking_telegram_connected'),
+                    style: _mono(9, color: BrandPalette.inkMuted),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (booking.canConnectTelegram && !booking.finished) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _connectBookingTelegram(booking),
+              icon: const Icon(Icons.send_outlined, size: 17),
+              label: Text(
+                widget.localization.t('booking_connect_telegram'),
+                style: _mono(9.5),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BrandPalette.ink,
+                minimumSize: const Size.fromHeight(48),
+                side: const BorderSide(color: BrandPalette.ink),
+                shape: const RoundedRectangleBorder(),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: _bookingBusy ? null : _deleteDeskRequest,
-            icon: const Icon(Icons.close, size: 17),
+            onPressed: _bookingBusy
+                ? null
+                : booking.finished
+                    ? _clearFinishedBooking
+                    : _deleteDeskRequest,
+            icon: Icon(booking.finished ? Icons.refresh : Icons.close, size: 17),
             label: Text(
-              _bookingBusy ? '…' : widget.localization.t('booking_delete'),
+              _bookingBusy
+                  ? '…'
+                  : widget.localization.t(
+                      booking.finished ? 'booking_again' : 'booking_delete',
+                    ),
               style: _mono(9.5),
             ),
             style: OutlinedButton.styleFrom(
