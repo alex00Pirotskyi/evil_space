@@ -28,6 +28,10 @@ exit /b %errorlevel%
 flutter pub get
 if errorlevel 1 exit /b %errorlevel%
 flutter test --no-pub
+if errorlevel 1 exit /b %errorlevel%
+node --check worker/telegram.js
+if errorlevel 1 exit /b %errorlevel%
+node --test worker/telegram_test.mjs
 exit /b %errorlevel%
 
 :telegram_setup
