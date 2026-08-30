@@ -76,6 +76,8 @@ class PublicDeskApi {
         token: booking.token,
         status: data['status']?.toString() ?? '',
         telegramLinkUrl: booking.telegramLinkUrl,
+        telegramLinked:
+            booking.telegramLinked || data['telegramLinked'] == true,
       );
       if (!next.valid) {
         clearSavedBooking();
