@@ -6,6 +6,7 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 
 import 'package:evil_space/coworking_model.dart';
+import 'package:evil_space/public_booking_signal.dart';
 import 'package:evil_space/public_desk_models.dart';
 
 class PublicDeskApi {
@@ -146,10 +147,12 @@ class PublicDeskApi {
       _bookingStorageKey,
       jsonEncode(booking.toJson()),
     );
+    notifyPublicBookingChanged();
   }
 
   void clearSavedBooking() {
     web.window.localStorage.removeItem(_bookingStorageKey);
+    notifyPublicBookingChanged();
   }
 
   SiteStatus? _takeBootstrapStatus() {
