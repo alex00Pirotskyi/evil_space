@@ -21,6 +21,8 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'POST' && url.pathname === '/api/telegram/webhook') {
+      const languageShortcut = await handleTelegramLanguageShortcut(request, env);
+      if (languageShortcut) return languageShortcut;
       return handleTelegramWebhook(request, env, ctx);
     }
 
@@ -111,6 +113,87 @@ export default {
     return legacyWorker.fetch(request, env, ctx);
   },
 };
+
+async function handleTelegramLanguageShortcut(request, env) {
+  if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN) return null;
+  const supplied = request.headers.get('X-Telegram-Bot-Api-Secret-Token') ?? '';
+  if (!constantTimeEqual(supplied, env.TELEGRAM_WEBHOOK_SECRET)) return null;
+
+  let update;
+  try {
+    update = await request.clone().json();
+  } catch {
+    return null;
+  }
+
+  const callback = update?.callback_query;
+  const data = typeof callback?.data === 'string' ? callback.data : '';
+  const match = /^cl:(en|ru|vi)$/.exec(data);
+  const userId = Number(callback?.from?.id ?? 0);
+  const chatId = Number(callback?.message?.chat?.id ?? 0);
+  if (!match || !userId || !chatId) return null;
+
+  const link = await env.evil_space
+    .prepare(
+      'SELECT language FROM customer_telegram_links WHERE telegram_user_id = ? LIMIT 1',
+    )
+    .bind(userId)
+    .first();
+  if (!link || normalizeLanguage(link.language) !== match[1]) return null;
+
+  await Promise.all([
+    telegramApi(env, 'answerCallbackQuery', {
+      callback_query_id: callback.id,
+    }).catch(() => null),
+    telegramApi(env, 'sendMessage', {
+      chat_id: chatId,
+      text: '🌐 <b>LANGUAGE · ЯЗЫК · NGÔN NGỮ</b>',
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: 'ENGLISH', callback_data: 'cl:en' },
+            { text: 'РУССКИЙ', callback_data: 'cl:ru' },
+          ],
+          [{ text: 'TIẾNG VIỆT', callback_data: 'cl:vi' }],
+        ],
+      },
+    }),
+  ]);
+  return json({ ok: true });
+}
+
+async function telegramApi(env, method, payload) {
+  const response = await fetch(
+    `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.ok !== true) {
+    throw new Error(`Telegram ${method} failed (${response.status}).`);
+  }
+  return data;
+}
+
+function normalizeLanguage(value) {
+  const language = typeof value === 'string' ? value.toLowerCase() : '';
+  return language === 'ru' || language === 'vi' ? language : 'en';
+}
+
+function constantTimeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) {
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 async function handlePublicStatus(env) {
   const now = nowSeconds();
