@@ -18,6 +18,7 @@
     content="coworking Nha Trang, coworking Vietnam, dedicated desk Nha Trang, private desk Nha Trang, coworking prices Nha Trang"
   >
   <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://evils.space/">
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="Evil Space Coworking — Nha Trang">
@@ -25,6 +26,7 @@
     property="og:description"
     content="A quiet coworking page: desk availability, 250K VND day pass, 2.5 MLN VND month pass, and directions in Nha Trang."
   >
+  <meta property="og:url" content="https://evils.space/">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="ru_RU">
   <meta property="og:locale:alternate" content="vi_VN">
@@ -49,10 +51,27 @@
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "Evil Space",
+    "url": "https://evils.space/",
     "description": "Coworking space in Nha Trang with a 250K VND day pass and 2.5 MLN VND month pass.",
     "telephone": "+84 56 5056 748",
     "currenciesAccepted": "VND",
     "priceRange": "250K VND day / 2.5 MLN VND month",
+    "openingHoursSpecification": [
+      {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ],
+        "opens": "11:00",
+        "closes": "23:00"
+      }
+    ],
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "60 Cao Văn Bé",
@@ -76,6 +95,8 @@
     :root {
       --paper: #F2F0E8;
       --ink: #1C1C1A;
+      --muted: #6F6D66;
+      --rule: #C9C6BC;
     }
 
     html,
@@ -93,6 +114,44 @@
       background: var(--paper);
     }
 
+    #evil-space-boot {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: grid;
+      place-items: center;
+      box-sizing: border-box;
+      padding: 28px;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .evil-space-boot-card {
+      width: min(430px, 100%);
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      padding: 24px 0;
+    }
+
+    .evil-space-boot-brand {
+      margin: 0;
+      font: 400 38px/1 Georgia, "Times New Roman", serif;
+      letter-spacing: -1px;
+    }
+
+    .evil-space-boot-meta {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font: 700 10px/1.4 "Courier New", monospace;
+      letter-spacing: .8px;
+    }
+
+    .evil-space-boot-rule {
+      height: 1px;
+      margin: 20px 0 12px;
+      background: var(--rule);
+    }
+
     noscript {
       display: block;
       max-width: 720px;
@@ -106,6 +165,15 @@
   </style>
 </head>
 <body>
+  <div id="evil-space-boot" role="status" aria-live="polite">
+    <div class="evil-space-boot-card">
+      <p class="evil-space-boot-brand">EVIL SPACE</p>
+      <p class="evil-space-boot-meta">NHA TRANG · COWORKING · 11:00–23:00</p>
+      <div class="evil-space-boot-rule"></div>
+      <p id="evil-space-boot-copy" class="evil-space-boot-meta">OPENING DAILY…</p>
+    </div>
+  </div>
+
   <noscript>
     Evil Space Coworking, 60 Cao Văn Bé, Nha Trang. Day pass 250K VND; one
     month 2.5 MLN VND. JavaScript is required to open the Daily edition.

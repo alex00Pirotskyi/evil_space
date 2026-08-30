@@ -11,17 +11,20 @@ import 'package:evil_space/public_desk_models.dart';
 class PublicDeskApi {
   static const _profileStorageKey = 'evil_space_saved_desk_contact_v1';
   static const _bookingStorageKey = 'evil_space_desk_booking_v1';
+  static const _bootstrapStatusStorageKey = 'evil_space_bootstrap_status_v1';
+  static const _bootstrapStatusConsumedKey =
+      'evil_space_bootstrap_status_consumed_v1';
 
   Future<SiteStatus?> status() async {
+    final bootstrapStatus = _takeBootstrapStatus();
+    if (bootstrapStatus != null) return bootstrapStatus;
+
+    _markBootstrapStatusConsumed();
     try {
       final response = await web.window.fetch('/api/public/status'.toJS).toDart;
       if (!response.ok) return null;
       final raw = (await response.text().toDart).toDart;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return null;
-      final status = decoded['status'];
-      if (status is! Map) return null;
-      return SiteStatus.fromJson(Map<String, dynamic>.from(status));
+      return _decodeStatus(raw);
     } catch (_) {
       return null;
     }
@@ -140,6 +143,36 @@ class PublicDeskApi {
 
   void clearSavedBooking() {
     web.window.localStorage.removeItem(_bookingStorageKey);
+  }
+
+  SiteStatus? _takeBootstrapStatus() {
+    try {
+      final raw = web.window.sessionStorage.getItem(_bootstrapStatusStorageKey);
+      web.window.sessionStorage.removeItem(_bootstrapStatusStorageKey);
+      web.window.sessionStorage.setItem(_bootstrapStatusConsumedKey, '1');
+      if (raw == null || raw.isEmpty) return null;
+      return _decodeStatus(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _markBootstrapStatusConsumed() {
+    try {
+      web.window.sessionStorage.setItem(_bootstrapStatusConsumedKey, '1');
+    } catch (_) {}
+  }
+
+  SiteStatus? _decodeStatus(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final status = decoded['status'];
+      if (status is! Map) return null;
+      return SiteStatus.fromJson(Map<String, dynamic>.from(status));
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> _jsonRequest(

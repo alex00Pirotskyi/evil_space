@@ -21,12 +21,38 @@ class EvilSpaceApp extends StatefulWidget {
 class _EvilSpaceAppState extends State<EvilSpaceApp> {
   late final PersistentLocalizationController _localization;
   late final EvilSpaceRouterDelegate _routerDelegate;
+  late final ThemeData _theme;
 
   @override
   void initState() {
     super.initState();
     _localization = PersistentLocalizationController.fromPlatform();
     _routerDelegate = EvilSpaceRouterDelegate(localization: _localization);
+    _theme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: BrandPalette.paper,
+      colorScheme: const ColorScheme.light(
+        surface: BrandPalette.paper,
+        onSurface: BrandPalette.ink,
+        primary: BrandPalette.ink,
+        onPrimary: BrandPalette.paperLift,
+        outline: BrandPalette.ink,
+        outlineVariant: BrandPalette.rule,
+      ),
+      splashFactory: NoSplash.splashFactory,
+      focusColor: BrandPalette.inkFaint,
+      highlightColor: Colors.transparent,
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: BrandPalette.ink,
+        selectionColor: Color(0x55AAA79D),
+        selectionHandleColor: BrandPalette.ink,
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: BrandPalette.ink,
+        contentTextStyle: TextStyle(color: BrandPalette.paperLift),
+      ),
+    );
   }
 
   @override
@@ -38,43 +64,20 @@ class _EvilSpaceAppState extends State<EvilSpaceApp> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _localization,
-      builder: (context, _) => MaterialApp.router(
-        debugShowCheckedModeBanner: false,
-        title: 'Evil Space Daily',
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.light,
-          scaffoldBackgroundColor: BrandPalette.paper,
-          colorScheme: const ColorScheme.light(
-            surface: BrandPalette.paper,
-            onSurface: BrandPalette.ink,
-            primary: BrandPalette.ink,
-            onPrimary: BrandPalette.paperLift,
-            outline: BrandPalette.ink,
-            outlineVariant: BrandPalette.rule,
-          ),
-          splashFactory: NoSplash.splashFactory,
-          focusColor: BrandPalette.inkFaint,
-          highlightColor: Colors.transparent,
-          textSelectionTheme: const TextSelectionThemeData(
-            cursorColor: BrandPalette.ink,
-            selectionColor: Color(0x55AAA79D),
-            selectionHandleColor: BrandPalette.ink,
-          ),
-          snackBarTheme: const SnackBarThemeData(
-            backgroundColor: BrandPalette.ink,
-            contentTextStyle: TextStyle(color: BrandPalette.paperLift),
-          ),
-        ),
+    return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: 'Evil Space Daily',
+      theme: _theme,
+      builder: (context, child) => ListenableBuilder(
+        listenable: _localization,
+        child: child ?? const SizedBox.shrink(),
         builder: (context, child) => _FirstVisitLanguageGate(
           localization: _localization,
           child: child ?? const SizedBox.shrink(),
         ),
-        routerDelegate: _routerDelegate,
-        routeInformationParser: const EvilSpaceRouteParser(),
       ),
+      routerDelegate: _routerDelegate,
+      routeInformationParser: const EvilSpaceRouteParser(),
     );
   }
 }
