@@ -25,7 +25,8 @@ class AdminApi {
 
   Future<AdminTelegramStatus> telegramStatus() async => _webOnly();
 
-  Future<AdminTelegramLink> createTelegramLink() async => _webOnly();
+  Future<AdminTelegramLink> createTelegramLink(String languageCode) async =>
+      _webOnly();
 
   Future<void> disconnectTelegram() async => _webOnly();
 
