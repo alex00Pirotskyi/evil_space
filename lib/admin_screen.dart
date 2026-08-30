@@ -321,6 +321,13 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
+  Future<void> _declineBooking(BookingRequestRecord booking) async {
+    await _apply(
+      () => widget.api.declineBooking(booking.id),
+      success: t('Запрос отклонён', 'Request declined'),
+    );
+  }
+
   Future<void> _editCustomer(CustomerRecord customer) async {
     final result = await showDialog<_CustomerEditResult>(
       context: context,
@@ -682,13 +689,30 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          FilledButton(
-            onPressed: _busy ? null : () => _acceptBooking(booking),
-            style: _darkButton(minHeight: 42),
-            child: Text(
-              t('ПРИНЯТЬ', 'ACCEPT'),
-              style: _mono(9.5, color: BrandPalette.paperLift),
-            ),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: _busy ? null : () => _declineBooking(booking),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BrandPalette.ink,
+                  minimumSize: const Size(0, 42),
+                  side: const BorderSide(color: BrandPalette.ink),
+                  shape: const RoundedRectangleBorder(),
+                ),
+                child: Text(t('ОТКЛОНИТЬ', 'DECLINE'), style: _mono(9)),
+              ),
+              FilledButton(
+                onPressed: _busy ? null : () => _acceptBooking(booking),
+                style: _darkButton(minHeight: 42),
+                child: Text(
+                  t('ПРИНЯТЬ', 'ACCEPT'),
+                  style: _mono(9.5, color: BrandPalette.paperLift),
+                ),
+              ),
+            ],
           ),
         ],
       ),
