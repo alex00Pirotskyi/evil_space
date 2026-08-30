@@ -44,10 +44,12 @@ void main() {
   });
 
   group('DeskBookingState', () {
+    const token = '12345678901234567890123456789012';
+
     test('round-trips accepted booking state', () {
       final state = DeskBookingState.fromJson(
         const {
-          'token': '12345678901234567890123456789012',
+          'token': token,
           'status': 'accepted',
         },
       );
@@ -58,16 +60,45 @@ void main() {
       expect(DeskBookingState.fromJson(state.toJson()).status, 'accepted');
     });
 
+    test('round-trips Telegram connection metadata', () {
+      final state = DeskBookingState.fromJson(
+        const {
+          'token': token,
+          'status': 'pending',
+          'telegramLinkUrl':
+              'https://t.me/CoworkingEvilAdminBot?start=c_test',
+          'telegramLinked': false,
+        },
+      );
+
+      expect(state.canConnectTelegram, isTrue);
+      final linked = DeskBookingState.fromJson({
+        ...state.toJson(),
+        'telegramLinked': true,
+      });
+      expect(linked.telegramLinked, isTrue);
+      expect(linked.canConnectTelegram, isFalse);
+    });
+
+    test('accepts declined and cancelled terminal states', () {
+      const declined = DeskBookingState(token: token, status: 'declined');
+      const cancelled = DeskBookingState(token: token, status: 'cancelled');
+
+      expect(declined.valid, isTrue);
+      expect(declined.declined, isTrue);
+      expect(declined.finished, isTrue);
+      expect(cancelled.valid, isTrue);
+      expect(cancelled.cancelled, isTrue);
+      expect(cancelled.finished, isTrue);
+    });
+
     test('rejects short tokens and unknown statuses', () {
       expect(
         const DeskBookingState(token: 'short', status: 'pending').valid,
         isFalse,
       );
       expect(
-        const DeskBookingState(
-          token: '12345678901234567890123456789012',
-          status: 'cancelled',
-        ).valid,
+        const DeskBookingState(token: token, status: 'mystery').valid,
         isFalse,
       );
     });
