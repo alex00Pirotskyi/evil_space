@@ -8,9 +8,14 @@ import 'package:evil_space/brand_logo.dart';
 import 'package:evil_space/brand_surface.dart';
 
 class AdminPortal extends StatefulWidget {
-  const AdminPortal({super.key, required this.onExit});
+  const AdminPortal({
+    super.key,
+    required this.onExit,
+    required this.initialLanguageCode,
+  });
 
   final VoidCallback onExit;
+  final String initialLanguageCode;
 
   @override
   State<AdminPortal> createState() => _AdminPortalState();
@@ -25,7 +30,8 @@ class _AdminPortalState extends State<AdminPortal> {
   bool _requestAccess = false;
   bool _busy = false;
   bool _passwordVisible = false;
-  bool _russian = true;
+  late bool _russian;
+  late String _telegramLanguageCode;
   String? _message;
 
   String t(String ru, String en) => _russian ? ru : en;
@@ -33,6 +39,8 @@ class _AdminPortalState extends State<AdminPortal> {
   @override
   void initState() {
     super.initState();
+    _telegramLanguageCode = _normalizeLanguage(widget.initialLanguageCode);
+    _russian = _telegramLanguageCode == 'ru';
     _loadSession();
   }
 
@@ -130,7 +138,11 @@ class _AdminPortalState extends State<AdminPortal> {
   Future<void> _showTelegram() async {
     await showDialog<void>(
       context: context,
-      builder: (_) => _TelegramAdminDialog(api: _api, russian: _russian),
+      builder: (_) => _TelegramAdminDialog(
+        api: _api,
+        russian: _russian,
+        languageCode: _telegramLanguageCode,
+      ),
     );
   }
 
@@ -315,12 +327,18 @@ class _AdminPortalState extends State<AdminPortal> {
                           _languageButton(
                             'RU',
                             _russian,
-                            () => setState(() => _russian = true),
+                            () => setState(() {
+                              _russian = true;
+                              _telegramLanguageCode = 'ru';
+                            }),
                           ),
                           _languageButton(
                             'EN',
                             !_russian,
-                            () => setState(() => _russian = false),
+                            () => setState(() {
+                              _russian = false;
+                              _telegramLanguageCode = 'en';
+                            }),
                           ),
                         ],
                       ),
@@ -493,10 +511,15 @@ class _AdminPortalState extends State<AdminPortal> {
 }
 
 class _TelegramAdminDialog extends StatefulWidget {
-  const _TelegramAdminDialog({required this.api, required this.russian});
+  const _TelegramAdminDialog({
+    required this.api,
+    required this.russian,
+    required this.languageCode,
+  });
 
   final AdminApi api;
   final bool russian;
+  final String languageCode;
 
   @override
   State<_TelegramAdminDialog> createState() => _TelegramAdminDialogState();
@@ -528,7 +551,7 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
       final status = await widget.api.telegramStatus();
       AdminTelegramLink? link;
       if (!status.linked) {
-        link = await widget.api.createTelegramLink();
+        link = await widget.api.createTelegramLink(widget.languageCode);
         if (!link.valid) {
           throw const AdminApiException('Could not create Telegram link.');
         }
@@ -677,8 +700,8 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
                     const SizedBox(height: 12),
                     Text(
                       t(
-                        'Бот может принимать/отклонять брони и выполнять ежедневные операции.',
-                        'The bot can accept/decline bookings and run daily operations.',
+                        'Бот может принимать/отклонять брони и выполнять ежедневные операции. Язык можно изменить прямо в боте.',
+                        'The bot can accept/decline bookings and run daily operations. Language can be changed inside the bot.',
                       ),
                       style: _serif(
                         16,
@@ -721,8 +744,8 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
                   ] else ...[
                     Text(
                       t(
-                        'Подключите свой Telegram один раз. После этого можно работать через бота вместо панели.',
-                        'Connect your Telegram once. After that you can operate Evil Space from the bot instead of the panel.',
+                        'Подключите свой Telegram один раз. Бот сразу возьмёт язык, выбранный на сайте, а потом язык можно переключить внутри Telegram.',
+                        'Connect your Telegram once. The bot starts in the language selected on the website, and you can switch it later inside Telegram.',
                       ),
                       style: _serif(
                         17,
@@ -768,6 +791,11 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
       ],
     );
   }
+}
+
+String _normalizeLanguage(String value) {
+  final code = value.toLowerCase();
+  return code == 'ru' || code == 'vi' ? code : 'en';
 }
 
 InputDecoration _input(String label) {
