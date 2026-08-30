@@ -34,11 +34,13 @@ class DeskBookingState {
     required this.token,
     required this.status,
     this.telegramLinkUrl,
+    this.telegramLinked = false,
   });
 
   final String token;
   final String status;
   final String? telegramLinkUrl;
+  final bool telegramLinked;
 
   bool get pending => status == 'pending';
   bool get accepted => status == 'accepted';
@@ -46,7 +48,9 @@ class DeskBookingState {
   bool get cancelled => status == 'cancelled';
   bool get finished => declined || cancelled;
   bool get canConnectTelegram =>
-      telegramLinkUrl != null && telegramLinkUrl!.startsWith('https://t.me/');
+      !telegramLinked &&
+      telegramLinkUrl != null &&
+      telegramLinkUrl!.startsWith('https://t.me/');
   bool get valid =>
       token.length >= 32 &&
       (pending || accepted || declined || cancelled);
@@ -55,6 +59,7 @@ class DeskBookingState {
     'token': token,
     'status': status,
     if (telegramLinkUrl != null) 'telegramLinkUrl': telegramLinkUrl,
+    'telegramLinked': telegramLinked,
   };
 
   factory DeskBookingState.fromJson(Map<String, dynamic> json) {
@@ -62,6 +67,7 @@ class DeskBookingState {
       token: json['token']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
       telegramLinkUrl: json['telegramLinkUrl']?.toString(),
+      telegramLinked: json['telegramLinked'] == true,
     );
   }
 
@@ -69,6 +75,7 @@ class DeskBookingState {
     token: token,
     status: value,
     telegramLinkUrl: telegramLinkUrl,
+    telegramLinked: telegramLinked,
   );
 }
 
