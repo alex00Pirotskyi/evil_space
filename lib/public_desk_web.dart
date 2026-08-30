@@ -79,7 +79,7 @@ class PublicDeskApi {
         telegramLinked:
             booking.telegramLinked || data['telegramLinked'] == true,
       );
-      if (!next.valid) {
+      if (!next.valid || next.finished) {
         clearSavedBooking();
         return null;
       }
@@ -135,7 +135,7 @@ class PublicDeskApi {
       final booking = DeskBookingState.fromJson(
         Map<String, dynamic>.from(decoded),
       );
-      return booking.valid ? booking : null;
+      return booking.valid && !booking.finished ? booking : null;
     } catch (_) {
       return null;
     }
