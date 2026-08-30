@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -38,6 +39,8 @@ class _DailyScreenState extends State<DailyScreen>
   static const _zaloUrl = 'https://zalo.me/84565056748';
   static const _telegramUrl = 'https://t.me/your_evil_space';
   static const _phoneUrl = 'tel:+84565056748';
+  static const _bookingBotBaseUrl =
+      'https://t.me/CoworkingEvilAdminBot?start=book_';
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _visitKey = GlobalKey();
@@ -47,7 +50,6 @@ class _DailyScreenState extends State<DailyScreen>
   Timer? _statusTimer;
   SiteContent _content = SiteContent.demo;
   SiteStatus? _liveStatus;
-  DeskBookingProfile? _savedProfile;
   DeskBookingState? _booking;
   bool _bookingBusy = false;
   bool _qrScrollScheduled = false;
@@ -62,7 +64,6 @@ class _DailyScreenState extends State<DailyScreen>
       duration: const Duration(milliseconds: 320),
     );
     widget.localization.addListener(_handleLocalizationChanged);
-    _savedProfile = _deskApi.savedProfile();
     _booking = _deskApi.savedBooking();
     unawaited(_loadContent());
     unawaited(_loadPublicState());
@@ -221,27 +222,43 @@ class _DailyScreenState extends State<DailyScreen>
     }
   }
 
+  Future<void> _launchTelegramBooking() async {
+    final url = '$_bookingBotBaseUrl${widget.localization.language.code}';
+    try {
+      final opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName:
+            defaultTargetPlatform == TargetPlatform.iOS ? '_self' : '_blank',
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+      );
+    }
+  }
+
   Future<void> _requestDesk() async {
     if (_bookingBusy || _booking != null) return;
 
-    final saved = _savedProfile;
-    if (saved != null && saved.valid) {
-      await _sendDeskRequest(saved, askToSave: false);
-      return;
-    }
-
     final profile = await showDialog<DeskBookingProfile>(
       context: context,
-      builder: (_) => _DeskBookingDialog(localization: widget.localization),
+      builder: (_) => _DeskBookingDialog(
+        localization: widget.localization,
+        onTelegram: () => unawaited(_launchTelegramBooking()),
+      ),
     );
     if (!mounted || profile == null) return;
-    await _sendDeskRequest(profile, askToSave: true);
+    await _sendDeskRequest(profile);
   }
 
-  Future<void> _sendDeskRequest(
-    DeskBookingProfile profile, {
-    required bool askToSave,
-  }) async {
+  Future<void> _sendDeskRequest(DeskBookingProfile profile) async {
     setState(() => _bookingBusy = true);
     try {
       final booking = await _deskApi
@@ -252,91 +269,6 @@ class _DailyScreenState extends State<DailyScreen>
         _booking = booking;
         _bookingBusy = false;
       });
-
-      if (askToSave) {
-        final save = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            backgroundColor: BrandPalette.paper,
-            shape: const RoundedRectangleBorder(),
-            title: Text(
-              widget.localization.t('booking_save_title'),
-              style: _serif(28),
-            ),
-            content: Text(
-              widget.localization.t('booking_save_copy'),
-              style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(
-                  widget.localization.t('booking_not_now'),
-                  style: _mono(9.5),
-                ),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: BrandPalette.ink,
-                  foregroundColor: BrandPalette.paperLift,
-                  shape: const RoundedRectangleBorder(),
-                ),
-                child: Text(
-                  widget.localization.t('booking_save'),
-                  style: _mono(9.5, color: BrandPalette.paperLift),
-                ),
-              ),
-            ],
-          ),
-        );
-        if (save == true && mounted) {
-          _deskApi.saveProfile(profile);
-          setState(() => _savedProfile = profile);
-        }
-      }
-
-      if (mounted && profile.contactType == 'telegram' && booking.canConnectTelegram) {
-        final connect = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            backgroundColor: BrandPalette.paper,
-            shape: const RoundedRectangleBorder(),
-            title: Text(
-              widget.localization.t('booking_connect_title'),
-              style: _serif(28),
-            ),
-            content: Text(
-              widget.localization.t('booking_connect_copy'),
-              style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(
-                  widget.localization.t('booking_not_now'),
-                  style: _mono(9.5),
-                ),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: BrandPalette.ink,
-                  foregroundColor: BrandPalette.paperLift,
-                  shape: const RoundedRectangleBorder(),
-                ),
-                child: Text(
-                  widget.localization.t('booking_connect_telegram'),
-                  style: _mono(9.5, color: BrandPalette.paperLift),
-                ),
-              ),
-            ],
-          ),
-        );
-        if (connect == true && mounted) {
-          await _connectBookingTelegram(booking);
-        }
-      }
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
@@ -400,11 +332,6 @@ class _DailyScreenState extends State<DailyScreen>
   void _clearFinishedBooking() {
     _deskApi.clearSavedBooking();
     setState(() => _booking = null);
-  }
-
-  void _forgetSavedProfile() {
-    _deskApi.clearSavedProfile();
-    setState(() => _savedProfile = null);
   }
 
   @override
@@ -554,7 +481,6 @@ class _DailyScreenState extends State<DailyScreen>
   Widget _availability(bool compact) {
     final status = _liveStatus ?? _content.status;
     final dayPrice = _priceFor('price_day_pass').price;
-    final saved = _savedProfile;
     final booking = _booking;
     final bookingStatusKey = booking == null
         ? ''
@@ -613,7 +539,7 @@ class _DailyScreenState extends State<DailyScreen>
           _PaperButton(
             label: widget.localization.t('availability_action'),
             detail: _bookingBusy ? '…' : dayPrice,
-            icon: saved == null ? Icons.arrow_outward : Icons.bolt_outlined,
+            icon: Icons.arrow_outward,
             filled: true,
             onPressed: _bookingBusy ? null : _requestDesk,
           )
@@ -694,26 +620,6 @@ class _DailyScreenState extends State<DailyScreen>
               side: const BorderSide(color: BrandPalette.ink),
               shape: const RoundedRectangleBorder(),
             ),
-          ),
-        ],
-        if (saved != null) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${widget.localization.t('booking_saved')} · ${saved.contactValue}',
-                  style: _mono(9, color: BrandPalette.inkMuted),
-                ),
-              ),
-              TextButton(
-                onPressed: _forgetSavedProfile,
-                child: Text(
-                  widget.localization.t('booking_forget'),
-                  style: _mono(8.5),
-                ),
-              ),
-            ],
           ),
         ],
       ],
@@ -988,9 +894,13 @@ class _DailyScreenState extends State<DailyScreen>
 }
 
 class _DeskBookingDialog extends StatefulWidget {
-  const _DeskBookingDialog({required this.localization});
+  const _DeskBookingDialog({
+    required this.localization,
+    required this.onTelegram,
+  });
 
   final LocalizationController localization;
+  final VoidCallback onTelegram;
 
   @override
   State<_DeskBookingDialog> createState() => _DeskBookingDialogState();
@@ -998,25 +908,29 @@ class _DeskBookingDialog extends StatefulWidget {
 
 class _DeskBookingDialogState extends State<_DeskBookingDialog> {
   final _name = TextEditingController();
-  final _contact = TextEditingController();
-  String _type = 'telegram';
+  final _phone = TextEditingController();
 
   @override
   void dispose() {
     _name.dispose();
-    _contact.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
-  void _submit() {
+  void _telegram() {
+    Navigator.of(context).pop();
+    widget.onTelegram();
+  }
+
+  void _submitPhone() {
     final name = _name.text.trim();
-    final contact = _contact.text.trim();
-    if (name.isEmpty || contact.length < 3) return;
+    final phone = _phone.text.trim();
+    if (name.isEmpty || phone.length < 3) return;
     Navigator.of(context).pop(
       DeskBookingProfile(
         name: name,
-        contactType: _type,
-        contactValue: contact,
+        contactType: 'phone',
+        contactValue: phone,
       ),
     );
   }
@@ -1034,44 +948,65 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            FilledButton.icon(
+              onPressed: _telegram,
+              icon: const Icon(Icons.send_outlined, size: 20),
+              label: Text(
+                l.t('booking_tg_button'),
+                style: _mono(10, color: BrandPalette.paperLift),
+              ),
+              style: FilledButton.styleFrom(
+                foregroundColor: BrandPalette.paperLift,
+                backgroundColor: BrandPalette.ink,
+                minimumSize: const Size.fromHeight(54),
+                shape: const RoundedRectangleBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l.t('booking_tg_copy'),
+              textAlign: TextAlign.center,
+              style: _mono(8.5, color: BrandPalette.inkMuted, height: 1.35),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                const Expanded(child: Divider(color: BrandPalette.rule)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(l.t('booking_or'), style: _mono(9)),
+                ),
+                const Expanded(child: Divider(color: BrandPalette.rule)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              l.t('booking_phone_copy'),
+              textAlign: TextAlign.center,
+              style: _mono(8.5, color: BrandPalette.inkMuted, height: 1.35),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _name,
-              autofocus: true,
+              autofocus: false,
               textCapitalization: TextCapitalization.words,
               textInputAction: TextInputAction.next,
               decoration: _bookingInput(l.t('booking_name')),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _contactTypeButton(
-                    'telegram',
-                    l.t('booking_telegram'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _contactTypeButton('phone', l.t('booking_phone')),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             TextField(
-              controller: _contact,
-              keyboardType: _type == 'phone'
-                  ? TextInputType.phone
-                  : TextInputType.text,
+              controller: _phone,
+              keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-              decoration: _bookingInput(l.t('booking_contact')),
+              onSubmitted: (_) => _submitPhone(),
+              decoration: _bookingInput(l.t('booking_phone')),
             ),
           ],
         ),
       ),
       actions: [
         FilledButton(
-          onPressed: _submit,
+          onPressed: _submitPhone,
           style: FilledButton.styleFrom(
             backgroundColor: BrandPalette.ink,
             foregroundColor: BrandPalette.paperLift,
@@ -1084,24 +1019,6 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _contactTypeButton(String type, String label) {
-    final selected = _type == type;
-    final foreground = selected
-        ? BrandPalette.paperLift
-        : BrandPalette.ink;
-    return OutlinedButton(
-      onPressed: () => setState(() => _type = type),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: foreground,
-        backgroundColor: selected ? BrandPalette.ink : BrandPalette.paper,
-        minimumSize: const Size.fromHeight(46),
-        side: const BorderSide(color: BrandPalette.ink),
-        shape: const RoundedRectangleBorder(),
-      ),
-      child: Text(label, style: _mono(9.5, color: foreground)),
     );
   }
 }
