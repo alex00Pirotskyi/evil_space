@@ -59,11 +59,21 @@ class _AdminPortalState extends State<AdminPortal> {
     final password = _passwordController.text;
 
     if (!email.contains('@')) {
-      setState(() => _message = t('Введите правильный email.', 'Enter a valid email.'));
+      setState(
+        () => _message = t(
+          'Введите правильный email.',
+          'Enter a valid email.',
+        ),
+      );
       return;
     }
     if (password.length < 4) {
-      setState(() => _message = t('Пароль минимум 4 символа.', 'Password must be at least 4 characters.'));
+      setState(
+        () => _message = t(
+          'Пароль минимум 4 символа.',
+          'Password must be at least 4 characters.',
+        ),
+      );
       return;
     }
 
@@ -132,11 +142,17 @@ class _AdminPortalState extends State<AdminPortal> {
         builder: (dialogContext) => AlertDialog(
           backgroundColor: BrandPalette.paper,
           shape: const RoundedRectangleBorder(),
-          title: Text(t('Администраторы', 'Administrators'), style: _serif(28)),
+          title: Text(
+            t('Администраторы', 'Administrators'),
+            style: _serif(28),
+          ),
           content: SizedBox(
             width: 460,
             child: admins.isEmpty
-                ? Text(t('Список пуст.', 'No administrators.'), style: _serif(17))
+                ? Text(
+                    t('Список пуст.', 'No administrators.'),
+                    style: _serif(17),
+                  )
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: admins
@@ -145,11 +161,18 @@ class _AdminPortalState extends State<AdminPortal> {
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: const BoxDecoration(
-                              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+                              border: Border(
+                                bottom: BorderSide(color: BrandPalette.rule),
+                              ),
                             ),
                             child: Row(
                               children: [
-                                Expanded(child: Text(admin.email, style: _mono(10))),
+                                Expanded(
+                                  child: Text(
+                                    admin.email,
+                                    style: _mono(10),
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
                                 Text(
                                   admin.status == 'approved'
@@ -174,7 +197,9 @@ class _AdminPortalState extends State<AdminPortal> {
       );
     } on AdminApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
@@ -245,7 +270,13 @@ class _AdminPortalState extends State<AdminPortal> {
                   children: [
                     const EvilCoworkingLogo(width: 210),
                     const SizedBox(height: 28),
-                    Text(t('Админ-панель выключена в этой сборке.', 'Admin is disabled in this build.'), style: _serif(28)),
+                    Text(
+                      t(
+                        'Админ-панель выключена в этой сборке.',
+                        'Admin is disabled in this build.',
+                      ),
+                      style: _serif(28),
+                    ),
                     const SizedBox(height: 18),
                     OutlinedButton(
                       onPressed: _logoutAndExit,
@@ -280,23 +311,43 @@ class _AdminPortalState extends State<AdminPortal> {
                         children: [
                           const EvilCoworkingLogo(width: 210),
                           const Spacer(),
-                          _languageButton('RU', _russian, () => setState(() => _russian = true)),
-                          _languageButton('EN', !_russian, () => setState(() => _russian = false)),
+                          _languageButton(
+                            'RU',
+                            _russian,
+                            () => setState(() => _russian = true),
+                          ),
+                          _languageButton(
+                            'EN',
+                            !_russian,
+                            () => setState(() => _russian = false),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 30),
                       const Divider(color: BrandPalette.ink),
                       const SizedBox(height: 18),
                       Text(
-                        _requestAccess ? t('Новый администратор', 'New administrator') : t('Вход', 'Sign in'),
+                        _requestAccess
+                            ? t('Новый администратор', 'New administrator')
+                            : t('Вход', 'Sign in'),
                         style: _serif(36),
                       ),
                       const SizedBox(height: 10),
                       Text(
                         _requestAccess
-                            ? t('Создайте пароль. Владелец получит письмо для подтверждения.', 'Create a password. The owner will receive an approval email.')
-                            : t('Только для подтверждённых администраторов.', 'Approved administrators only.'),
-                        style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
+                            ? t(
+                                'Создайте пароль. Владелец получит письмо для подтверждения.',
+                                'Create a password. The owner will receive an approval email.',
+                              )
+                            : t(
+                                'Только для подтверждённых администраторов.',
+                                'Approved administrators only.',
+                              ),
+                        style: _serif(
+                          17,
+                          color: BrandPalette.inkMuted,
+                          height: 1.35,
+                        ),
                       ),
                       const SizedBox(height: 26),
                       TextField(
@@ -319,11 +370,19 @@ class _AdminPortalState extends State<AdminPortal> {
                         textInputAction: TextInputAction.done,
                         enabled: !_busy,
                         onSubmitted: (_) => _submit(),
-                        decoration: _input(t('ПАРОЛЬ', 'PASSWORD')).copyWith(
+                        decoration: _input(
+                          t('ПАРОЛЬ', 'PASSWORD'),
+                        ).copyWith(
                           suffixIcon: IconButton(
-                            onPressed: _busy ? null : () => setState(() => _passwordVisible = !_passwordVisible),
+                            onPressed: _busy
+                                ? null
+                                : () => setState(
+                                    () => _passwordVisible = !_passwordVisible,
+                                  ),
                             icon: Icon(
-                              _passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              _passwordVisible
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
                               color: BrandPalette.ink,
                             ),
                           ),
@@ -333,8 +392,13 @@ class _AdminPortalState extends State<AdminPortal> {
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.all(13),
-                          decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-                          child: Text(_message!, style: _mono(10.5, height: 1.35)),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: BrandPalette.ink),
+                          ),
+                          child: Text(
+                            _message!,
+                            style: _mono(10.5, height: 1.35),
+                          ),
                         ),
                       ],
                       const SizedBox(height: 18),
@@ -350,7 +414,10 @@ class _AdminPortalState extends State<AdminPortal> {
                           _busy
                               ? '…'
                               : _requestAccess
-                              ? t('ОТПРАВИТЬ ЗАПРОС', 'REQUEST ACCESS')
+                              ? t(
+                                  'ОТПРАВИТЬ ЗАПРОС',
+                                  'REQUEST ACCESS',
+                                )
                               : t('ВОЙТИ', 'SIGN IN'),
                           style: _mono(11, color: BrandPalette.paperLift),
                         ),
@@ -366,8 +433,14 @@ class _AdminPortalState extends State<AdminPortal> {
                               }),
                         child: Text(
                           _requestAccess
-                              ? t('УЖЕ ЕСТЬ ДОСТУП? ВОЙТИ', 'ALREADY APPROVED? SIGN IN')
-                              : t('НОВЫЙ АДМИН? ЗАПРОСИТЬ ДОСТУП', 'NEW ADMIN? REQUEST ACCESS'),
+                              ? t(
+                                  'УЖЕ ЕСТЬ ДОСТУП? ВОЙТИ',
+                                  'ALREADY APPROVED? SIGN IN',
+                                )
+                              : t(
+                                  'НОВЫЙ АДМИН? ЗАПРОСИТЬ ДОСТУП',
+                                  'NEW ADMIN? REQUEST ACCESS',
+                                ),
                           style: _mono(9.5),
                         ),
                       ),
@@ -375,7 +448,10 @@ class _AdminPortalState extends State<AdminPortal> {
                       OutlinedButton(
                         onPressed: widget.onExit,
                         style: _outlineButton(),
-                        child: Text(t('НА САЙТ', 'BACK TO SITE'), style: _mono(10)),
+                        child: Text(
+                          t('НА САЙТ', 'BACK TO SITE'),
+                          style: _mono(10),
+                        ),
                       ),
                     ],
                   ),
@@ -388,17 +464,29 @@ class _AdminPortalState extends State<AdminPortal> {
     );
   }
 
-  Widget _languageButton(String label, bool selected, VoidCallback onPressed) {
+  Widget _languageButton(
+    String label,
+    bool selected,
+    VoidCallback onPressed,
+  ) {
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: selected ? BrandPalette.paperLift : BrandPalette.ink,
+        foregroundColor: selected
+            ? BrandPalette.paperLift
+            : BrandPalette.ink,
         backgroundColor: selected ? BrandPalette.ink : Colors.transparent,
         minimumSize: const Size(42, 40),
         padding: EdgeInsets.zero,
         shape: const RoundedRectangleBorder(),
       ),
-      child: Text(label, style: _mono(9.5, color: selected ? BrandPalette.paperLift : BrandPalette.ink)),
+      child: Text(
+        label,
+        style: _mono(
+          9.5,
+          color: selected ? BrandPalette.paperLift : BrandPalette.ink,
+        ),
+      ),
     );
   }
 }
@@ -415,6 +503,7 @@ class _TelegramAdminDialog extends StatefulWidget {
 
 class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
   AdminTelegramStatus? _status;
+  AdminTelegramLink? _link;
   bool _busy = true;
   String? _error;
 
@@ -427,29 +516,92 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
   }
 
   Future<void> _refresh() async {
-    if (mounted) setState(() { _busy = true; _error = null; });
+    if (mounted) {
+      setState(() {
+        _busy = true;
+        _error = null;
+        _link = null;
+      });
+    }
     try {
       final status = await widget.api.telegramStatus();
+      AdminTelegramLink? link;
+      if (!status.linked) {
+        link = await widget.api.createTelegramLink();
+        if (!link.valid) {
+          throw const AdminApiException('Could not create Telegram link.');
+        }
+      }
       if (!mounted) return;
-      setState(() { _status = status; _busy = false; });
+      setState(() {
+        _status = status;
+        _link = link;
+        _busy = false;
+      });
     } on AdminApiException catch (error) {
       if (!mounted) return;
-      setState(() { _busy = false; _error = error.message; });
+      setState(() {
+        _busy = false;
+        _error = error.message;
+      });
     }
   }
 
   Future<void> _connect() async {
-    setState(() { _busy = true; _error = null; });
+    final link = _link;
+    if (link == null || !link.valid) {
+      setState(
+        () => _error = t(
+          'Ссылка Telegram не готова. Нажмите ОБНОВИТЬ.',
+          'Telegram link is not ready. Press REFRESH.',
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (link.expiresAt <= now) {
+      setState(
+        () => _error = t(
+          'Ссылка Telegram истекла. Нажмите ОБНОВИТЬ.',
+          'Telegram link expired. Press REFRESH.',
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
     try {
-      final link = await widget.api.createTelegramLink();
-      if (!link.valid) throw const AdminApiException('Could not create Telegram link.');
-      final opened = await launchUrl(Uri.parse(link.url), mode: LaunchMode.platformDefault);
-      if (!opened) throw const AdminApiException('Could not open Telegram.');
+      final opened = await launchUrl(
+        Uri.parse(link.url),
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName:
+            defaultTargetPlatform == TargetPlatform.iOS ? '_self' : '_blank',
+      );
+      if (!opened) {
+        throw const AdminApiException('Could not open Telegram.');
+      }
       if (!mounted) return;
       setState(() => _busy = false);
     } on AdminApiException catch (error) {
       if (!mounted) return;
-      setState(() { _busy = false; _error = error.message; });
+      setState(() {
+        _busy = false;
+        _error = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = t(
+          'Не удалось открыть Telegram.',
+          'Could not open Telegram.',
+        );
+      });
     }
   }
 
@@ -460,7 +612,10 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
       await _refresh();
     } on AdminApiException catch (error) {
       if (!mounted) return;
-      setState(() { _busy = false; _error = error.message; });
+      setState(() {
+        _busy = false;
+        _error = error.message;
+      });
     }
   }
 
@@ -474,10 +629,16 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
         purchaseNotifications: purchases ?? status.purchaseNotifications,
       );
       if (!mounted) return;
-      setState(() { _status = next; _busy = false; });
+      setState(() {
+        _status = next;
+        _busy = false;
+      });
     } on AdminApiException catch (error) {
       if (!mounted) return;
-      setState(() { _busy = false; _error = error.message; });
+      setState(() {
+        _busy = false;
+        _error = error.message;
+      });
     }
   }
 
@@ -491,10 +652,12 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
       content: SizedBox(
         width: 480,
         child: _busy && status == null
-            ? const Center(child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(color: BrandPalette.ink),
-              ))
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(color: BrandPalette.ink),
+                ),
+              )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -516,26 +679,43 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
                         'Бот может принимать/отклонять брони и выполнять ежедневные операции.',
                         'The bot can accept/decline bookings and run daily operations.',
                       ),
-                      style: _serif(16, color: BrandPalette.inkMuted, height: 1.35),
+                      style: _serif(
+                        16,
+                        color: BrandPalette.inkMuted,
+                        height: 1.35,
+                      ),
                     ),
                     const SizedBox(height: 18),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(t('БРОНИ', 'BOOKINGS'), style: _mono(10)),
                       value: status.bookingNotifications,
-                      onChanged: _busy ? null : (value) => _toggle(bookings: value),
+                      onChanged: _busy
+                          ? null
+                          : (value) => _toggle(bookings: value),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text(t('ПОКУПКИ', 'PURCHASES'), style: _mono(10)),
+                      title: Text(
+                        t('ПОКУПКИ', 'PURCHASES'),
+                        style: _mono(10),
+                      ),
                       value: status.purchaseNotifications,
-                      onChanged: _busy ? null : (value) => _toggle(purchases: value),
+                      onChanged: _busy
+                          ? null
+                          : (value) => _toggle(purchases: value),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: _busy ? null : _disconnect,
                       style: _outlineButton(),
-                      child: Text(t('ОТКЛЮЧИТЬ TELEGRAM', 'DISCONNECT TELEGRAM'), style: _mono(9.5)),
+                      child: Text(
+                        t(
+                          'ОТКЛЮЧИТЬ TELEGRAM',
+                          'DISCONNECT TELEGRAM',
+                        ),
+                        style: _mono(9.5),
+                      ),
                     ),
                   ] else ...[
                     Text(
@@ -543,22 +723,32 @@ class _TelegramAdminDialogState extends State<_TelegramAdminDialog> {
                         'Подключите свой Telegram один раз. После этого можно работать через бота вместо панели.',
                         'Connect your Telegram once. After that you can operate Evil Space from the bot instead of the panel.',
                       ),
-                      style: _serif(17, color: BrandPalette.inkMuted, height: 1.35),
+                      style: _serif(
+                        17,
+                        color: BrandPalette.inkMuted,
+                        height: 1.35,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
-                      onPressed: _busy ? null : _connect,
+                      onPressed: _busy || _link == null ? null : _connect,
                       style: FilledButton.styleFrom(
                         backgroundColor: BrandPalette.ink,
                         foregroundColor: BrandPalette.paperLift,
                         minimumSize: const Size.fromHeight(52),
                         shape: const RoundedRectangleBorder(),
                       ),
-                      child: Text(t('ПОДКЛЮЧИТЬ TELEGRAM', 'CONNECT TELEGRAM'), style: _mono(10, color: BrandPalette.paperLift)),
+                      child: Text(
+                        t('ПОДКЛЮЧИТЬ TELEGRAM', 'CONNECT TELEGRAM'),
+                        style: _mono(10, color: BrandPalette.paperLift),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      t('После START вернитесь сюда и нажмите ОБНОВИТЬ.', 'After pressing START, return here and press REFRESH.'),
+                      t(
+                        'После START вернитесь сюда и нажмите ОБНОВИТЬ.',
+                        'After pressing START, return here and press REFRESH.',
+                      ),
                       style: _mono(9, color: BrandPalette.inkMuted),
                     ),
                   ],
