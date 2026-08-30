@@ -47,7 +47,10 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
       activePage = MaterialPage<void>(
         key: const ValueKey('admin'),
         name: AppRoute.admin.path,
-        child: _DeferredAdminPortal(onExit: () => navigate(AppRoute.home)),
+        child: _DeferredAdminPortal(
+          onExit: () => navigate(AppRoute.home),
+          languageCode: localization.language.code,
+        ),
       );
     } else {
       final publicRoute =
@@ -89,9 +92,13 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
 }
 
 class _DeferredAdminPortal extends StatefulWidget {
-  const _DeferredAdminPortal({required this.onExit});
+  const _DeferredAdminPortal({
+    required this.onExit,
+    required this.languageCode,
+  });
 
   final VoidCallback onExit;
+  final String languageCode;
 
   @override
   State<_DeferredAdminPortal> createState() => _DeferredAdminPortalState();
@@ -111,7 +118,10 @@ class _DeferredAdminPortalState extends State<_DeferredAdminPortal> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&
             snapshot.error == null) {
-          return admin_portal.AdminPortal(onExit: widget.onExit);
+          return admin_portal.AdminPortal(
+            onExit: widget.onExit,
+            initialLanguageCode: widget.languageCode,
+          );
         }
 
         if (snapshot.hasError) {
