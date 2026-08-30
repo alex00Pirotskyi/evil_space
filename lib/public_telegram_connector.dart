@@ -31,14 +31,29 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   @override
   void initState() {
     super.initState();
+    widget.localization.addListener(_handleLocalizationChanged);
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
   }
 
   @override
+  void didUpdateWidget(covariant PublicTelegramConnector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localization != widget.localization) {
+      oldWidget.localization.removeListener(_handleLocalizationChanged);
+      widget.localization.addListener(_handleLocalizationChanged);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.localization.removeListener(_handleLocalizationChanged);
     _timer?.cancel();
     super.dispose();
+  }
+
+  void _handleLocalizationChanged() {
+    if (mounted) setState(() {});
   }
 
   void _refresh() {
