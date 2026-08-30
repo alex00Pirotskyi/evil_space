@@ -6,6 +6,7 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 
 import 'package:evil_space/admin_api_models.dart';
+import 'package:evil_space/admin_telegram_models.dart';
 
 class AdminApi {
   Future<AdminSession> session() async {
@@ -64,6 +65,35 @@ class AdminApi {
     return DeleteAdminResult.fromJson(data);
   }
 
+  Future<AdminTelegramStatus> telegramStatus() async {
+    final data = await _request('GET', '/api/admin/telegram');
+    return AdminTelegramStatus.fromJson(data);
+  }
+
+  Future<AdminTelegramLink> createTelegramLink() async {
+    final data = await _request('POST', '/api/admin/telegram/link');
+    return AdminTelegramLink.fromJson(data);
+  }
+
+  Future<void> disconnectTelegram() async {
+    await _request('POST', '/api/admin/telegram/disconnect');
+  }
+
+  Future<AdminTelegramStatus> updateTelegramPreferences({
+    required bool bookingNotifications,
+    required bool purchaseNotifications,
+  }) async {
+    final data = await _request(
+      'POST',
+      '/api/admin/telegram/preferences',
+      body: {
+        'bookingNotifications': bookingNotifications,
+        'purchaseNotifications': purchaseNotifications,
+      },
+    );
+    return AdminTelegramStatus.fromJson(data);
+  }
+
   Future<OperationsSnapshot> operations() async {
     final data = await _request('GET', '/api/admin/operations');
     return OperationsSnapshot.fromJson(_snapshotMap(data));
@@ -86,7 +116,13 @@ class AdminApi {
   }
 
   Future<OperationsSnapshot> acceptBooking(int id) async {
-    return _operation('POST', '/api/admin/booking/accept', {'id': id});
+    await _request('POST', '/api/admin/booking/accept', body: {'id': id});
+    return operations();
+  }
+
+  Future<OperationsSnapshot> declineBooking(int id) async {
+    await _request('POST', '/api/admin/booking/decline', body: {'id': id});
+    return operations();
   }
 
   Future<OperationsSnapshot> updateCustomer(CustomerRecord customer) async {
