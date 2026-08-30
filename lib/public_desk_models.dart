@@ -30,27 +30,46 @@ class DeskBookingProfile {
 }
 
 class DeskBookingState {
-  const DeskBookingState({required this.token, required this.status});
+  const DeskBookingState({
+    required this.token,
+    required this.status,
+    this.telegramLinkUrl,
+  });
 
   final String token;
   final String status;
+  final String? telegramLinkUrl;
 
   bool get pending => status == 'pending';
   bool get accepted => status == 'accepted';
+  bool get declined => status == 'declined';
+  bool get cancelled => status == 'cancelled';
+  bool get finished => declined || cancelled;
+  bool get canConnectTelegram =>
+      telegramLinkUrl != null && telegramLinkUrl!.startsWith('https://t.me/');
   bool get valid =>
-      token.length >= 32 && (status == 'pending' || status == 'accepted');
+      token.length >= 32 &&
+      (pending || accepted || declined || cancelled);
 
-  Map<String, dynamic> toJson() => {'token': token, 'status': status};
+  Map<String, dynamic> toJson() => {
+    'token': token,
+    'status': status,
+    if (telegramLinkUrl != null) 'telegramLinkUrl': telegramLinkUrl,
+  };
 
   factory DeskBookingState.fromJson(Map<String, dynamic> json) {
     return DeskBookingState(
       token: json['token']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
+      telegramLinkUrl: json['telegramLinkUrl']?.toString(),
     );
   }
 
-  DeskBookingState withStatus(String value) =>
-      DeskBookingState(token: token, status: value);
+  DeskBookingState withStatus(String value) => DeskBookingState(
+    token: token,
+    status: value,
+    telegramLinkUrl: telegramLinkUrl,
+  );
 }
 
 class PublicDeskException implements Exception {
