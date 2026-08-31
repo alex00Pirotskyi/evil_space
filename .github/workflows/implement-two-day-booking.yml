@@ -1,4 +1,4 @@
-name: Implement two-day booking
+name: Finalize two-day booking
 
 on:
   push:
@@ -11,303 +11,67 @@ permissions:
   contents: write
 
 jobs:
-  patch:
+  verify-and-fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/kindle-admin-foundation
+          fetch-depth: 0
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
-      - name: Clean and harden two-day integration
+
+      - name: Remove superseded single-booking block
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          # Remove the superseded single-booking methods that remained after the large transform.
           path = Path('lib/app_shell.dart')
           text = path.read_text()
-          start = text.find('  Future<void> _launchTelegramBooking() async {')
-          if start >= 0:
-              end = text.find('  @override\n  Widget build(BuildContext context)', start)
-              if end < 0:
-                  raise SystemExit('could not find end of legacy booking block')
-              text = text[:start] + text[end:]
-          path.write_text(text)
-
-          # Correct service-date validation anchors.
-          path = Path('lib/public_desk_models.dart')
-          text = path.read_text().replace(
-              "RegExp(r'^\\d{4}-\\d{2}-\\d{2}\\$')",
-              "RegExp(r'^\\d{4}-\\d{2}-\\d{2}$')",
-          )
-          path.write_text(text)
-
-          # Expiring one day must never wipe the other day's saved booking.
-          path = Path('lib/public_desk_web.dart')
-          text = path.read_text()
-          text = text.replace(
-              'if (response.status == 404 || response.status == 410) {\n        clearSavedBooking();',
-              'if (response.status == 404 || response.status == 410) {\n        clearSavedBooking(booking.serviceDate);',
-              1,
-          )
-          path.write_text(text)
-
-          # Keep the non-web implementation API-compatible with the web implementation.
-          path = Path('lib/public_desk_stub.dart')
-          text = path.read_text()
-          text = text.replace(
-              '  DeskBookingState? savedBooking() => null;\n',
-              '  List<DeskBookingState> savedBookings() => const [];\n',
-          )
-          text = text.replace(
-              '  void clearSavedBooking() {}',
-              '  void clearSavedBooking([String? serviceDate]) {}',
-          )
-          path.write_text(text)
-
-          # Update model regression coverage for service date and locked amount.
-          Path('test/public_desk_models_test.dart').write_text(r'''import 'package:flutter_test/flutter_test.dart';
-
-import 'package:evil_space/public_desk_models.dart';
-
-void main() {
-  const date = '2026-09-01';
-
-  group('DeskBookingProfile', () {
-    test('accepts phone and Telegram contacts with a service date', () {
-      expect(
-        const DeskBookingProfile(
-          name: 'Alex',
-          contactType: 'phone',
-          contactValue: '+84 123 456',
-          serviceDate: date,
-        ).valid,
-        isTrue,
-      );
-      expect(
-        const DeskBookingProfile(
-          name: 'Alex',
-          contactType: 'telegram',
-          contactValue: '@alex',
-          serviceDate: date,
-        ).valid,
-        isTrue,
-      );
-    });
-
-    test('rejects missing identity, bad contact type, or bad date', () {
-      expect(
-        const DeskBookingProfile(
-          name: ' ',
-          contactType: 'telegram',
-          contactValue: '@alex',
-          serviceDate: date,
-        ).valid,
-        isFalse,
-      );
-      expect(
-        const DeskBookingProfile(
-          name: 'Alex',
-          contactType: 'email',
-          contactValue: 'alex@example.com',
-          serviceDate: date,
-        ).valid,
-        isFalse,
-      );
-      expect(
-        const DeskBookingProfile(
-          name: 'Alex',
-          contactType: 'phone',
-          contactValue: '+84 123',
-          serviceDate: 'tomorrow',
-        ).valid,
-        isFalse,
-      );
-    });
-  });
-
-  group('DeskBookingState', () {
-    const token = '12345678901234567890123456789012';
-
-    test('round-trips accepted booking date and locked amount', () {
-      final state = DeskBookingState.fromJson(
-        const {
-          'token': token,
-          'status': 'accepted',
-          'serviceDate': date,
-          'amountVnd': 200000,
-        },
-      );
-
-      expect(state.valid, isTrue);
-      expect(state.accepted, isTrue);
-      expect(state.serviceDate, date);
-      expect(state.amountVnd, 200000);
-      final restored = DeskBookingState.fromJson(state.toJson());
-      expect(restored.status, 'accepted');
-      expect(restored.serviceDate, date);
-      expect(restored.amountVnd, 200000);
-    });
-
-    test('round-trips Telegram connection metadata', () {
-      final state = DeskBookingState.fromJson(
-        const {
-          'token': token,
-          'status': 'pending',
-          'serviceDate': date,
-          'amountVnd': 100000,
-          'telegramLinkUrl':
-              'https://t.me/CoworkingEvilAdminBot?start=c_test',
-          'telegramLinked': false,
-        },
-      );
-
-      expect(state.canConnectTelegram, isTrue);
-      final linked = DeskBookingState.fromJson({
-        ...state.toJson(),
-        'telegramLinked': true,
-      });
-      expect(linked.telegramLinked, isTrue);
-      expect(linked.canConnectTelegram, isFalse);
-    });
-
-    test('accepts declined and cancelled terminal states', () {
-      const declined = DeskBookingState(
-        token: token,
-        status: 'declined',
-        serviceDate: date,
-        amountVnd: 200000,
-      );
-      const cancelled = DeskBookingState(
-        token: token,
-        status: 'cancelled',
-        serviceDate: date,
-        amountVnd: 200000,
-      );
-
-      expect(declined.valid, isTrue);
-      expect(declined.finished, isTrue);
-      expect(cancelled.valid, isTrue);
-      expect(cancelled.finished, isTrue);
-    });
-
-    test('rejects short tokens, unknown statuses, bad dates and zero prices', () {
-      expect(
-        const DeskBookingState(
-          token: 'short',
-          status: 'pending',
-          serviceDate: date,
-          amountVnd: 200000,
-        ).valid,
-        isFalse,
-      );
-      expect(
-        const DeskBookingState(
-          token: token,
-          status: 'mystery',
-          serviceDate: date,
-          amountVnd: 200000,
-        ).valid,
-        isFalse,
-      );
-      expect(
-        const DeskBookingState(
-          token: token,
-          status: 'pending',
-          serviceDate: 'tomorrow',
-          amountVnd: 200000,
-        ).valid,
-        isFalse,
-      );
-      expect(
-        const DeskBookingState(
-          token: token,
-          status: 'pending',
-          serviceDate: date,
-          amountVnd: 0,
-        ).valid,
-        isFalse,
-      );
-    });
-  });
-}
-''')
-
-          # Existing Telegram contract now reads prices from the shared rules module.
-          path = Path('test/telegram_contract_test.dart')
-          text = path.read_text()
-          text = text.replace('    late String telegram;\n', '    late String telegram;\n    late String bookingRules;\n', 1)
-          text = text.replace(
-              "      telegram = File('worker/telegram.js').readAsStringSync();\n",
-              "      telegram = File('worker/telegram.js').readAsStringSync();\n      bookingRules = File('worker/booking_rules.js').readAsStringSync();\n",
-              1,
-          )
-          pricing_pattern = r"    test\('operational day pass price is 200K everywhere', \(\) \{.*?\n    \}\);"
-          pricing = r'''    test('booking prices come from the shared Nha Trang rules', () {
-      expect(bookingRules, contains('export const DAY_PASS_VND = 200000;'));
-      expect(bookingRules, contains('export const HALF_DAY_VND = 100000;'));
-      expect(bookingRules, contains('export const MONTH_PASS_VND = 2500000;'));
-      expect(worker, contains('dayPassAmount(serviceDayForOffset(0, now), now)'));
-      expect(telegram, contains('dayPassAmount(serviceDayForOffset(0, now), now)'));
-      expect(worker, isNot(contains('250K VND')));
-      expect(telegram, isNot(contains('250K VND')));
-    });'''
-          text, count = re.subn(pricing_pattern, lambda _: pricing, text, count=1, flags=re.S)
-          if count != 1:
-              raise SystemExit('could not update pricing contract test')
-          text = text.replace(
-              "      expect(telegram, contains(\"VALUES (?, 'telegram', ?, 'new', ?, ?)\"));",
-              "      expect(telegram, contains('serviceDayFromCompactDate'));\n      expect(telegram, contains(\"VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)\"));",
-              1,
-          )
-          text = text.replace(
-              "    test('admin display uses the same 200K day pass price', () {\n      final screen = File('lib/admin_screen.dart').readAsStringSync();\n      expect(screen, contains(\"'200K VND'\"));\n      expect(screen, isNot(contains(\"'250K VND'\")));\n    });",
-              "    test('admin displays full-day and half-day prices', () {\n      final screen = File('lib/admin_screen.dart').readAsStringSync();\n      expect(screen, contains(\"'200K VND'\"));\n      expect(screen, contains(\"'100K VND'\"));\n      expect(screen, isNot(contains(\"'250K VND'\")));\n    });",
-              1,
-          )
-          path.write_text(text)
-
-          path = Path('test/telegram_start_booking_contract_test.dart')
-          text = path.read_text().replace(
-              "contains(\"VALUES (?, 'telegram', ?, 'new', ?, ?)\")",
-              "contains(\"VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)\")",
-          )
-          path.write_text(text)
-
-          # Make local `make` validate the same shared rules as CI.
-          path = Path('tool/release.dart')
-          text = path.read_text()
-          text = text.replace(
-              "  await _run('node', ['--check', 'worker/telegram.js']);\n  await _run('node', ['--test', 'worker/telegram_test.mjs']);",
-              "  await _run('node', ['--check', 'worker/telegram.js']);\n  await _run('node', ['--check', 'worker/booking_rules.js']);\n  await _run('node', [\n    '--test',\n    'worker/telegram_test.mjs',\n    'worker/booking_rules_test.mjs',\n  ]);",
-              1,
-          )
-          path.write_text(text)
+          marker = '  Future<void> _launchTelegramBooking() async {'
+          start = text.find(marker)
+          if start < 0:
+              raise SystemExit('legacy booking block was not found')
+          end = text.find('  @override\n  Widget build(BuildContext context)', start)
+          if end < 0:
+              raise SystemExit('end of legacy booking block was not found')
+          path.write_text(text[:start] + text[end:])
           PY
-          dart format lib/app_shell.dart lib/public_desk_models.dart lib/public_desk_web.dart lib/public_desk_stub.dart test/public_desk_models_test.dart test/telegram_contract_test.dart test/telegram_start_booking_contract_test.dart test/booking_service_day_contract_test.dart tool/release.dart
-      - name: Verify Worker
+          dart format lib/app_shell.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify Worker and booking rules
         run: |
           node --check worker/index.js
           node --check worker/entry.js
           node --check worker/telegram.js
           node --check worker/booking_rules.js
           node --test worker/telegram_test.mjs worker/booking_rules_test.mjs
-      - name: Flutter dependencies
-        run: flutter pub get
+
       - name: Analyze
         run: flutter analyze --no-pub
+
       - name: Test
         run: flutter test --no-pub
+
+      - name: Build optimized Wasm web
+        run: flutter build web --release --wasm --no-pub --dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
+
+      - name: Verify release
+        run: |
+          node --check build/web/flutter_bootstrap.js
+          dart run tool/verify_release.dart build/web
+
       - name: Commit verified cleanup
         run: |
-          git checkout -- .github/workflows/implement-two-day-booking.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/app_shell.dart lib/public_desk_models.dart lib/public_desk_web.dart lib/public_desk_stub.dart test/public_desk_models_test.dart test/telegram_contract_test.dart test/telegram_start_booking_contract_test.dart test/booking_service_day_contract_test.dart tool/release.dart
-          git commit -m "Harden two-day booking client state and tests"
+          git add lib/app_shell.dart
+          git commit -m "Finalize two-day booking client flow"
           git push origin HEAD:feature/kindle-admin-foundation
