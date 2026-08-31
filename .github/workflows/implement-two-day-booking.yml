@@ -41,7 +41,7 @@ jobs:
           )
           script = script.replace(
               "text = replace_once(text, old, new, 'admin booking groups')",
-              "block_start = text.index('      if (snapshot.bookingRequests.isNotEmpty) ...[')\n          block_end = text.index(\"      const SizedBox(height: 28),\\n      _sectionTitle(t('СЕГОДНЯ', 'TODAY'))\", block_start)\n          text = text[:block_start] + new + text[block_end:]",
+              "block_start = text.index('      if (snapshot.bookingRequests.isNotEmpty) ...[')\nblock_end = text.index(\"      const SizedBox(height: 28),\\n      _sectionTitle(t('СЕГОДНЯ', 'TODAY'))\", block_start)\ntext = text[:block_start] + new + text[block_end:]",
           )
           Path('/tmp/two_day_patch.py').write_text(script)
           PY
