@@ -7,6 +7,7 @@ void main() {
     late String migration;
     late String languageMigration;
     late String entry;
+    late String worker;
     late String telegram;
     late String setup;
 
@@ -18,6 +19,7 @@ void main() {
         'migrations/0007_telegram_languages.sql',
       ).readAsStringSync();
       entry = File('worker/entry.js').readAsStringSync();
+      worker = File('worker/index.js').readAsStringSync();
       telegram = File('worker/telegram.js').readAsStringSync();
       setup = File('tool/telegram_setup.dart').readAsStringSync();
     });
@@ -56,6 +58,17 @@ void main() {
       expect(entry, contains('ctx.waitUntil(notifyAdminsNewBooking'));
       expect(telegram, contains('X-Telegram-Bot-Api-Secret-Token'));
       expect(telegram, contains('TELEGRAM_WEBHOOK_SECRET'));
+    });
+
+    test('operational day pass price is 200K everywhere', () {
+      expect(worker, contains('const DAY_PASS_VND = 200000;'));
+      expect(worker, isNot(contains('const DAY_PASS_VND = 250000;')));
+      expect(telegram, contains('const DAY_PASS_VND = 200000;'));
+      expect(telegram, contains("'200K VND'"));
+      expect(telegram, isNot(contains('const DAY_PASS_VND = 250000;')));
+      expect(telegram, isNot(contains("'250K VND'")));
+      expect(worker, contains('const MONTH_PASS_VND = 2500000;'));
+      expect(telegram, contains('const MONTH_PASS_VND = 2500000;'));
     });
 
     test('one-tap TG booking uses Telegram identity and website language', () {
