@@ -28,33 +28,17 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           app = Path('lib/app_shell.dart')
           text = app.read_text()
           old = "            Text(detail, style: _serif(19, color: foreground)),"
-          new = """            Flexible(
-              flex: 2,
-              child: Text(
-                detail,
-                textAlign: TextAlign.right,
-                style: _serif(19, color: foreground),
-              ),
-            ),"""
+          new = "            Flexible(\n              flex: 2,\n              child: Text(\n                detail,\n                textAlign: TextAlign.right,\n                style: _serif(19, color: foreground),\n              ),\n            ),"
           if old not in text:
               raise SystemExit('paper button detail target not found')
           app.write_text(text.replace(old, new, 1))
-
           smoke = Path('test/web_app_smoke_test.dart')
           text = smoke.read_text()
-          old = """    expect(find.text('TODAY'), findsOneWidget);
-    await tester.tap(find.text('TODAY'));
-    await tester.pumpAndSettle();"""
-          new = """    final todayButton = find.text('TODAY');
-    expect(todayButton, findsOneWidget);
-    await tester.ensureVisible(todayButton);
-    await tester.pumpAndSettle();
-    await tester.tap(todayButton);
-    await tester.pumpAndSettle();"""
+          old = "    expect(find.text('TODAY'), findsOneWidget);\n    await tester.tap(find.text('TODAY'));\n    await tester.pumpAndSettle();"
+          new = "    final todayButton = find.text('TODAY');\n    expect(todayButton, findsOneWidget);\n    await tester.ensureVisible(todayButton);\n    await tester.pumpAndSettle();\n    await tester.tap(todayButton);\n    await tester.pumpAndSettle();"
           if old not in text:
               raise SystemExit('smoke-test TODAY tap target not found')
           smoke.write_text(text.replace(old, new, 1))
@@ -91,6 +75,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A lib/app_shell.dart test/web_app_smoke_test.dart .repair-test.txt .repair-analyze.txt
+          git add -A
           git commit -m "Fix responsive public booking release tests"
           git push origin HEAD:feature/kindle-admin-foundation
