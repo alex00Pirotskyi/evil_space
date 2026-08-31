@@ -25,9 +25,9 @@ class PublicDeskApi {
 
   void clearSavedProfile() {}
 
-  DeskBookingState? savedBooking() => null;
+  List<DeskBookingState> savedBookings() => const [];
 
   void saveBooking(DeskBookingState booking) {}
 
-  void clearSavedBooking() {}
+  void clearSavedBooking([String? serviceDate]) {}
 }
