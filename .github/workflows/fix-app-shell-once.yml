@@ -1,0 +1,77 @@
+name: Fix app_shell once
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/fix-app-shell-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+
+      - name: Remove stale booking implementation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/app_shell.dart')
+          text = path.read_text(encoding='utf-8')
+
+          stale_start = "  Future<void> _launchTelegramBooking() async {"
+          build_marker = "\n\n  @override\n  Widget build(BuildContext context)"
+
+          if stale_start not in text:
+              raise SystemExit('stale zero-argument booking block not found')
+
+          start = text.index(stale_start)
+          end = text.index(build_marker, start)
+          text = text[:start] + text[end:]
+
+          unused_price = """  SitePrice _priceFor(String key) {
+            for (final price in _content.prices) {
+              if (price.labelKey == key) return price;
+            }
+            return SiteContent.demo.prices.first;
+          }
+
+          """
+          if unused_price in text:
+              text = text.replace(unused_price, '', 1)
+
+          checks = {
+              'dated telegram launcher': text.count('Future<void> _launchTelegramBooking(String serviceDate) async') == 1,
+              'dated desk request': text.count('Future<void> _requestDesk(String serviceDate) async') == 1,
+              'single send implementation': text.count('Future<void> _sendDeskRequest(DeskBookingProfile profile) async') == 1,
+              'single telegram connector': text.count('Future<void> _connectBookingTelegram(DeskBookingState booking) async') == 1,
+              'dated delete request': text.count('Future<void> _deleteDeskRequest(DeskBookingState booking) async') == 1,
+              'dated finished booking clear': text.count('void _clearFinishedBooking(DeskBookingState booking)') == 1,
+              'no legacy booking state': '_booking =' not in text and '_booking !=' not in text,
+              'no stale zero-arg launcher': 'Future<void> _launchTelegramBooking() async' not in text,
+              'no stale zero-arg request': 'Future<void> _requestDesk() async' not in text,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit('verification failed: ' + ', '.join(failed))
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/app_shell.dart
+          git diff --cached --check
+          git commit -m "Fix duplicate public booking implementation"
+          git push origin HEAD:feature/kindle-admin-foundation
