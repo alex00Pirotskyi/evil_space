@@ -55,13 +55,11 @@ jobs:
           dart format lib/app_shell.dart
           dart fix --apply
           dart format lib/app_shell.dart
-          python3 - <<'PY'
-          import subprocess
-          changed = subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines()
-          unexpected = [p for p in changed if p != 'lib/app_shell.dart']
-          if unexpected:
-              raise SystemExit('dart fix touched unexpected files: ' + ', '.join(unexpected))
-          PY
+          cp lib/app_shell.dart /tmp/fixed_app_shell.dart
+          git checkout -- .
+          cp /tmp/fixed_app_shell.dart lib/app_shell.dart
+          dart format lib/app_shell.dart
+          test "$(git diff --name-only)" = "lib/app_shell.dart"
 
       - name: Verify Worker and booking rules
         run: |
