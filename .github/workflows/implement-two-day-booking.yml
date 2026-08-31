@@ -1,0 +1,1895 @@
+name: Implement two-day booking
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/implement-two-day-booking.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+      - name: Patch backend and Flutter booking model
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new)
+
+          def replace_func(text, name, next_name, new_body):
+              pattern = rf'async function {re.escape(name)}\([^\n]*\) \{{.*?(?=\nasync function {re.escape(next_name)}\()'
+              updated, count = re.subn(pattern, new_body.rstrip() + '\n', text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'function {name}: expected 1 match, got {count}')
+              return updated
+
+          # worker/entry.js
+          path = Path('worker/entry.js')
+          text = path.read_text()
+          anchor = "} from './telegram.js';\n"
+          addition = """} from './telegram.js';
+import {
+  bookingWindow,
+  dayPassAmount,
+  isBookableServiceDay,
+  serviceDateKey,
+  serviceDayFromDateKey,
+} from './booking_rules.js';
+"""
+          text = replace_once(text, anchor, addition, 'entry imports')
+          text = text.replace('return filterOperationsToToday(response);', 'return filterOperationsBookingWindow(response);')
+
+          new_status = r'''async function handlePublicStatus(env) {
+  const now = nowSeconds();
+  const { today, tomorrow, end } = bookingWindow(now);
+  const row = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS today_occupied,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS tomorrow_occupied
+    `)
+    .bind(today, tomorrow, tomorrow, end)
+    .first();
+
+  const total = Math.max(1, Number(row?.total ?? 10));
+  const occupied = Math.min(total, Math.max(0, Number(row?.today_occupied ?? 0)));
+  const tomorrowOccupied = Math.min(total, Math.max(0, Number(row?.tomorrow_occupied ?? 0)));
+  return json({
+    ok: true,
+    status: {
+      total,
+      occupied,
+      free: Math.max(0, total - occupied),
+      updated: new Date(today * 1000).toISOString(),
+      todayDate: serviceDateKey(today),
+      tomorrowDate: serviceDateKey(tomorrow),
+      todayPrice: dayPassAmount(today, now),
+      tomorrowPrice: dayPassAmount(tomorrow, now),
+      tomorrowOccupied,
+      tomorrowFree: Math.max(0, total - tomorrowOccupied),
+    },
+  });
+}
+'''
+          text = replace_func(text, 'handlePublicStatus', 'handlePublicBooking', new_status)
+
+          new_book = r'''async function handlePublicBooking(request, env, ctx) {
+  const body = await readJson(request);
+  if (!body) return jsonError('Invalid request.', 400);
+
+  const name = cleanText(body.name, MAX_NAME_LENGTH);
+  const contactType =
+    body.contactType === 'phone' || body.contactType === 'telegram'
+      ? body.contactType
+      : '';
+  const contactValue = cleanText(body.contactValue, MAX_CONTACT_LENGTH);
+  const now = nowSeconds();
+  const serviceDay = serviceDayFromDateKey(body.serviceDate);
+
+  if (!name) return jsonError('Name is required.', 400);
+  if (!contactType || contactValue.length < 3) {
+    return jsonError('Phone or Telegram is required.', 400);
+  }
+  if (serviceDay == null || !isBookableServiceDay(serviceDay, now)) {
+    return jsonError('Choose today or tomorrow.', 400);
+  }
+
+  const serviceEnd = serviceDay + 86400;
+  const capacity = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied
+    `)
+    .bind(serviceDay, serviceEnd)
+    .first();
+  if (Number(capacity?.occupied ?? 0) >= Number(capacity?.total ?? 10)) {
+    return jsonError('No desks are left for this day.', 409);
+  }
+
+  const duplicate = await env.evil_space
+    .prepare(`
+      SELECT id
+      FROM booking_requests
+      WHERE service_day = ?
+        AND contact_type = ?
+        AND lower(contact_value) = lower(?)
+        AND status IN ('new', 'processing', 'accepted')
+      LIMIT 1
+    `)
+    .bind(serviceDay, contactType, contactValue)
+    .first();
+  if (duplicate) return jsonError('You already have an active booking for this day.', 409);
+
+  const amountVnd = dayPassAmount(serviceDay, now);
+  const token = randomToken(32);
+  const tokenHash = await hashToken(token);
+  const created = await env.evil_space
+    .prepare(`
+      INSERT INTO booking_requests
+        (name, contact_type, contact_value, status, created_at, client_token_hash,
+         service_day, amount_vnd)
+      VALUES (?, ?, ?, 'new', ?, ?, ?, ?)
+      RETURNING id
+    `)
+    .bind(name, contactType, contactValue, now, tokenHash, serviceDay, amountVnd)
+    .first();
+
+  if (!created?.id) return jsonError('Could not create desk request.', 500);
+
+  let telegramLinkUrl = null;
+  if (contactType === 'telegram') {
+    telegramLinkUrl = await createCustomerTelegramLink(
+      env,
+      created.id,
+      body.language,
+    );
+  }
+
+  ctx.waitUntil(notifyAdminsNewBooking(env, created.id));
+
+  return json(
+    {
+      ok: true,
+      token,
+      status: 'pending',
+      serviceDate: serviceDateKey(serviceDay),
+      amountVnd,
+      telegramLinkUrl,
+      telegramLinked: false,
+      message: 'Desk request sent. Evil Space staff can now see it.',
+    },
+    201,
+  );
+}
+'''
+          text = replace_func(text, 'handlePublicBooking', 'handlePublicBookingStatus', new_book)
+
+          new_booking_status = r'''async function handlePublicBookingStatus(url, env) {
+  const token = url.searchParams.get('token') ?? '';
+  if (!isReasonableToken(token)) return jsonError('Invalid booking.', 400);
+
+  const tokenHash = await hashToken(token);
+  const booking = await env.evil_space
+    .prepare(`
+      SELECT
+        b.id,
+        b.status,
+        b.service_day,
+        b.amount_vnd,
+        CASE
+          WHEN b.customer_id IS NOT NULL AND EXISTS (
+            SELECT 1
+            FROM customer_telegram_links l
+            WHERE l.customer_id = b.customer_id
+          ) THEN 1
+          ELSE 0
+        END AS telegram_linked
+      FROM booking_requests b
+      WHERE b.client_token_hash = ?
+      LIMIT 1
+    `)
+    .bind(tokenHash)
+    .first();
+
+  if (!booking) return jsonError('Booking not found.', 404);
+
+  const now = nowSeconds();
+  const { today, end } = bookingWindow(now);
+  const serviceDay = Number(booking.service_day ?? 0);
+  if (serviceDay < today || serviceDay >= end) {
+    return jsonError('Booking expired.', 410);
+  }
+
+  const status = booking.status === 'accepted'
+    ? 'accepted'
+    : booking.status === 'declined'
+      ? 'declined'
+      : booking.status === 'cancelled'
+        ? 'cancelled'
+        : 'pending';
+
+  return json({
+    ok: true,
+    status,
+    serviceDate: serviceDateKey(serviceDay),
+    amountVnd: Number(booking.amount_vnd ?? 0),
+    telegramLinked: Number(booking.telegram_linked ?? 0) === 1,
+  });
+}
+'''
+          text = replace_func(text, 'handlePublicBookingStatus', 'filterOperationsToToday', new_booking_status)
+
+          new_filter = r'''async function filterOperationsBookingWindow(response) {
+  if (!response.ok) return response;
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return response;
+  }
+
+  const requests = payload?.snapshot?.booking_requests;
+  if (Array.isArray(requests)) {
+    const { today, end } = bookingWindow(nowSeconds());
+    payload.snapshot.booking_requests = requests.filter((booking) => {
+      const serviceDay = Number(booking?.service_day ?? 0);
+      return serviceDay >= today && serviceDay < end;
+    });
+  }
+
+  return json(payload, response.status);
+}
+'''
+          pattern = r'async function filterOperationsToToday\(response\) \{.*?(?=\nasync function readJson\()'
+          text, count = re.subn(pattern, new_filter.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('entry filter function mismatch')
+          path.write_text(text)
+
+          # worker/index.js
+          path = Path('worker/index.js')
+          text = path.read_text()
+          text = "import { DAY_PASS_VND, dayPassAmount, serviceDayForOffset } from './booking_rules.js';\n" + text
+          text = replace_once(text, 'const DAY_PASS_VND = 200000;\n', '', 'index DAY_PASS const')
+          text = replace_once(
+              text,
+              '.bind(name, DAY_PASS_VND, now, session.email, customer.id)',
+              '.bind(name, dayPassAmount(serviceDayForOffset(0, now), now), now, session.email, customer.id)',
+              'manual day pass price',
+          )
+          old_query = """        SELECT id, name, contact_type, contact_value, status, created_at
+        FROM booking_requests
+        WHERE status = 'new'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 100
+      `)
+      .all(),"""
+          new_query = """        SELECT id, name, contact_type, contact_value, status, created_at,
+               service_day, amount_vnd, handled_at, handled_by_email
+        FROM booking_requests
+        WHERE service_day >= ? AND service_day < ?
+          AND (status = 'new' OR (status = 'accepted' AND service_day >= ?))
+        ORDER BY service_day ASC, created_at DESC, id DESC
+        LIMIT 100
+      `)
+      .bind(start, end + 86400, end)
+      .all(),"""
+          text = replace_once(text, old_query, new_query, 'operations booking query')
+          path.write_text(text)
+
+          # worker/telegram.js
+          path = Path('worker/telegram.js')
+          text = path.read_text()
+          text = """import {
+  DAY_PASS_VND,
+  HALF_DAY_VND,
+  MONTH_PASS_VND,
+  bookingDayKind,
+  bookingWindow,
+  compactServiceDate,
+  dayPassAmount,
+  isBookableServiceDay,
+  nhaTrangDayBounds,
+  serviceDateKey,
+  serviceDayForOffset,
+  serviceDayFromCompactDate,
+  visitTimestampForServiceDay,
+} from './booking_rules.js';
+""" + text
+          for old in [
+              'const DAY_PASS_VND = 200000;\n',
+              'const MONTH_PASS_VND = 2500000;\n',
+          ]:
+              text = replace_once(text, old, '', f'telegram remove {old.strip()}')
+          text = text.replace('const CUSTOMER_LINK_TTL = 6 * 60 * 60;', 'const CUSTOMER_LINK_TTL = 30 * 60 * 60;')
+
+          # Translation additions and generic accepted copy.
+          replacements = {
+              "    today: 'TODAY',\n": "    today: 'TODAY',\n    tomorrow: 'TOMORROW',\n    date: 'Date',\n    price: 'Price',\n    halfDay: 'HALF DAY · AFTER 16:00',\n",
+              "    today: 'СЕГОДНЯ',\n": "    today: 'СЕГОДНЯ',\n    tomorrow: 'ЗАВТРА',\n    date: 'Дата',\n    price: 'Цена',\n    halfDay: 'ПОЛДНЯ · ПОСЛЕ 16:00',\n",
+              "    today: 'HÔM NAY',\n": "    today: 'HÔM NAY',\n    tomorrow: 'NGÀY MAI',\n    date: 'Ngày',\n    price: 'Giá',\n    halfDay: 'NỬA NGÀY · SAU 16:00',\n",
+              "    customerAcceptedCopy: 'Your desk at Evil Space is confirmed for today.\\nOpen daily 11:00–23:00.\\n\\nYou can cancel here anytime if your plans change.',": "    customerAcceptedCopy: 'Your desk at Evil Space is confirmed.\\nOpen daily 11:00–23:00.\\n\\nYou can cancel here anytime if your plans change.',",
+              "    customerAcceptedCopy: 'Ваш стол в Evil Space подтверждён на сегодня.\\nРаботаем ежедневно 11:00–23:00.\\n\\nЕсли планы изменятся, бронь можно отменить здесь.',": "    customerAcceptedCopy: 'Ваш стол в Evil Space подтверждён.\\nРаботаем ежедневно 11:00–23:00.\\n\\nЕсли планы изменятся, бронь можно отменить здесь.',",
+              "    customerNoBooking: 'You do not have an active desk request today.',": "    customerNoBooking: 'You do not have an active desk request for today or tomorrow.',",
+              "    customerNoBooking: 'У вас нет активной брони на сегодня.',": "    customerNoBooking: 'У вас нет активной брони на сегодня или завтра.',",
+              "    bookingAlreadyActive: 'You already have an active desk request today.',": "    bookingAlreadyActive: 'You already have an active desk request for this day.',",
+              "    bookingAlreadyActive: 'У вас уже есть активный запрос на сегодня.',": "    bookingAlreadyActive: 'У вас уже есть активный запрос на этот день.',",
+          }
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+
+          # createCustomerTelegramLink
+          pattern = r'export async function createCustomerTelegramLink\(env, bookingId, rawLanguage = \'en\'\) \{.*?(?=\nexport async function handleWebAcceptBooking\()'
+          new = r'''export async function createCustomerTelegramLink(env, bookingId, rawLanguage = 'en') {
+  const id = toPositiveInt(bookingId);
+  if (!id) return null;
+  const now = nowSeconds();
+  const booking = await bookingById(env, id);
+  if (!booking) return null;
+  const serviceDay = Number(booking.service_day ?? 0);
+  const expiresAt = Math.min(serviceDay + 86400, now + CUSTOMER_LINK_TTL);
+  if (expiresAt <= now) return null;
+  const language = normalizeLanguage(rawLanguage);
+
+  const token = randomToken(24);
+  const tokenHash = await hashToken(token);
+  await env.evil_space.batch([
+    env.evil_space
+      .prepare('DELETE FROM customer_telegram_link_tokens WHERE booking_id = ? AND used_at IS NULL')
+      .bind(id),
+    env.evil_space
+      .prepare(`
+        INSERT INTO customer_telegram_link_tokens
+          (token_hash, booking_id, created_at, expires_at, used_at, language)
+        VALUES (?, ?, ?, ?, NULL, ?)
+      `)
+      .bind(tokenHash, id, now, expiresAt, language),
+  ]);
+  return `https://t.me/${BOT_USERNAME}?start=c_${token}`;
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram createCustomerTelegramLink mismatch')
+
+          # Cancel record selection gets service-day fields.
+          text = text.replace(
+              'SELECT id, status, customer_id, accepted_visit_id, created_at\n      FROM booking_requests',
+              'SELECT id, status, customer_id, accepted_visit_id, created_at, service_day, amount_vnd\n      FROM booking_requests',
+              1,
+          )
+
+          # pairCustomer
+          pattern = r'async function pairCustomer\(env, user, chatId, token\) \{.*?(?=\nasync function bookViaTelegram\()'
+          new = r'''async function pairCustomer(env, user, chatId, token) {
+  if (!isReasonableToken(token)) return sendText(env, chatId, 'This booking link is invalid.');
+  const tokenHash = await hashToken(token);
+  const now = nowSeconds();
+  const pending = await env.evil_space
+    .prepare(`
+      SELECT t.booking_id, t.expires_at, t.language,
+             b.id, b.name, b.contact_type, b.contact_value, b.status, b.customer_id,
+             b.created_at, b.service_day, b.amount_vnd
+      FROM customer_telegram_link_tokens t
+      JOIN booking_requests b ON b.id = t.booking_id
+      WHERE t.token_hash = ? AND t.used_at IS NULL
+    `)
+    .bind(tokenHash)
+    .first();
+  if (!pending || Number(pending.expires_at) <= now) {
+    return sendText(env, chatId, 'This booking link expired. Return to evils.space and create a new desk request if needed.');
+  }
+  if (!isBookableServiceDay(Number(pending.service_day ?? 0), now) || !['new', 'accepted'].includes(pending.status)) {
+    return sendText(env, chatId, 'This booking is no longer active.');
+  }
+
+  const language = normalizeLanguage(pending.language);
+  const identity = telegramBookingIdentity(user);
+  const customer = await ensureTelegramCustomer(env, user, identity);
+  await upsertCustomerTelegramLink(env, customer.id, user, chatId, language);
+  await env.evil_space.batch([
+    env.evil_space.prepare('UPDATE booking_requests SET customer_id = ? WHERE id = ?').bind(customer.id, pending.id),
+    env.evil_space.prepare('UPDATE customer_telegram_link_tokens SET used_at = ? WHERE token_hash = ?').bind(now, tokenHash),
+  ]);
+
+  if (pending.status === 'accepted') {
+    await sendCustomerAccepted(env, chatId, pending.id, language);
+  } else {
+    await sendCustomerPending(env, chatId, pending.id, language, true);
+  }
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram pairCustomer mismatch')
+
+          # bookViaTelegram
+          pattern = r'async function bookViaTelegram\(env, user, chatId, rawLanguage\) \{.*?(?=\nfunction telegramBookingIdentity\()'
+          new = r'''async function bookViaTelegram(env, user, chatId, rawPayload) {
+  const now = nowSeconds();
+  let language = 'en';
+  let serviceDay = null;
+  const match = /^(\d{8})_(en|ru|vi)$/.exec(String(rawPayload ?? ''));
+  if (match) {
+    serviceDay = serviceDayFromCompactDate(match[1]);
+    language = normalizeLanguage(match[2]);
+  } else {
+    language = normalizeLanguage(rawPayload);
+    serviceDay = serviceDayForOffset(0, now);
+  }
+  if (serviceDay == null || !isBookableServiceDay(serviceDay, now)) {
+    return sendText(env, chatId, 'This booking date is no longer available. Return to evils.space and choose today or tomorrow.');
+  }
+
+  const identity = telegramBookingIdentity(user);
+  const customer = await ensureTelegramCustomer(env, user, identity);
+  await upsertCustomerTelegramLink(env, customer.id, user, chatId, language);
+
+  const existing = await env.evil_space
+    .prepare(`
+      SELECT id, status
+      FROM booking_requests
+      WHERE customer_id = ?
+        AND service_day = ?
+        AND status IN ('new', 'processing', 'accepted')
+      ORDER BY id DESC
+      LIMIT 1
+    `)
+    .bind(customer.id, serviceDay)
+    .first();
+
+  if (existing?.id) {
+    if (existing.status === 'accepted') {
+      await sendCustomerAccepted(env, chatId, existing.id, language);
+    } else {
+      await sendCustomerPending(env, chatId, existing.id, language);
+    }
+    return;
+  }
+
+  const capacity = await serviceDayCapacity(env, serviceDay);
+  if (capacity.occupied >= capacity.total) {
+    return sendText(env, chatId, 'No desks are left for this day.');
+  }
+
+  const amountVnd = dayPassAmount(serviceDay, now);
+  const created = await env.evil_space
+    .prepare(`
+      INSERT INTO booking_requests
+        (name, contact_type, contact_value, status, created_at, customer_id,
+         service_day, amount_vnd)
+      VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)
+      RETURNING id
+    `)
+    .bind(identity.name, identity.contact, now, customer.id, serviceDay, amountVnd)
+    .first();
+  if (!created?.id) throw new Error('Could not create Telegram booking.');
+
+  await Promise.all([
+    notifyAdminsNewBooking(env, created.id),
+    sendCustomerPending(env, chatId, created.id, language),
+  ]);
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram bookViaTelegram mismatch')
+
+          # sendPendingBookings
+          pattern = r'async function sendPendingBookings\(env, admin, chatId\) \{.*?(?=\nasync function sendBookingToAdmin\()'
+          new = r'''async function sendPendingBookings(env, admin, chatId) {
+  const lang = normalizeLanguage(admin.language);
+  const { today, end } = bookingWindow(nowSeconds());
+  const result = await env.evil_space
+    .prepare(`
+      SELECT id, name, contact_type, contact_value, status, created_at,
+             service_day, amount_vnd, handled_at, handled_by_email
+      FROM booking_requests
+      WHERE status = 'new' AND service_day >= ? AND service_day < ?
+      ORDER BY service_day ASC, created_at ASC, id ASC
+      LIMIT 50
+    `)
+    .bind(today, end)
+    .all();
+  const bookings = result.results ?? [];
+  if (!bookings.length) {
+    await sendText(env, chatId, tr(lang, 'noPending'), adminMenuKeyboard(lang));
+    return;
+  }
+  for (const booking of bookings) {
+    await sendBookingToAdmin(env, chatId, booking, lang);
+  }
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram sendPendingBookings mismatch')
+
+          # bookingAdminText
+          pattern = r'function bookingAdminText\(booking, status, actor = \'\', language = \'en\'\) \{.*?(?=\nfunction bookingAdminKeyboard\()'
+          new = r'''function bookingAdminText(booking, status, actor = '', language = 'en') {
+  const lang = normalizeLanguage(language);
+  const contact = booking.contact_type === 'telegram' ? 'TG' : tr(lang, 'phone');
+  const heading = status === 'accepted'
+    ? tr(lang, 'bookingAcceptedTitle')
+    : status === 'declined'
+      ? tr(lang, 'bookingDeclinedTitle')
+      : status === 'cancelled'
+        ? tr(lang, 'bookingCancelledTitle')
+        : tr(lang, 'newDeskRequest');
+  const serviceDay = Number(booking.service_day ?? 0);
+  const kind = bookingDayKind(serviceDay, nowSeconds());
+  const dayLabel = kind === 'tomorrow' ? tr(lang, 'tomorrow') : tr(lang, 'today');
+  return [
+    `<b>${heading}</b>`,
+    '',
+    `<b>${escapeHtml(booking.name ?? '')}</b>`,
+    `${contact}: ${escapeHtml(booking.contact_value ?? '')}`,
+    `${dayLabel} · ${formatLocalDate(serviceDay)} · <b>${formatMoney(booking.amount_vnd)}</b>`,
+    `${tr(lang, 'time')}: ${formatLocalTime(booking.created_at)}`,
+    actor ? `${tr(lang, 'by')}: ${escapeHtml(actor)}` : '',
+  ].filter(Boolean).join('\n');
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram bookingAdminText mismatch')
+
+          # prepareNamedOperation dynamic today price.
+          old = """  const isMonth = state === 'confirm_month';
+  return sendText(
+    env,
+    chatId,
+    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\\n\\n<b>${escapeHtml(name)}</b>\\n${isMonth ? '2.5 MLN VND' : '200K VND'}\\n\\n${tr(lang, 'confirmQuestion')}`,"""
+          new = """  const isMonth = state === 'confirm_month';
+  const now = nowSeconds();
+  const todayPrice = dayPassAmount(serviceDayForOffset(0, now), now);
+  return sendText(
+    env,
+    chatId,
+    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\\n\\n<b>${escapeHtml(name)}</b>\\n${isMonth ? '2.5 MLN VND' : formatMoney(todayPrice)}\\n\\n${tr(lang, 'confirmQuestion')}`,"""
+          text = replace_once(text, old, new, 'telegram prepare price')
+
+          # acceptBooking
+          pattern = r'async function acceptBooking\(env, bookingId, admin\) \{.*?(?=\nasync function declineBooking\()'
+          new = r'''async function acceptBooking(env, bookingId, admin) {
+  const now = nowSeconds();
+  const existing = await bookingById(env, bookingId);
+  if (!existing) throw new OperationError('Booking not found.', 404);
+  const serviceDay = Number(existing.service_day ?? 0);
+  if (!isBookableServiceDay(serviceDay, now)) {
+    throw new OperationError('This desk request is no longer for today or tomorrow.', 410);
+  }
+
+  const claimed = await env.evil_space
+    .prepare(`
+      UPDATE booking_requests
+      SET status = 'processing', handled_at = ?, handled_by_email = ?
+      WHERE id = ? AND status = 'new'
+      RETURNING id, name, contact_type, contact_value, created_at, service_day, amount_vnd
+    `)
+    .bind(now, admin.email, bookingId)
+    .first();
+  if (!claimed) throw new OperationError('Booking request was already handled.', 409);
+
+  try {
+    const customer = await ensureCustomer(env, {
+      name: claimed.name,
+      phone: claimed.contact_type === 'phone' ? claimed.contact_value : '',
+      telegram: claimed.contact_type === 'telegram' ? claimed.contact_value : '',
+    });
+    const current = await bookingById(env, bookingId);
+    const customerId = toPositiveInt(current?.customer_id) ?? customer.id;
+    const serviceStart = Number(claimed.service_day);
+    const serviceEnd = serviceStart + 86400;
+    const already = await env.evil_space
+      .prepare(`
+        SELECT id FROM visits
+        WHERE customer_id = ? AND created_at >= ? AND created_at < ?
+        LIMIT 1
+      `)
+      .bind(customerId, serviceStart, serviceEnd)
+      .first();
+
+    let acceptedVisitId = null;
+    if (!already) {
+      const visitTime = visitTimestampForServiceDay(serviceStart, now);
+      const amountVnd = Number(claimed.amount_vnd ?? dayPassAmount(serviceStart, now));
+      const visit = await env.evil_space
+        .prepare(`
+          INSERT INTO visits
+            (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
+          SELECT ?, 'day', NULL, ?, ?, ?, ?
+          WHERE (
+            SELECT COUNT(*) FROM visits
+            WHERE created_at >= ? AND created_at < ?
+          ) < COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10)
+          RETURNING id
+        `)
+        .bind(claimed.name, amountVnd, visitTime, admin.email, customerId, serviceStart, serviceEnd)
+        .first();
+      acceptedVisitId = toPositiveInt(visit?.id);
+      if (!acceptedVisitId) throw new OperationError('No desks are left for this day.', 409);
+    }
+
+    await env.evil_space
+      .prepare(`
+        UPDATE booking_requests
+        SET status = 'accepted', customer_id = ?, accepted_visit_id = ?
+        WHERE id = ? AND status = 'processing'
+      `)
+      .bind(customerId, acceptedVisitId, bookingId)
+      .run();
+    await audit(env, admin, 'booking.accept', 'booking', bookingId, `${claimed.name} · ${serviceDateKey(serviceStart)} · ${formatMoney(claimed.amount_vnd)}`);
+    return { ...claimed, id: bookingId, customer_id: customerId, accepted_visit_id: acceptedVisitId };
+  } catch (error) {
+    await env.evil_space
+      .prepare("UPDATE booking_requests SET status = 'new', handled_at = NULL, handled_by_email = NULL WHERE id = ? AND status = 'processing'")
+      .bind(bookingId)
+      .run();
+    throw error;
+  }
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram acceptBooking mismatch')
+
+          # declineBooking
+          pattern = r'async function declineBooking\(env, bookingId, admin\) \{.*?(?=\nasync function cancelBookingRecord\()'
+          new = r'''async function declineBooking(env, bookingId, admin) {
+  const now = nowSeconds();
+  const existing = await bookingById(env, bookingId);
+  if (!existing) throw new OperationError('Booking not found.', 404);
+  const serviceDay = Number(existing.service_day ?? 0);
+  if (!isBookableServiceDay(serviceDay, now)) {
+    throw new OperationError('This desk request is no longer for today or tomorrow.', 410);
+  }
+
+  const declined = await env.evil_space
+    .prepare(`
+      UPDATE booking_requests
+      SET status = 'declined', handled_at = ?, handled_by_email = ?
+      WHERE id = ? AND status = 'new'
+      RETURNING id, name, contact_type, contact_value, created_at, service_day, amount_vnd
+    `)
+    .bind(now, admin.email, bookingId)
+    .first();
+  if (!declined) throw new OperationError('Booking request was already handled.', 409);
+  await audit(env, admin, 'booking.decline', 'booking', bookingId, `${declined.name} · ${serviceDateKey(serviceDay)} · ${formatMoney(declined.amount_vnd)}`);
+  return declined;
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram declineBooking mismatch')
+
+          # addDayPass dynamic price.
+          text = replace_once(
+              text,
+              '.bind(name, DAY_PASS_VND, now, admin.email, customer.id)',
+              '.bind(name, dayPassAmount(serviceDayForOffset(0, now), now), now, admin.email, customer.id)',
+              'telegram addDayPass price',
+          )
+
+          # customer messages include date + price.
+          pattern = r'async function sendCustomerPending\(env, chatId, bookingId, language, connected = false\) \{.*?(?=\nasync function sendCustomerCancelConfirmation\()'
+          new = r'''async function sendCustomerPending(env, chatId, bookingId, language, connected = false) {
+  const lang = normalizeLanguage(language);
+  const heading = connected ? tr(lang, 'customerConnected') : tr(lang, 'customerPending');
+  const copy = connected ? tr(lang, 'customerConnectedCopy') : tr(lang, 'customerPendingCopy');
+  const booking = await bookingById(env, bookingId);
+  const details = booking ? bookingCustomerDetails(booking, lang) : '';
+  await telegramApi(env, 'sendMessage', {
+    chat_id: chatId,
+    text: `${heading}\n\n${details}${details ? '\n\n' : ''}${copy}`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: tr(lang, 'cancelRequest'), callback_data: `cc:${bookingId}` }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    },
+  });
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram sendCustomerPending mismatch')
+
+          pattern = r'async function sendCustomerAccepted\(env, chatId, bookingId, language\) \{.*?(?=\nasync function sendCustomerDeclined\()'
+          new = r'''async function sendCustomerAccepted(env, chatId, bookingId, language) {
+  const lang = normalizeLanguage(language);
+  const booking = await bookingById(env, bookingId);
+  const details = booking ? bookingCustomerDetails(booking, lang) : '';
+  await telegramApi(env, 'sendMessage', {
+    chat_id: chatId,
+    text: `${tr(lang, 'customerAccepted')}\n\n${details}${details ? '\n\n' : ''}${tr(lang, 'customerAcceptedCopy')}`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: `❌ ${tr(lang, 'cancelBooking')}`, callback_data: `cc:${bookingId}` },
+          { text: `📶 ${tr(lang, 'wifi')}`, callback_data: `cw:${bookingId}` },
+        ],
+        [{ text: tr(lang, 'directions'), url: 'https://www.google.com/maps/dir/?api=1&destination=Evil%20Space%2C%2060%20Cao%20V%C4%83n%20B%C3%A9%2C%20Nha%20Trang' }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    },
+  });
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram sendCustomerAccepted mismatch')
+
+          # sendCustomerHome handles both days.
+          pattern = r'async function sendCustomerHome\(env, customer, chatId\) \{.*?(?=\nasync function customerTelegramForBooking\()'
+          new = r'''async function sendCustomerHome(env, customer, chatId) {
+  const lang = normalizeLanguage(customer?.language);
+  const { today, end } = bookingWindow(nowSeconds());
+  const result = await env.evil_space
+    .prepare(`
+      SELECT id, status
+      FROM booking_requests
+      WHERE customer_id = ? AND service_day >= ? AND service_day < ?
+        AND status IN ('new', 'processing', 'accepted')
+      ORDER BY service_day ASC, id DESC
+      LIMIT 2
+    `)
+    .bind(customer.customer_id, today, end)
+    .all();
+  const bookings = result.results ?? [];
+
+  if (!bookings.length) {
+    return sendText(env, chatId, tr(lang, 'customerNoBooking'), {
+      inline_keyboard: [
+        [{ text: tr(lang, 'openSite'), url: 'https://evils.space' }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    });
+  }
+  for (const booking of bookings) {
+    if (booking.status === 'accepted') {
+      await sendCustomerAccepted(env, chatId, booking.id, lang);
+    } else {
+      await sendCustomerPending(env, chatId, booking.id, lang);
+    }
+  }
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram sendCustomerHome mismatch')
+
+          # todaySummary pending only today plus tomorrow separately.
+          pattern = r'async function todaySummary\(env\) \{.*?(?=\nasync function linkedAdmin\()'
+          new = r'''async function todaySummary(env) {
+  const now = nowSeconds();
+  const { today, tomorrow, end } = bookingWindow(now);
+  const row = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied,
+        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND service_day = ?) AS pending_today,
+        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND service_day = ?) AS pending_tomorrow,
+        COALESCE((SELECT SUM(amount) FROM visits WHERE created_at >= ? AND created_at < ?), 0) AS income
+    `)
+    .bind(today, tomorrow, today, tomorrow, today, tomorrow)
+    .first();
+  const pendingToday = Math.max(0, Number(row?.pending_today ?? 0));
+  const pendingTomorrow = Math.max(0, Number(row?.pending_tomorrow ?? 0));
+  return {
+    total: Math.max(1, Number(row?.total ?? 10)),
+    occupied: Math.max(0, Number(row?.occupied ?? 0)),
+    pending: pendingToday + pendingTomorrow,
+    pendingToday,
+    pendingTomorrow,
+    income: Math.max(0, Number(row?.income ?? 0)),
+    tomorrowFree: Math.max(0, Number(row?.total ?? 10) - Number((await serviceDayCapacity(env, tomorrow)).occupied ?? 0)),
+    end,
+  };
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram todaySummary mismatch')
+
+          # bookingById and capacity helper.
+          pattern = r'async function bookingById\(env, id\) \{.*?(?=\nasync function customerById\()'
+          new = r'''async function bookingById(env, id) {
+  return env.evil_space
+    .prepare(`
+      SELECT id, name, contact_type, contact_value, status, created_at,
+             handled_at, handled_by_email, customer_id, accepted_visit_id,
+             service_day, amount_vnd
+      FROM booking_requests
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+}
+
+async function serviceDayCapacity(env, serviceDay) {
+  const row = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied
+    `)
+    .bind(serviceDay, serviceDay + 86400)
+    .first();
+  return {
+    total: Math.max(1, Number(row?.total ?? 10)),
+    occupied: Math.max(0, Number(row?.occupied ?? 0)),
+  };
+}
+
+function bookingCustomerDetails(booking, language) {
+  const lang = normalizeLanguage(language);
+  const serviceDay = Number(booking.service_day ?? 0);
+  const kind = bookingDayKind(serviceDay, nowSeconds());
+  const label = kind === 'tomorrow' ? tr(lang, 'tomorrow') : tr(lang, 'today');
+  return `<b>${label} · ${formatLocalDate(serviceDay)} · ${formatMoney(booking.amount_vnd)}</b>`;
+}
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram bookingById mismatch')
+
+          # Customer callback uses service day instead of created_at.
+          text = text.replace(
+              'SELECT b.id, b.status, b.customer_id, b.accepted_visit_id, b.created_at',
+              'SELECT b.id, b.status, b.customer_id, b.accepted_visit_id, b.created_at, b.service_day, b.amount_vnd',
+              1,
+          )
+          old = """  const { start, end } = nhaTrangDayBounds(nowSeconds());
+  const createdAt = Number(booking.created_at ?? 0);
+  if (createdAt < start || createdAt >= end) {
+    return answerCallback(env, callback.id, tr(lang, 'bookingExpired'), true);
+  }
+"""
+          new = """  if (!isBookableServiceDay(Number(booking.service_day ?? 0), nowSeconds())) {
+    return answerCallback(env, callback.id, tr(lang, 'bookingExpired'), true);
+  }
+"""
+          text = replace_once(text, old, new, 'customer callback expiry')
+
+          # Remove local duplicate day-bound function now imported.
+          pattern = r'\nfunction nhaTrangDayBounds\(now\) \{.*?\n\}\n\nfunction cookieValue'
+          text, count = re.subn(pattern, '\nfunction cookieValue', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('telegram duplicate nhaTrangDayBounds mismatch')
+
+          # Export pricing helpers for tests.
+          text = text.replace(
+              '  telegramBookingIdentity,\n};',
+              '  telegramBookingIdentity,\n  dayPassAmount,\n  serviceDateKey,\n};',
+              1,
+          )
+          path.write_text(text)
+
+          # lib/coworking_model.dart extend SiteStatus and demo half-day.
+          path = Path('lib/coworking_model.dart')
+          text = path.read_text()
+          old = """class SiteStatus {
+  const SiteStatus({
+    required this.total,
+    required this.occupied,
+    required this.updated,
+  });
+
+  final int total;
+  final int occupied;
+  final String updated;
+
+  int get free => (total - occupied).clamp(0, total).toInt();
+
+  factory SiteStatus.fromJson(Map<String, dynamic> json) {
+    final rawTotal = (json['total'] as num?)?.toInt() ?? 10;
+    final normalizedTotal = rawTotal.clamp(1, 999).toInt();
+    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 0;
+
+    return SiteStatus(
+      total: normalizedTotal,
+      occupied: rawOccupied.clamp(0, normalizedTotal).toInt(),
+      updated: json['updated'] as String? ?? 'LOCAL',
+    );
+  }
+}
+"""
+          new = """class SiteStatus {
+  const SiteStatus({
+    required this.total,
+    required this.occupied,
+    required this.updated,
+    this.todayDate = '',
+    this.tomorrowDate = '',
+    this.todayPrice = 200000,
+    this.tomorrowPrice = 200000,
+    this.tomorrowOccupied = 0,
+  });
+
+  final int total;
+  final int occupied;
+  final String updated;
+  final String todayDate;
+  final String tomorrowDate;
+  final int todayPrice;
+  final int tomorrowPrice;
+  final int tomorrowOccupied;
+
+  int get free => (total - occupied).clamp(0, total).toInt();
+  int get tomorrowFree => (total - tomorrowOccupied).clamp(0, total).toInt();
+
+  factory SiteStatus.fromJson(Map<String, dynamic> json) {
+    final rawTotal = (json['total'] as num?)?.toInt() ?? 10;
+    final normalizedTotal = rawTotal.clamp(1, 999).toInt();
+    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 0;
+    final rawTomorrow = (json['tomorrowOccupied'] as num?)?.toInt() ?? 0;
+
+    return SiteStatus(
+      total: normalizedTotal,
+      occupied: rawOccupied.clamp(0, normalizedTotal).toInt(),
+      updated: json['updated'] as String? ?? 'LOCAL',
+      todayDate: json['todayDate']?.toString() ?? '',
+      tomorrowDate: json['tomorrowDate']?.toString() ?? '',
+      todayPrice: (json['todayPrice'] as num?)?.toInt() ?? 200000,
+      tomorrowPrice: (json['tomorrowPrice'] as num?)?.toInt() ?? 200000,
+      tomorrowOccupied: rawTomorrow.clamp(0, normalizedTotal).toInt(),
+    );
+  }
+}
+"""
+          text = replace_once(text, old, new, 'SiteStatus')
+          text = text.replace(
+              "      SitePrice(labelKey: 'price_day_pass', price: '200K VND'),\n",
+              "      SitePrice(labelKey: 'price_day_pass', price: '200K VND'),\n      SitePrice(labelKey: 'price_half_day', price: '100K VND'),\n",
+              1,
+          )
+          path.write_text(text)
+
+          # lib/public_desk_models.dart
+          path = Path('lib/public_desk_models.dart')
+          text = path.read_text()
+          text = text.replace(
+              '    required this.contactValue,\n  });',
+              '    required this.contactValue,\n    required this.serviceDate,\n  });',
+              1,
+          )
+          text = text.replace(
+              '  final String contactValue;\n',
+              '  final String contactValue;\n  final String serviceDate;\n',
+              1,
+          )
+          text = text.replace(
+              "    'contactValue': contactValue,\n",
+              "    'contactValue': contactValue,\n    'serviceDate': serviceDate,\n",
+              1,
+          )
+          text = text.replace(
+              "      contactValue: json['contactValue']?.toString() ?? '',\n",
+              "      contactValue: json['contactValue']?.toString() ?? '',\n      serviceDate: json['serviceDate']?.toString() ?? '',\n",
+              1,
+          )
+          text = text.replace(
+              '      contactValue.trim().isNotEmpty;',
+              "      contactValue.trim().isNotEmpty &&\n      RegExp(r'^\\d{4}-\\d{2}-\\d{2}\$').hasMatch(serviceDate);",
+              1,
+          )
+          text = text.replace(
+              '    this.telegramLinked = false,\n  });',
+              '    this.telegramLinked = false,\n    required this.serviceDate,\n    required this.amountVnd,\n  });',
+              1,
+          )
+          text = text.replace(
+              '  final bool telegramLinked;\n',
+              '  final bool telegramLinked;\n  final String serviceDate;\n  final int amountVnd;\n',
+              1,
+          )
+          text = text.replace(
+              "      (pending || accepted || declined || cancelled);",
+              "      (pending || accepted || declined || cancelled) &&\n      RegExp(r'^\\d{4}-\\d{2}-\\d{2}\$').hasMatch(serviceDate) &&\n      amountVnd > 0;",
+              1,
+          )
+          text = text.replace(
+              "    'telegramLinked': telegramLinked,\n",
+              "    'telegramLinked': telegramLinked,\n    'serviceDate': serviceDate,\n    'amountVnd': amountVnd,\n",
+              1,
+          )
+          text = text.replace(
+              "      telegramLinked: json['telegramLinked'] == true,\n",
+              "      telegramLinked: json['telegramLinked'] == true,\n      serviceDate: json['serviceDate']?.toString() ?? '',\n      amountVnd: (json['amountVnd'] as num?)?.toInt() ?? 0,\n",
+              1,
+          )
+          text = text.replace(
+              '    telegramLinked: telegramLinked,\n  );',
+              '    telegramLinked: telegramLinked,\n    serviceDate: serviceDate,\n    amountVnd: amountVnd,\n  );',
+              1,
+          )
+          path.write_text(text)
+
+          # lib/public_desk_web.dart storage and booking state.
+          path = Path('lib/public_desk_web.dart')
+          text = path.read_text()
+          text = text.replace(
+              "  static const _bookingStorageKey = 'evil_space_desk_booking_v1';",
+              "  static const _bookingStorageKey = 'evil_space_desk_booking_v1';\n  static const _bookingsStorageKey = 'evil_space_desk_bookings_v2';",
+              1,
+          )
+          text = text.replace(
+              "      final next = DeskBookingState(\n        token: booking.token,\n        status: data['status']?.toString() ?? '',\n        telegramLinkUrl: booking.telegramLinkUrl,\n        telegramLinked:\n            booking.telegramLinked || data['telegramLinked'] == true,\n      );\n      if (!next.valid || next.finished) {\n        clearSavedBooking();\n        return null;\n      }\n      saveBooking(next);",
+              "      final next = DeskBookingState(\n        token: booking.token,\n        status: data['status']?.toString() ?? '',\n        telegramLinkUrl: booking.telegramLinkUrl,\n        telegramLinked:\n            booking.telegramLinked || data['telegramLinked'] == true,\n        serviceDate: data['serviceDate']?.toString() ?? booking.serviceDate,\n        amountVnd: (data['amountVnd'] as num?)?.toInt() ?? booking.amountVnd,\n      );\n      if (!next.valid) {\n        clearSavedBooking(booking.serviceDate);\n        return null;\n      }\n      saveBooking(next);",
+              1,
+          )
+          text = text.replace('    clearSavedBooking();\n  }\n\n  DeskBookingProfile? savedProfile()', '    clearSavedBooking(booking.serviceDate);\n  }\n\n  DeskBookingProfile? savedProfile()', 1)
+          pattern = r'  DeskBookingState\? savedBooking\(\) \{.*?(?=\n  SiteStatus\? _takeBootstrapStatus\()'
+          new = r'''  List<DeskBookingState> savedBookings() {
+    final results = <DeskBookingState>[];
+    try {
+      final raw = web.window.localStorage.getItem(_bookingsStorageKey);
+      final decoded = raw == null || raw.isEmpty ? null : jsonDecode(raw);
+      if (decoded is List) {
+        for (final item in decoded.whereType<Map>()) {
+          final booking = DeskBookingState.fromJson(Map<String, dynamic>.from(item));
+          if (booking.valid) results.add(booking);
+        }
+      }
+      if (results.isEmpty) {
+        final legacy = web.window.localStorage.getItem(_bookingStorageKey);
+        if (legacy != null && legacy.isNotEmpty) {
+          final old = jsonDecode(legacy);
+          if (old is Map) {
+            final map = Map<String, dynamic>.from(old);
+            final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+            final date = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+            map['serviceDate'] ??= date;
+            map['amountVnd'] ??= 200000;
+            final booking = DeskBookingState.fromJson(map);
+            if (booking.valid) results.add(booking);
+          }
+          web.window.localStorage.removeItem(_bookingStorageKey);
+        }
+      }
+    } catch (_) {}
+    results.sort((a, b) => a.serviceDate.compareTo(b.serviceDate));
+    return results;
+  }
+
+  void saveBooking(DeskBookingState booking) {
+    final bookings = savedBookings()
+        .where((item) => item.serviceDate != booking.serviceDate)
+        .toList();
+    bookings.add(booking);
+    bookings.sort((a, b) => a.serviceDate.compareTo(b.serviceDate));
+    web.window.localStorage.setItem(
+      _bookingsStorageKey,
+      jsonEncode(bookings.map((item) => item.toJson()).toList()),
+    );
+    notifyPublicBookingChanged();
+  }
+
+  void clearSavedBooking([String? serviceDate]) {
+    if (serviceDate == null) {
+      web.window.localStorage.removeItem(_bookingsStorageKey);
+    } else {
+      final bookings = savedBookings()
+          .where((item) => item.serviceDate != serviceDate)
+          .toList();
+      if (bookings.isEmpty) {
+        web.window.localStorage.removeItem(_bookingsStorageKey);
+      } else {
+        web.window.localStorage.setItem(
+          _bookingsStorageKey,
+          jsonEncode(bookings.map((item) => item.toJson()).toList()),
+        );
+      }
+    }
+    web.window.localStorage.removeItem(_bookingStorageKey);
+    notifyPublicBookingChanged();
+  }
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('public desk storage mismatch')
+          path.write_text(text)
+
+          # app_shell.dart: state, polling, actions, availability, dialog.
+          path = Path('lib/app_shell.dart')
+          text = path.read_text()
+          text = text.replace('  DeskBookingState? _booking;\n', '  List<DeskBookingState> _bookings = const [];\n', 1)
+          text = text.replace('    _booking = _deskApi.savedBooking();', '    _bookings = _deskApi.savedBookings();', 1)
+
+          pattern = r'  Future<void> _loadPublicState\(\) async \{.*?(?=\n  void _handleLocalizationChanged\()'
+          new = r'''  Future<void> _loadPublicState() async {
+    if (_publicRefreshInFlight) {
+      _publicRefreshQueued = true;
+      return;
+    }
+
+    _publicRefreshInFlight = true;
+    final currentBookings = List<DeskBookingState>.from(_bookings);
+    try {
+      final statusFuture = _deskApi.status().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => null,
+      );
+      final bookingsFuture = Future.wait(
+        currentBookings.map(_refreshBooking),
+      );
+      final results = await Future.wait<Object?>([
+        statusFuture,
+        bookingsFuture,
+      ]);
+      if (!mounted) return;
+
+      final status = results[0] as SiteStatus?;
+      final refreshedBookings = (results[1] as List<DeskBookingState?>)
+          .whereType<DeskBookingState>()
+          .toList(growable: false);
+      final statusChanged = status != null && !_sameStatus(_liveStatus, status);
+      final bookingContextUnchanged = _sameBookings(_bookings, currentBookings);
+      final bookingChanged =
+          bookingContextUnchanged && !_sameBookings(_bookings, refreshedBookings);
+
+      if (!statusChanged && !bookingChanged) return;
+      setState(() {
+        if (statusChanged) _liveStatus = status;
+        if (bookingChanged) _bookings = refreshedBookings;
+      });
+    } finally {
+      _publicRefreshInFlight = false;
+      if (_publicRefreshQueued && mounted) {
+        _publicRefreshQueued = false;
+        unawaited(_loadPublicState());
+      }
+    }
+  }
+
+  Future<DeskBookingState?> _refreshBooking(DeskBookingState booking) async {
+    try {
+      return await _deskApi
+          .bookingStatus(booking)
+          .timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      return booking;
+    } on PublicDeskException {
+      return booking;
+    }
+  }
+
+  bool _sameStatus(SiteStatus? a, SiteStatus? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    return a.total == b.total &&
+        a.occupied == b.occupied &&
+        a.tomorrowOccupied == b.tomorrowOccupied &&
+        a.todayPrice == b.todayPrice &&
+        a.tomorrowPrice == b.tomorrowPrice &&
+        a.todayDate == b.todayDate &&
+        a.tomorrowDate == b.tomorrowDate &&
+        _statusDayKey(a.updated) == _statusDayKey(b.updated);
+  }
+
+  String _statusDayKey(String raw) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    final local = parsed.toUtc().add(const Duration(hours: 7));
+    return '${local.year}-${local.month}-${local.day}';
+  }
+
+  bool _sameBookings(List<DeskBookingState> a, List<DeskBookingState> b) {
+    if (a.length != b.length) return false;
+    final left = [...a]..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
+    final right = [...b]..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
+    for (var index = 0; index < left.length; index += 1) {
+      final x = left[index];
+      final y = right[index];
+      if (x.token != y.token ||
+          x.status != y.status ||
+          x.serviceDate != y.serviceDate ||
+          x.amountVnd != y.amountVnd ||
+          x.telegramLinkUrl != y.telegramLinkUrl ||
+          x.telegramLinked != y.telegramLinked) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  DeskBookingState? _bookingFor(String serviceDate) {
+    for (final booking in _bookings) {
+      if (booking.serviceDate == serviceDate) return booking;
+    }
+    return null;
+  }
+
+  String _serviceDateForOffset(int days) {
+    final local = _nhaTrangNow().add(Duration(days: days));
+    return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+  }
+
+  String _compactServiceDate(String serviceDate) => serviceDate.replaceAll('-', '');
+
+  Future<void> _launchTelegramBooking(String serviceDate) async {
+    final url = '$_bookingBotBaseUrl${_compactServiceDate(serviceDate)}_${widget.localization.language.code}';
+    try {
+      final opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName:
+            defaultTargetPlatform == TargetPlatform.iOS ? '_self' : '_blank',
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+      );
+    }
+  }
+
+  Future<void> _requestDesk(String serviceDate) async {
+    if (_bookingBusy || _bookingFor(serviceDate) != null) return;
+
+    final profile = await showDialog<DeskBookingProfile>(
+      context: context,
+      builder: (_) => _DeskBookingDialog(
+        localization: widget.localization,
+        serviceDate: serviceDate,
+        isTomorrow: serviceDate == _serviceDateForOffset(1),
+        onTelegram: () => unawaited(_launchTelegramBooking(serviceDate)),
+      ),
+    );
+    if (!mounted || profile == null) return;
+    await _sendDeskRequest(profile);
+  }
+
+  Future<void> _sendDeskRequest(DeskBookingProfile profile) async {
+    setState(() => _bookingBusy = true);
+    try {
+      final booking = await _deskApi
+          .book(profile)
+          .timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      setState(() {
+        _bookings = [
+          ..._bookings.where((item) => item.serviceDate != booking.serviceDate),
+          booking,
+        ]..sort((a, b) => a.serviceDate.compareTo(b.serviceDate));
+        _bookingBusy = false;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('REQUEST TIMEOUT')),
+      );
+    } on PublicDeskException catch (error) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT SEND REQUEST')),
+      );
+    }
+  }
+
+  Future<void> _connectBookingTelegram(DeskBookingState booking) async {
+    final url = booking.telegramLinkUrl;
+    if (url == null || !booking.canConnectTelegram) return;
+    await _launch(url);
+  }
+
+  Future<void> _deleteDeskRequest(DeskBookingState booking) async {
+    if (_bookingBusy) return;
+    setState(() => _bookingBusy = true);
+    try {
+      await _deskApi
+          .deleteBooking(booking)
+          .timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      setState(() {
+        _bookings = _bookings
+            .where((item) => item.serviceDate != booking.serviceDate)
+            .toList(growable: false);
+        _bookingBusy = false;
+      });
+      await _loadPublicState();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.localization.t('booking_deleted'))),
+      );
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('REQUEST TIMEOUT')),
+      );
+    } on PublicDeskException catch (error) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  }
+
+  void _clearFinishedBooking(DeskBookingState booking) {
+    _deskApi.clearSavedBooking(booking.serviceDate);
+    setState(() {
+      _bookings = _bookings
+          .where((item) => item.serviceDate != booking.serviceDate)
+          .toList(growable: false);
+    });
+  }
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('app shell booking methods mismatch')
+
+          # replace availability method whole.
+          pattern = r'  Widget _availability\(bool compact\) \{.*?(?=\n  Widget _prices\(bool compact\) \{)'
+          new = r'''  Widget _availability(bool compact) {
+    final status = _liveStatus ?? _content.status;
+    final todayDate = status.todayDate.isEmpty ? _serviceDateForOffset(0) : status.todayDate;
+    final tomorrowDate = status.tomorrowDate.isEmpty ? _serviceDateForOffset(1) : status.tomorrowDate;
+    final todayBooking = _bookingFor(todayDate);
+    final tomorrowBooking = _bookingFor(tomorrowDate);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionKicker(widget.localization.t('availability_kicker')),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('${status.free}', style: _serif(compact ? 86 : 116, height: 0.78)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Text(
+                  widget.localization.t(status.free == 1 ? 'desk_free' : 'desks_free'),
+                  style: _serif(compact ? 23 : 30, height: 0.96),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        _OccupancyMarks(total: status.total, occupied: status.occupied),
+        const SizedBox(height: 12),
+        Text(
+          '${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
+          style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
+        ),
+        const SizedBox(height: 26),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _PaperButton(
+                label: widget.localization.t('booking_today'),
+                detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
+                icon: Icons.today_outlined,
+                filled: true,
+                onPressed: _bookingBusy || todayBooking != null || status.free <= 0
+                    ? null
+                    : () => _requestDesk(todayDate),
+              ),
+            ),
+            Expanded(
+              child: _PaperButton(
+                label: widget.localization.t('booking_tomorrow'),
+                detail: _bookingBusy
+                    ? '…'
+                    : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
+                icon: Icons.event_outlined,
+                onPressed: _bookingBusy || tomorrowBooking != null || status.tomorrowFree <= 0
+                    ? null
+                    : () => _requestDesk(tomorrowDate),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.localization.t('half_day_note'),
+          style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.35),
+        ),
+        if (todayBooking != null) ...[
+          const SizedBox(height: 16),
+          _bookingCard(todayBooking, false),
+        ],
+        if (tomorrowBooking != null) ...[
+          const SizedBox(height: 10),
+          _bookingCard(tomorrowBooking, true),
+        ],
+      ],
+    );
+  }
+
+  Widget _bookingCard(DeskBookingState booking, bool tomorrow) {
+    final bookingStatusKey = booking.accepted
+        ? 'booking_accepted'
+        : booking.declined
+            ? 'booking_declined'
+            : booking.cancelled
+                ? 'booking_cancelled'
+                : 'booking_pending';
+    final bookingIcon = booking.accepted
+        ? Icons.check_circle_outline
+        : booking.declined
+            ? Icons.cancel_outlined
+            : booking.cancelled
+                ? Icons.block_outlined
+                : Icons.hourglass_top_outlined;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: booking.accepted ? BrandPalette.paperDeep : BrandPalette.paperLift,
+        border: Border.all(color: BrandPalette.ink),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(bookingIcon, size: 24),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  '${widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today')} · ${widget.localization.t(bookingStatusKey)}',
+                  style: _mono(11.5, spacing: 0.55),
+                ),
+              ),
+              Text(_moneyLabel(booking.amountVnd), style: _serif(18)),
+            ],
+          ),
+          if (booking.telegramLinked) ...[
+            const SizedBox(height: 10),
+            Text(widget.localization.t('booking_telegram_connected'), style: _mono(9, color: BrandPalette.inkMuted)),
+          ] else if (booking.canConnectTelegram && !booking.finished) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _connectBookingTelegram(booking),
+              icon: const Icon(Icons.send_outlined, size: 17),
+              label: Text(widget.localization.t('booking_connect_telegram'), style: _mono(9.5)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BrandPalette.ink,
+                minimumSize: const Size.fromHeight(46),
+                side: const BorderSide(color: BrandPalette.ink),
+                shape: const RoundedRectangleBorder(),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _bookingBusy
+                ? null
+                : booking.finished
+                    ? () => _clearFinishedBooking(booking)
+                    : () => _deleteDeskRequest(booking),
+            icon: Icon(booking.finished ? Icons.refresh : Icons.close, size: 17),
+            label: Text(
+              _bookingBusy
+                  ? '…'
+                  : widget.localization.t(booking.finished ? 'booking_again' : 'booking_delete'),
+              style: _mono(9.5),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BrandPalette.ink,
+              minimumSize: const Size.fromHeight(46),
+              side: const BorderSide(color: BrandPalette.ink),
+              shape: const RoundedRectangleBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _moneyLabel(int value) {
+    if (value % 1000000 == 0) return '${value ~/ 1000000} MLN VND';
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)} MLN VND';
+    if (value % 1000 == 0) return '${value ~/ 1000}K VND';
+    return '$value VND';
+  }
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('app shell availability mismatch')
+
+          # booking dialog service day and title.
+          text = text.replace(
+              '    required this.onTelegram,\n  });\n\n  final LocalizationController localization;\n  final VoidCallback onTelegram;',
+              '    required this.onTelegram,\n    required this.serviceDate,\n    required this.isTomorrow,\n  });\n\n  final LocalizationController localization;\n  final VoidCallback onTelegram;\n  final String serviceDate;\n  final bool isTomorrow;',
+              1,
+          )
+          text = text.replace(
+              "        contactValue: phone,\n      ),",
+              "        contactValue: phone,\n        serviceDate: widget.serviceDate,\n      ),",
+              1,
+          )
+          text = text.replace(
+              "      title: Text(l.t('booking_title'), style: _serif(30)),",
+              "      title: Text(l.t(widget.isTomorrow ? 'booking_title_tomorrow' : 'booking_title_today'), style: _serif(30)),",
+              1,
+          )
+          path.write_text(text)
+
+          # localization.dart
+          path = Path('lib/localization.dart')
+          text = path.read_text()
+          additions = {
+              "      'availability_action': 'GET A DESK TODAY',\n": "      'availability_action': 'GET A DESK TODAY',\n      'booking_today': 'TODAY',\n      'booking_tomorrow': 'TOMORROW',\n      'booking_title_today': 'GET A DESK TODAY',\n      'booking_title_tomorrow': 'GET A DESK TOMORROW',\n      'free_short': 'FREE',\n      'half_day_note': 'HALF DAY AFTER 16:00 · TODAY ONLY 100K VND',\n",
+              "      'availability_action': 'ЗАБРОНИРОВАТЬ СТОЛ',\n": "      'availability_action': 'ЗАБРОНИРОВАТЬ СТОЛ',\n      'booking_today': 'СЕГОДНЯ',\n      'booking_tomorrow': 'ЗАВТРА',\n      'booking_title_today': 'ЗАБРОНИРОВАТЬ СТОЛ НА СЕГОДНЯ',\n      'booking_title_tomorrow': 'ЗАБРОНИРОВАТЬ СТОЛ НА ЗАВТРА',\n      'free_short': 'СВОБ.',\n      'half_day_note': 'ПОЛДНЯ ПОСЛЕ 16:00 · СЕГОДНЯ ТОЛЬКО 100K VND',\n",
+              "      'availability_action': 'ĐẶT BÀN HÔM NAY',\n": "      'availability_action': 'ĐẶT BÀN HÔM NAY',\n      'booking_today': 'HÔM NAY',\n      'booking_tomorrow': 'NGÀY MAI',\n      'booking_title_today': 'ĐẶT BÀN HÔM NAY',\n      'booking_title_tomorrow': 'ĐẶT BÀN NGÀY MAI',\n      'free_short': 'TRỐNG',\n      'half_day_note': 'NỬA NGÀY SAU 16:00 · HÔM NAY CHỈ 100K VND',\n",
+              "      'prices_title': 'THREE SIMPLE PRICES',\n": "      'prices_title': 'SIMPLE PRICES',\n      'price_half_day': 'HALF DAY · AFTER 16:00',\n",
+              "      'prices_title': 'ТРИ ПРОСТЫЕ ЦЕНЫ',\n": "      'prices_title': 'ПРОСТЫЕ ЦЕНЫ',\n      'price_half_day': 'ПОЛДНЯ · ПОСЛЕ 16:00',\n",
+              "      'prices_title': 'BA MỨC GIÁ ĐƠN GIẢN',\n": "      'prices_title': 'BẢNG GIÁ',\n      'price_half_day': 'NỬA NGÀY · SAU 16:00',\n",
+          }
+          for old, new in additions.items():
+              text = replace_once(text, old, new, f'localization {old[:20]}')
+          path.write_text(text)
+
+          # status.json half day row.
+          path = Path('assets/content/status.json')
+          text = path.read_text()
+          text = text.replace(
+              '    {"label_key": "price_day_pass", "price": "200K VND"},\n',
+              '    {"label_key": "price_day_pass", "price": "200K VND"},\n    {"label_key": "price_half_day", "price": "100K VND"},\n',
+              1,
+          )
+          path.write_text(text)
+
+          # admin_api_models.dart
+          path = Path('lib/admin_api_models.dart')
+          text = path.read_text()
+          old = """class BookingRequestRecord {
+  const BookingRequestRecord({
+    required this.id,
+    required this.name,
+    required this.contactType,
+    required this.contactValue,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String name;
+  final String contactType;
+  final String contactValue;
+  final int createdAt;
+
+  factory BookingRequestRecord.fromJson(Map<String, dynamic> json) {
+    return BookingRequestRecord(
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      contactType: json['contact_type']?.toString() ?? '',
+      contactValue: json['contact_value']?.toString() ?? '',
+      createdAt: _asInt(json['created_at']) ?? 0,
+    );
+  }
+}
+"""
+          new = """class BookingRequestRecord {
+  const BookingRequestRecord({
+    required this.id,
+    required this.name,
+    required this.contactType,
+    required this.contactValue,
+    required this.createdAt,
+    required this.status,
+    required this.serviceDay,
+    required this.amountVnd,
+    this.handledAt,
+    this.handledByEmail,
+  });
+
+  final int id;
+  final String name;
+  final String contactType;
+  final String contactValue;
+  final int createdAt;
+  final String status;
+  final int serviceDay;
+  final int amountVnd;
+  final int? handledAt;
+  final String? handledByEmail;
+
+  bool get accepted => status == 'accepted';
+
+  factory BookingRequestRecord.fromJson(Map<String, dynamic> json) {
+    return BookingRequestRecord(
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      contactType: json['contact_type']?.toString() ?? '',
+      contactValue: json['contact_value']?.toString() ?? '',
+      createdAt: _asInt(json['created_at']) ?? 0,
+      status: json['status']?.toString() ?? 'new',
+      serviceDay: _asInt(json['service_day']) ?? 0,
+      amountVnd: _asInt(json['amount_vnd']) ?? 200000,
+      handledAt: _asInt(json['handled_at']),
+      handledByEmail: json['handled_by_email']?.toString(),
+    );
+  }
+}
+"""
+          text = replace_once(text, old, new, 'admin booking model')
+          path.write_text(text)
+
+          # admin_screen.dart: dynamic half-day quick add + rich acknowledgements and accepted tomorrow rows.
+          path = Path('lib/admin_screen.dart')
+          text = path.read_text()
+          text = text.replace("            subtitle: '200K VND',", "            subtitle: _money(_currentDayPassAmount()),", 1)
+          old = """  Future<void> _acceptBooking(BookingRequestRecord booking) async {
+    await _apply(
+      () => widget.api.acceptBooking(booking.id),
+      success: t(
+        'Клиент добавлен на сегодня',
+        'Customer added for today',
+      ),
+    );
+  }
+
+  Future<void> _declineBooking(BookingRequestRecord booking) async {
+    await _apply(
+      () => widget.api.declineBooking(booking.id),
+      success: t('Запрос отклонён', 'Request declined'),
+    );
+  }
+"""
+          new = """  Future<void> _acceptBooking(BookingRequestRecord booking) async {
+    await _apply(
+      () => widget.api.acceptBooking(booking.id),
+      success: '${t('ПРИНЯТО', 'ACCEPTED')} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)}',
+    );
+  }
+
+  Future<void> _declineBooking(BookingRequestRecord booking) async {
+    await _apply(
+      () => widget.api.declineBooking(booking.id),
+      success: '${t('ОТКЛОНЕНО', 'DECLINED')} · ${_bookingDayLabel(booking)} · ${_money(booking.amountVnd)}',
+    );
+  }
+"""
+          text = replace_once(text, old, new, 'admin accept acknowledgement')
+
+          # Replace booking section in today with two groups.
+          old = """      if (snapshot.bookingRequests.isNotEmpty) ...[
+        const SizedBox(height: 28),
+        _sectionTitle(
+          '${t('ЗАПРОСЫ С САЙТА', 'WEBSITE REQUESTS')} · ${snapshot.bookingRequests.length}',
+        ),
+        ...snapshot.bookingRequests.map(_bookingRow),
+      ],
+"""
+          new = """      if (snapshot.bookingRequests.isNotEmpty) ...[
+        const SizedBox(height: 28),
+        _bookingGroup(snapshot.bookingRequests, tomorrow: false),
+        const SizedBox(height: 20),
+        _bookingGroup(snapshot.bookingRequests, tomorrow: true),
+      ],
+"""
+          text = replace_once(text, old, new, 'admin booking groups')
+
+          pattern = r'  Widget _bookingRow\(BookingRequestRecord booking\) \{.*?(?=\n  Widget _month\()'
+          new = r'''  Widget _bookingGroup(
+    List<BookingRequestRecord> bookings, {
+    required bool tomorrow,
+  }) {
+    final rows = bookings
+        .where((booking) => _isTomorrowBooking(booking) == tomorrow)
+        .toList(growable: false);
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final title = tomorrow
+        ? t('БРОНИ НА ЗАВТРА', 'TOMORROW BOOKINGS')
+        : t('БРОНИ НА СЕГОДНЯ', 'TODAY BOOKINGS');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionTitle('$title · ${rows.length}'),
+        ...rows.map(_bookingRow),
+      ],
+    );
+  }
+
+  Widget _bookingRow(BookingRequestRecord booking) {
+    final type = booking.contactType == 'telegram' ? 'TG' : t('ТЕЛ', 'PHONE');
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(booking.name, style: _serif(19)),
+                const SizedBox(height: 5),
+                Text(
+                  '$type · ${booking.contactValue} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)} · ${_time(booking.createdAt)}',
+                  style: _mono(9.5, color: BrandPalette.inkMuted),
+                ),
+                if (booking.accepted && (booking.handledByEmail?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    '${t('ПРИНЯТО', 'ACCEPTED')} · ${booking.handledByEmail}',
+                    style: _mono(9, color: BrandPalette.inkMuted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (booking.accepted)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: BrandPalette.ink,
+                border: Border.all(color: BrandPalette.ink),
+              ),
+              child: Text(
+                t('ПРИНЯТО', 'ACCEPTED'),
+                style: _mono(9, color: BrandPalette.paperLift),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              alignment: WrapAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _declineBooking(booking),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(0, 42),
+                    side: const BorderSide(color: BrandPalette.ink),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: Text(t('ОТКЛОНИТЬ', 'DECLINE'), style: _mono(9)),
+                ),
+                FilledButton(
+                  onPressed: _busy ? null : () => _acceptBooking(booking),
+                  style: _darkButton(minHeight: 42),
+                  child: Text(
+                    '${t('ПРИНЯТЬ', 'ACCEPT')} · ${_money(booking.amountVnd)}',
+                    style: _mono(9.5, color: BrandPalette.paperLift),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool _isTomorrowBooking(BookingRequestRecord booking) {
+    final local = DateTime.fromMillisecondsSinceEpoch(
+      booking.serviceDay * 1000,
+      isUtc: true,
+    ).add(const Duration(hours: 7));
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    return local.year == tomorrow.year &&
+        local.month == tomorrow.month &&
+        local.day == tomorrow.day;
+  }
+
+  String _bookingDayLabel(BookingRequestRecord booking) =>
+      _isTomorrowBooking(booking) ? t('ЗАВТРА', 'TOMORROW') : t('СЕГОДНЯ', 'TODAY');
+
+  int _currentDayPassAmount() {
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    return now.hour >= 16 ? 100000 : 200000;
+  }
+'''
+          text, count = re.subn(pattern, new.rstrip() + '\n', text, count=1, flags=re.S)
+          if count != 1: raise SystemExit('admin booking row mismatch')
+
+          text = text.replace(
+              "      _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', '200K VND'),\n",
+              "      _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', '200K VND'),\n      _row(t('ПОЛДНЯ · ПОСЛЕ 16:00', 'HALF DAY · AFTER 16:00'), '', '100K VND'),\n",
+              1,
+          )
+          path.write_text(text)
+
+          # CI runs both node test suites.
+          path = Path('.github/workflows/web-ci.yml')
+          text = path.read_text()
+          text = text.replace(
+              '      - name: Test Telegram bot helpers\n        run: node --test worker/telegram_test.mjs\n',
+              '      - name: Test Worker booking and Telegram helpers\n        run: node --test worker/telegram_test.mjs worker/booking_rules_test.mjs\n',
+              1,
+          )
+          text = text.replace(
+              '          node --check worker/telegram.js\n',
+              '          node --check worker/telegram.js\n          node --check worker/booking_rules.js\n',
+              1,
+          )
+          path.write_text(text)
+
+          # Dart contract test.
+          Path('test/booking_service_day_contract_test.dart').write_text(r'''import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('booking service day migration and backend contract stay wired', () {
+    final migration = File('migrations/0008_booking_service_day.sql').readAsStringSync();
+    final entry = File('worker/entry.js').readAsStringSync();
+    final telegram = File('worker/telegram.js').readAsStringSync();
+    expect(migration, contains('service_day'));
+    expect(migration, contains('amount_vnd'));
+    expect(entry, contains('todayPrice: dayPassAmount(today, now)'));
+    expect(entry, contains('tomorrowPrice: dayPassAmount(tomorrow, now)'));
+    expect(entry, contains('serviceDayFromDateKey(body.serviceDate)'));
+    expect(telegram, contains('visitTimestampForServiceDay'));
+    expect(telegram, contains('service_day, amount_vnd'));
+  });
+
+  test('public UI exposes joined today and tomorrow booking choices', () {
+    final shell = File('lib/app_shell.dart').readAsStringSync();
+    final localization = File('lib/localization.dart').readAsStringSync();
+    expect(shell, contains("widget.localization.t('booking_today')"));
+    expect(shell, contains("widget.localization.t('booking_tomorrow')"));
+    expect(shell, contains("widget.localization.t('half_day_note')"));
+    expect(shell, contains('_bookingFor(todayDate)'));
+    expect(shell, contains('_bookingFor(tomorrowDate)'));
+    expect(localization, contains("'price_half_day': 'HALF DAY · AFTER 16:00'"));
+    expect(localization, contains("'price_half_day': 'ПОЛДНЯ · ПОСЛЕ 16:00'"));
+    expect(localization, contains("'price_half_day': 'NỬA NGÀY · SAU 16:00'"));
+  });
+
+  test('admin acknowledgement includes service day and locked amount', () {
+    final models = File('lib/admin_api_models.dart').readAsStringSync();
+    final screen = File('lib/admin_screen.dart').readAsStringSync();
+    expect(models, contains('required this.serviceDay'));
+    expect(models, contains('required this.amountVnd'));
+    expect(screen, contains('_bookingDayLabel(booking)'));
+    expect(screen, contains('_money(booking.amountVnd)'));
+    expect(screen, contains("t('ПРИНЯТО', 'ACCEPTED')"));
+  });
+
+  test('old created-at midnight expiry is removed from active booking paths', () {
+    final entry = File('worker/entry.js').readAsStringSync();
+    final telegram = File('worker/telegram.js').readAsStringSync();
+    expect(entry, contains('serviceDay < today || serviceDay >= end'));
+    expect(telegram, contains('isBookableServiceDay(serviceDay, now)'));
+    expect(telegram, contains("service_day = ?"));
+  });
+}
+''')
+          PY
+      - name: Verify syntax before commit
+        run: |
+          node --check worker/booking_rules.js
+          node --check worker/entry.js
+          node --check worker/index.js
+          node --check worker/telegram.js
+          node --test worker/booking_rules_test.mjs
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/entry.js worker/index.js worker/telegram.js lib/coworking_model.dart lib/public_desk_models.dart lib/public_desk_web.dart lib/app_shell.dart lib/localization.dart assets/content/status.json lib/admin_api_models.dart lib/admin_screen.dart .github/workflows/web-ci.yml test/booking_service_day_contract_test.dart
+          git rm .github/workflows/implement-two-day-booking.yml
+          git commit -m "Add today and tomorrow desk booking operations"
+          git push origin HEAD:feature/kindle-admin-foundation
