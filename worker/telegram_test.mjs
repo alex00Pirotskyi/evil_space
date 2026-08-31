@@ -17,7 +17,7 @@ test('Telegram commands parse arguments and bot mentions', () => {
 
 test('Telegram money labels match the admin product prices', () => {
   assert.equal(telegramTest.formatMoney(0), '0 VND');
-  assert.equal(telegramTest.formatMoney(250000), '250K VND');
+  assert.equal(telegramTest.formatMoney(200000), '200K VND');
   assert.equal(telegramTest.formatMoney(2500000), '2.5 MLN VND');
 });
 
