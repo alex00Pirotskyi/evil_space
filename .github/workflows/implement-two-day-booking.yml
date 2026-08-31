@@ -24,6 +24,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install dependencies
+        run: flutter pub get
+
       - name: Remove superseded booking implementation
         run: |
           python3 - <<'PY'
@@ -50,9 +53,15 @@ jobs:
           path.write_text(text)
           PY
           dart format lib/app_shell.dart
-
-      - name: Install dependencies
-        run: flutter pub get
+          dart fix --apply
+          dart format lib/app_shell.dart
+          python3 - <<'PY'
+          import subprocess
+          changed = subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines()
+          unexpected = [p for p in changed if p != 'lib/app_shell.dart']
+          if unexpected:
+              raise SystemExit('dart fix touched unexpected files: ' + ', '.join(unexpected))
+          PY
 
       - name: Verify Worker and booking rules
         run: |
