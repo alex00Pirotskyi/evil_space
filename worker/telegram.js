@@ -42,6 +42,10 @@ const TEXT = {
     openSite: 'OPEN EVIL SPACE',
     cancelBooking: 'CANCEL BOOKING',
     cancelRequest: 'CANCEL REQUEST',
+    cancelConfirm: 'Cancel this desk request?',
+    confirmCancel: 'YES, CANCEL',
+    keepBooking: 'KEEP BOOKING',
+    bookingKept: 'Booking kept.',
     directions: 'DIRECTIONS',
     wifi: 'WI-FI',
     copyNetwork: 'COPY NETWORK',
@@ -138,6 +142,10 @@ const TEXT = {
     openSite: 'ОТКРЫТЬ EVIL SPACE',
     cancelBooking: 'ОТМЕНИТЬ БРОНЬ',
     cancelRequest: 'ОТМЕНИТЬ ЗАПРОС',
+    cancelConfirm: 'Отменить этот запрос на стол?',
+    confirmCancel: 'ДА, ОТМЕНИТЬ',
+    keepBooking: 'ОСТАВИТЬ БРОНЬ',
+    bookingKept: 'Бронь сохранена.',
     directions: 'МАРШРУТ',
     wifi: 'WI-FI',
     copyNetwork: 'КОПИРОВАТЬ СЕТЬ',
@@ -234,6 +242,10 @@ const TEXT = {
     openSite: 'MỞ EVIL SPACE',
     cancelBooking: 'HỦY ĐẶT BÀN',
     cancelRequest: 'HỦY YÊU CẦU',
+    cancelConfirm: 'Hủy yêu cầu đặt bàn này?',
+    confirmCancel: 'CÓ, HỦY',
+    keepBooking: 'GIỮ ĐẶT BÀN',
+    bookingKept: 'Đã giữ đặt bàn.',
     directions: 'CHỈ ĐƯỜNG',
     wifi: 'WI-FI',
     copyNetwork: 'SAO CHÉP MẠNG',
@@ -715,7 +727,7 @@ async function handleCallback(env, callback) {
       return sendAdminMenu(env, await linkedAdmin(env, userId), chatId);
     }
 
-    if (data.startsWith('cc:') || data.startsWith('cw:')) {
+    if (data.startsWith('cc:') || data.startsWith('cf:') || data.startsWith('ck:') || data.startsWith('cw:')) {
       await handleCustomerCallback(env, callback, userId, chatId, data);
       return;
     }
@@ -884,10 +896,24 @@ async function handleCustomerCallback(env, callback, userId, chatId, data) {
   }
 
   if (data.startsWith('cc:')) {
+    if (!['new', 'accepted'].includes(booking.status)) {
+      return answerCallback(env, callback.id, 'This booking can no longer be cancelled.', true);
+    }
+    await answerCallback(env, callback.id);
+    await sendCustomerCancelConfirmation(env, chatId, booking.id, lang);
+    return;
+  }
+
+  if (data.startsWith('ck:')) {
+    await answerCallback(env, callback.id, tr(lang, 'bookingKept'));
+    await sendCustomerHome(env, customer, chatId);
+    return;
+  }
+
+  if (data.startsWith('cf:')) {
     try {
       const cancelled = await cancelBookingRecord(env, booking, 'telegram');
       await answerCallback(env, callback.id, tr(lang, 'bookingCancelledCallback'));
-      await sendCustomerCancelled(env, chatId, lang);
       await notifyBookingOutcome(env, cancelled.id, 'cancelled');
     } catch (error) {
       await answerCallback(env, callback.id, userMessage(error), true);
@@ -1780,6 +1806,21 @@ async function sendCustomerPending(env, chatId, bookingId, language, connected =
         [{ text: tr(lang, 'cancelRequest'), callback_data: `cc:${bookingId}` }],
         [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
       ],
+    },
+  });
+}
+
+async function sendCustomerCancelConfirmation(env, chatId, bookingId, language) {
+  const lang = normalizeLanguage(language);
+  await telegramApi(env, 'sendMessage', {
+    chat_id: chatId,
+    text: `⚠️ <b>${tr(lang, 'cancelConfirm')}</b>`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [[
+        { text: `❌ ${tr(lang, 'confirmCancel')}`, callback_data: `cf:${bookingId}` },
+        { text: `✅ ${tr(lang, 'keepBooking')}`, callback_data: `ck:${bookingId}` },
+      ]],
     },
   });
 }

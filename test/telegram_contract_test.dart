@@ -79,6 +79,46 @@ void main() {
       expect(telegram, contains('notifyAdminsNewBooking(env, created.id)'));
     });
 
+    test('customer cancellation requires a second explicit tap', () {
+      expect(
+        telegram,
+        contains(
+          "if (data.startsWith('cc:') || data.startsWith('cf:') || data.startsWith('ck:') || data.startsWith('cw:'))",
+        ),
+      );
+      expect(telegram, contains('sendCustomerCancelConfirmation'));
+      expect(telegram, contains('callback_data: `cf:${bookingId}`'));
+      expect(telegram, contains('callback_data: `ck:${bookingId}`'));
+
+      final ask = telegram.indexOf("if (data.startsWith('cc:')) {");
+      final confirm = telegram.indexOf("if (data.startsWith('cf:')) {", ask);
+      expect(ask, greaterThanOrEqualTo(0));
+      expect(confirm, greaterThan(ask));
+      expect(
+        telegram.substring(ask, confirm),
+        isNot(contains('cancelBookingRecord')),
+      );
+
+      final wifi = telegram.indexOf(
+        "if (booking.status !== 'accepted')",
+        confirm,
+      );
+      expect(wifi, greaterThan(confirm));
+      final confirmedCancel = telegram.substring(confirm, wifi);
+      expect(
+        confirmedCancel,
+        contains("cancelBookingRecord(env, booking, 'telegram')"),
+      );
+      expect(
+        confirmedCancel,
+        contains("notifyBookingOutcome(env, cancelled.id, 'cancelled')"),
+      );
+      expect(
+        confirmedCancel,
+        isNot(contains('sendCustomerCancelled(env, chatId, lang)')),
+      );
+    });
+
     test('Wi-Fi and bot credentials are runtime secrets, never constants', () {
       expect(telegram, contains('env.TELEGRAM_BOT_TOKEN'));
       expect(telegram, contains('env.WIFI_PASSWORD'));
