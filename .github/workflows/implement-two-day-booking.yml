@@ -1,4 +1,4 @@
-name: Finalize two-day booking
+name: Finalize two-day booking compile
 
 on:
   push:
@@ -17,7 +17,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/kindle-admin-foundation
-          fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
         with:
@@ -25,10 +24,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Final client cleanup
+      - name: Remove superseded booking implementation
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -36,27 +32,27 @@ jobs:
           path = Path('lib/app_shell.dart')
           text = path.read_text()
 
-          legacy = '  Future<void> _launchTelegramBooking() async {'
-          start = text.find(legacy)
+          start = text.find('  Future<void> _launchTelegramBooking() async {')
           if start < 0:
-              raise SystemExit('legacy booking block was not found')
+              raise SystemExit('legacy booking block not found')
           end = text.find('  @override\n  Widget build(BuildContext context)', start)
           if end < 0:
-              raise SystemExit('end of legacy booking block was not found')
+              raise SystemExit('legacy booking block end not found')
           text = text[:start] + text[end:]
 
-          price_start = text.find('  SitePrice _priceFor(String key) {')
-          if price_start >= 0:
-              price_end = text.find('\n  String _updatedLabel(', price_start)
-              if price_end < 0:
-                  raise SystemExit('end of unused price helper was not found')
-              text = text[:price_start] + text[price_end + 1:]
+          start = text.find('  SitePrice _priceFor(String key) {')
+          if start >= 0:
+              end = text.find('  String _updatedLabel(', start)
+              if end < 0:
+                  raise SystemExit('unused price helper end not found')
+              text = text[:start] + text[end:]
 
           path.write_text(text)
           PY
           dart format lib/app_shell.dart
-          dart fix --apply lib/app_shell.dart
-          dart format lib/app_shell.dart
+
+      - name: Install dependencies
+        run: flutter pub get
 
       - name: Verify Worker and booking rules
         run: |
@@ -80,10 +76,10 @@ jobs:
           node --check build/web/flutter_bootstrap.js
           dart run tool/verify_release.dart build/web
 
-      - name: Commit verified cleanup
+      - name: Commit verified fix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/app_shell.dart
-          git commit -m "Finalize two-day booking client flow"
+          git commit -m "Remove superseded single-day booking flow"
           git push origin HEAD:feature/kindle-admin-foundation
