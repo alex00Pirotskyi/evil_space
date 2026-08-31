@@ -1,6 +1,6 @@
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const BOT_USERNAME = 'CoworkingEvilAdminBot';
-const DAY_PASS_VND = 250000;
+const DAY_PASS_VND = 200000;
 const MONTH_PASS_VND = 2500000;
 const ADMIN_LINK_TTL = 10 * 60;
 const CUSTOMER_LINK_TTL = 6 * 60 * 60;
@@ -1306,7 +1306,7 @@ async function prepareNamedOperation(env, admin, chatId, state, value) {
   return sendText(
     env,
     chatId,
-    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : '250K VND'}\n\n${tr(lang, 'confirmQuestion')}`,
+    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : '200K VND'}\n\n${tr(lang, 'confirmQuestion')}`,
     {
       inline_keyboard: [[
         { text: tr(lang, 'confirm'), callback_data: isMonth ? 'op:month:ok' : 'op:day:ok' },
