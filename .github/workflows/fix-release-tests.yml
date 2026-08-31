@@ -1,0 +1,97 @@
+name: Fix release test failures
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/fix-release-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Patch layout and stale tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('lib/app_shell.dart')
+          text = app.read_text()
+          old = "Row(\ncrossAxisAlignment: CrossAxisAlignment.stretch,\nchildren: ["
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one unbounded stretched booking row, found {text.count(old)}')
+          text = text.replace(old, "Row(\nchildren: [", 1)
+          app.write_text(text)
+
+          language_gate = Path('test/language_gate_test.dart')
+          text = language_gate.read_text()
+          old = "expect(find.text('ТРИ ПРОСТЫЕ ЦЕНЫ'), findsOneWidget);"
+          new = "expect(find.text('ПРОСТЫЕ ЦЕНЫ'), findsOneWidget);"
+          if old not in text:
+              raise SystemExit('old Russian prices title expectation not found')
+          language_gate.write_text(text.replace(old, new, 1))
+
+          smoke = Path('test/web_app_smoke_test.dart')
+          text = smoke.read_text()
+          old = "find.text('GET A DESK TODAY')"
+          if text.count(old) != 2:
+              raise SystemExit(f'expected two old booking trigger finders, found {text.count(old)}')
+          smoke.write_text(text.replace(old, "find.text('TODAY')"))
+
+          widget = Path('test/widget_test.dart')
+          text = widget.read_text()
+          if text.count("'THREE SIMPLE PRICES'") != 2:
+              raise SystemExit('unexpected English prices-title expectation count')
+          text = text.replace("'THREE SIMPLE PRICES'", "'SIMPLE PRICES'")
+          if "'BA MỨC GIÁ ĐƠN GIẢN'" not in text:
+              raise SystemExit('old Vietnamese prices-title expectation not found')
+          text = text.replace("'BA MỨC GIÁ ĐƠN GIẢN'", "'BẢNG GIÁ'", 1)
+          old_prices = "          '200K VND',\n          '2.5 MLN VND',\n          '1 MLN VND / MONTH',"
+          new_prices = "          '200K VND',\n          '100K VND',\n          '2.5 MLN VND',\n          '1 MLN VND / MONTH',"
+          if old_prices not in text:
+              raise SystemExit('old demo price expectation not found')
+          widget.write_text(text.replace(old_prices, new_prices, 1))
+          PY
+          dart format lib/app_shell.dart test/language_gate_test.dart test/web_app_smoke_test.dart test/widget_test.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Test
+        run: flutter test --no-pub
+
+      - name: Build optimized Wasm web
+        run: flutter build web --release --wasm --no-pub --dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
+
+      - name: Verify release
+        run: |
+          node --check worker/index.js
+          node --check worker/entry.js
+          node --check worker/telegram.js
+          node --check build/web/flutter_bootstrap.js
+          dart run tool/verify_release.dart build/web
+
+      - name: Commit verified repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/app_shell.dart test/language_gate_test.dart test/web_app_smoke_test.dart test/widget_test.dart
+          git commit -m "Fix release layout and booking tests"
+          git push origin HEAD:feature/kindle-admin-foundation
