@@ -90,3 +90,5 @@ jobs:
           git add lib/app_shell.dart
           git commit -m "Remove superseded single-day booking flow"
           git push origin HEAD:feature/kindle-admin-foundation
+
+# Final verification rerun after service-day Telegram contract update.
