@@ -145,6 +145,22 @@ void main() {
       expect(api, contains("'/api/admin/booking/decline'"));
     });
 
+    test('admin display uses the same 200K day pass price', () {
+      final screen = File('lib/admin_screen.dart').readAsStringSync();
+      expect(screen, contains("'200K VND'"));
+      expect(screen, isNot(contains("'250K VND'")));
+    });
+
+    test('public pricing includes the monthly personal locker', () {
+      final content = File('assets/content/status.json').readAsStringSync();
+      final localization = File('lib/localization.dart').readAsStringSync();
+      expect(content, contains('"price_locker"'));
+      expect(content, contains('"1 MLN VND / MONTH"'));
+      expect(localization, contains("'price_locker': 'PERSONAL LOCKER'"));
+      expect(localization, contains("'price_locker': 'ЛИЧНЫЙ ШКАФЧИК'"));
+      expect(localization, contains("'price_locker': 'TỦ CÁ NHÂN'"));
+    });
+
     test('admin Telegram pairing receives the selected web language', () {
       final router = File('lib/app_router.dart').readAsStringSync();
       final portal = File('lib/admin_portal.dart').readAsStringSync();
