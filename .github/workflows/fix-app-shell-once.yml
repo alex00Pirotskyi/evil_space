@@ -26,17 +26,13 @@ jobs:
 
           path = Path('lib/app_shell.dart')
           text = path.read_text(encoding='utf-8')
-          block = """  SitePrice _priceFor(String key) {
-            for (final price in _content.prices) {
-              if (price.labelKey == key) return price;
-            }
-            return SiteContent.demo.prices.first;
-          }
-
-          """
-          if block not in text:
+          start_marker = '  SitePrice _priceFor(String key) {'
+          end_marker = '  String _updatedLabel(String raw) {'
+          if start_marker not in text:
               raise SystemExit('_priceFor helper not found')
-          text = text.replace(block, '', 1)
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          text = text[:start] + text[end:]
           if '_priceFor(' in text:
               raise SystemExit('_priceFor still present')
           path.write_text(text, encoding='utf-8')
