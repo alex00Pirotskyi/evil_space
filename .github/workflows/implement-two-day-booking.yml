@@ -25,26 +25,38 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Remove superseded single-booking block
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Final client cleanup
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
           path = Path('lib/app_shell.dart')
           text = path.read_text()
-          marker = '  Future<void> _launchTelegramBooking() async {'
-          start = text.find(marker)
+
+          legacy = '  Future<void> _launchTelegramBooking() async {'
+          start = text.find(legacy)
           if start < 0:
               raise SystemExit('legacy booking block was not found')
           end = text.find('  @override\n  Widget build(BuildContext context)', start)
           if end < 0:
               raise SystemExit('end of legacy booking block was not found')
-          path.write_text(text[:start] + text[end:])
+          text = text[:start] + text[end:]
+
+          price_start = text.find('  SitePrice _priceFor(String key) {')
+          if price_start >= 0:
+              price_end = text.find('\n  String _updatedLabel(', price_start)
+              if price_end < 0:
+                  raise SystemExit('end of unused price helper was not found')
+              text = text[:price_start] + text[price_end + 1:]
+
+          path.write_text(text)
           PY
           dart format lib/app_shell.dart
-
-      - name: Install dependencies
-        run: flutter pub get
+          dart fix --apply lib/app_shell.dart
+          dart format lib/app_shell.dart
 
       - name: Verify Worker and booking rules
         run: |
