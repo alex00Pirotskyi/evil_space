@@ -143,8 +143,9 @@ class SiteContent {
   static const SiteContent demo = SiteContent(
     status: SiteStatus(total: 10, occupied: 0, updated: 'DEMO'),
     prices: [
-      SitePrice(labelKey: 'price_day_pass', price: '250K VND'),
+      SitePrice(labelKey: 'price_day_pass', price: '200K VND'),
       SitePrice(labelKey: 'price_month', price: '2.5 MLN VND'),
+      SitePrice(labelKey: 'price_locker', price: '1 MLN VND / MONTH'),
     ],
     announcements: [
       SiteAnnouncement(
