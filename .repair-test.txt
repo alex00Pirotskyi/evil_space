@@ -1,0 +1,327 @@
+
+::group::✅ Passing tests
+✅ /home/runner/work/evil_space/evil_space/test/telegram_start_booking_contract_test.dart: Telegram booking start creates or restores date-aware booking
+::endgroup::
+::group::❌ /home/runner/work/evil_space/evil_space/test/admin_route_input_test.dart: admin route isolates text fields from public selection layer (failed)
+══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞═════════════════════════════════════════════════════════
+The following assertion was thrown during layout:
+A RenderFlex overflowed by 45 pixels on the right.
+
+The overflowing RenderFlex has an orientation of Axis.horizontal.
+The edge of the RenderFlex that is overflowing has been marked in the rendering with a yellow and
+black striped pattern. This is usually caused by the contents being too big for the RenderFlex.
+Consider applying a flex factor (e.g. using an Expanded widget) to force the children of the
+RenderFlex to fit within the available space instead of being sized to their natural size.
+This is considered an error condition because it indicates that there is content that cannot be
+seen. If the content is legitimately bigger than the available space, consider clipping it with a
+ClipRect widget before putting it in the flex, or using a scrollable container rather than a Flex,
+like a ListView.
+The specific RenderFlex in question is: RenderFlex#e9074 DISPOSED OVERFLOWING:
+  needs compositing
+  creator: MultiChildRenderObjectElement#b4181(DEFUNCT) ←
+    SingleChildRenderObjectElement#fbb94(DEFUNCT) ← SingleChildRenderObjectElement#306ff(DEFUNCT) ←
+    SingleChildRenderObjectElement#b730a(DEFUNCT) ← StatefulElement#61db0(DEFUNCT) ←
+    StatelessElement#d9fe4(DEFUNCT) ← SingleChildRenderObjectElement#48290(DEFUNCT) ←
+    InheritedElement#b2a95(DEFUNCT) ← StatelessElement#ee3e4(DEFUNCT) ←
+    SingleChildRenderObjectElement#a250b(DEFUNCT) ← SingleChildRenderObjectElement#cd67c(DEFUNCT) ←
+    _InheritedNotifierElement<FocusNode>#0e496(DEFUNCT) ← ⋯
+  parentData: offset=Offset(0.0, 0.0) (can use size)
+  constraints: BoxConstraints(0.0<=w<=324.0, 0.0<=h<=Infinity)
+  size: Size(324.0, 104.0)
+  direction: horizontal
+  mainAxisAlignment: start
+  mainAxisSize: max
+  crossAxisAlignment: center
+  textDirection: ltr
+  verticalDirection: down
+  spacing: 0.0
+◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGET INSPECTOR ╞══════════════════════════════════════════════════════════
+The following assertion was thrown:
+Looking up a deactivated widget's ancestor is unsafe.
+At this point the state of the widget's element tree is no longer stable.
+To safely refer to a widget's ancestor in its dispose() method, save a reference to the ancestor by
+calling dependOnInheritedWidgetOfExactType() in the widget's didChangeDependencies() method.
+
+When the exception was thrown, this was the stack:
+#0      Element._debugCheckStateIsActiveForAncestorLookup.<anonymous closure> (package:flutter/src/widgets/framework.dart:5062:9)
+#1      Element._debugCheckStateIsActiveForAncestorLookup (package:flutter/src/widgets/framework.dart:5076:6)
+#2      Element.visitAncestorElements (package:flutter/src/widgets/framework.dart:5187:12)
+#3      _describeRelevantUserCode (package:flutter/src/widgets/widget_inspector.dart:4342:13)
+#4      _parseDiagnosticsNode (package:flutter/src/widgets/widget_inspector.dart:4261:12)
+#5      debugTransformDebugCreator (package:flutter/src/widgets/widget_inspector.dart:4240:21)
+#6      _FlutterErrorDetailsNode.builder (package:flutter/src/foundation/assertions.dart:1300:31)
+#7      DiagnosticableNode.getProperties (package:flutter/src/foundation/diagnostics.dart:2943:68)
+#8      TextTreeRenderer._debugRender (package:flutter/src/foundation/diagnostics.dart:1270:63)
+#9      TextTreeRenderer.render (package:flutter/src/foundation/diagnostics.dart:1137:14)
+#10     FlutterError.dumpErrorToConsole (package:flutter/src/foundation/assertions.dart:1030:13)
+#11     _defaultTestExceptionReporter (package:flutter_test/src/test_exception_reporter.dart:29:16)
+#12     TestWidgetsFlutterBinding._createTestCompletionHandler.<anonymous closure> (package:flutter_test/src/binding.dart:1714:28)
+<asynchronous suspension>
+(elided 8 frames from dart:async and package:stack_trace)
+
+This exception was caught while trying to describe the user-relevant code of another error.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY WIDGET INSPECTOR ╞══════════════════════════════════════════════════════════
+The following assertion was thrown:
+Looking up a deactivated widget's ancestor is unsafe.
+At this point the state of the widget's element tree is no longer stable.
+To safely refer to a widget's ancestor in its dispose() method, save a reference to the ancestor by
+calling dependOnInheritedWidgetOfExactType() in the widget's didChangeDependencies() method.
+
+When the exception was thrown, this was the stack:
+#0      Element._debugCheckStateIsActiveForAncestorLookup.<anonymous closure> (package:flutter/src/widgets/framework.dart:5062:9)
+#1      Element._debugCheckStateIsActiveForAncestorLookup (package:flutter/src/widgets/framework.dart:5076:6)
+#2      Element.visitAncestorElements (package:flutter/src/widgets/framework.dart:5187:12)
+#3      _describeRelevantUserCode (package:flutter/src/widgets/widget_inspector.dart:4342:13)
+#4      _parseDiagnosticsNode (package:flutter/src/widgets/widget_inspector.dart:4261:12)
+#5      debugTransformDebugCreator (package:flutter/src/widgets/widget_inspector.dart:4240:21)
+#6      _FlutterErrorDetailsNode.builder (package:flutter/src/foundation/assertions.dart:1300:31)
+#7      DiagnosticableNode.emptyBodyDescription (package:flutter/src/foundation/diagnostics.dart:2939:45)
+#8      TextTreeRenderer._debugRender (package:flutter/src/foundation/diagnostics.dart:1307:14)
+#9      TextTreeRenderer.render (package:flutter/src/foundation/diagnostics.dart:1137:14)
+#10     FlutterError.dumpErrorToConsole (package:flutter/src/foundation/assertions.dart:1030:13)
+#11     _defaultTestExceptionReporter (package:flutter_test/src/test_exception_reporter.dart:29:16)
+#12     TestWidgetsFlutterBinding._createTestCompletionHandler.<anonymous closure> (package:flutter_test/src/binding.dart:1714:28)
+<asynchronous suspension>
+(elided 8 frames from dart:async and package:stack_trace)
+
+This exception was caught while trying to describe the user-relevant code of another error.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+Test failed. See exception logs above.
+The test description was: admin route isolates text fields from public selection layer
+
+::endgroup::
+::group::✅ Passing tests
+✅ /home/runner/work/evil_space/evil_space/test/admin_screen_test.dart: add customer remains available while dashboard data is unavailable
+✅ /home/runner/work/evil_space/evil_space/test/public_desk_models_test.dart: DeskBookingProfile accepts phone and Telegram contacts with a service date
+✅ /home/runner/work/evil_space/evil_space/test/public_desk_models_test.dart: DeskBookingProfile rejects missing identity, bad contact type, or bad date
+✅ /home/runner/work/evil_space/evil_space/test/public_desk_models_test.dart: DeskBookingState round-trips accepted booking date and locked amount
+✅ /home/runner/work/evil_space/evil_space/test/public_desk_models_test.dart: DeskBookingState round-trips Telegram connection metadata
+✅ /home/runner/work/evil_space/evil_space/test/public_desk_models_test.dart: DeskBookingState accepts declined and cancelled terminal states
+✅ /home/runner/work/evil_space/evil_space/test/public_desk_models_test.dart: DeskBookingState rejects short tokens, unknown statuses, bad dates and zero prices
+✅ /home/runner/work/evil_space/evil_space/test/admin_telegram_ios_test.dart: admin Telegram link is prepared before the connect tap
+✅ /home/runner/work/evil_space/evil_space/test/web_release_contract_test.dart: web release keeps the optimized Flutter bootstrap contract
+✅ /home/runner/work/evil_space/evil_space/test/web_release_contract_test.dart: public startup keeps admin behind a deferred Flutter boundary
+✅ /home/runner/work/evil_space/evil_space/test/web_release_contract_test.dart: release automation pins Wasm-first Flutter 3.47.2 builds
+✅ /home/runner/work/evil_space/evil_space/test/booking_service_day_contract_test.dart: booking service day migration and backend contract stay wired
+✅ /home/runner/work/evil_space/evil_space/test/booking_service_day_contract_test.dart: public UI exposes joined today and tomorrow booking choices
+✅ /home/runner/work/evil_space/evil_space/test/booking_service_day_contract_test.dart: admin acknowledgement includes service day and locked amount
+✅ /home/runner/work/evil_space/evil_space/test/booking_service_day_contract_test.dart: old created-at midnight expiry is removed from active booking paths
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract migration contains admin, customer, session and audit state
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract booking service day and locked amount are persisted
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract Telegram language is persisted for admin and customer links
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract Worker exposes secure Telegram and booking action routes
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract booking prices come from the shared Nha Trang rules
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract one-tap TG booking uses verified identity, absolute date and language
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract future accepted bookings use their service day for occupancy and income
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract admin Telegram acknowledgement includes date and locked price
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract customer cancellation requires a second explicit tap
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract Wi-Fi and bot credentials are runtime secrets, never constants
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram backend contract tracked integration sources contain no literal Telegram bot token
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram Flutter contract public booking is TG one-tap or name plus phone only
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram Flutter contract public UI supports today and tomorrow independently
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram Flutter contract admin UI exposes accept, decline, day, date and exact amount
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram Flutter contract admin displays full-day and half-day prices
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram Flutter contract public pricing includes half day and monthly personal locker
+✅ /home/runner/work/evil_space/evil_space/test/telegram_contract_test.dart: Telegram Flutter contract admin Telegram pairing receives the selected web language
+✅ /home/runner/work/evil_space/evil_space/test/admin_portal_test.dart: admin portal inherits Russian and can switch to English
+✅ /home/runner/work/evil_space/evil_space/test/admin_portal_test.dart: Vietnamese web language is preserved for Telegram pairing
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: routing keeps home and qr public and recognizes the admin boundary
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: routing restores canonical browser paths
+::endgroup::
+::group::❌ /home/runner/work/evil_space/evil_space/test/web_app_smoke_test.dart: public booking offers one-tap TG or name plus phone (failed)
+
+Warning: A call to tap() with finder "Found 1 widget with text "TODAY": [
+  Text("TODAY", inherit: true, color: Color(alpha: 1.0000, red: 0.9725, green: 0.9647, blue: 0.9373, colorSpace: ColorSpace.sRGB), family: Courier New, familyFallback: [monospace], size: 11.0, weight: 700, letterSpacing: 0.8, height: 1.2x, dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery, SelectionRegistrarScope]),
+]" derived an Offset (Offset(129.5, 600.3)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+Indeed, Offset(129.5, 600.3) is outside the bounds of the root of the render tree, Size(800.0, 600.0).
+The finder corresponds to this RenderBox: RenderMouseRegion#267ee relayoutBoundary=up26
+The hit test result at that offset is: HitTestResult(HitTestEntry<HitTestTarget>#986d2(_ReusableRenderView#e27ed), HitTestEntry<HitTestTarget>#a7b17(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+#2      WidgetController.tap (package:flutter_test/src/controller.dart:1080:7)
+#3      main.<anonymous closure> (file:///home/runner/work/evil_space/evil_space/test/web_app_smoke_test.dart:27:18)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "tap()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞═════════════════════════════════════════════════════════
+The following assertion was thrown during layout:
+A RenderFlex overflowed by 45 pixels on the right.
+
+The relevant error-causing widget was:
+  Row Row:file:///home/runner/work/evil_space/evil_space/lib/app_shell.dart:1202:16
+
+The overflowing RenderFlex has an orientation of Axis.horizontal.
+The edge of the RenderFlex that is overflowing has been marked in the rendering with a yellow and
+black striped pattern. This is usually caused by the contents being too big for the RenderFlex.
+Consider applying a flex factor (e.g. using an Expanded widget) to force the children of the
+RenderFlex to fit within the available space instead of being sized to their natural size.
+This is considered an error condition because it indicates that there is content that cannot be
+seen. If the content is legitimately bigger than the available space, consider clipping it with a
+ClipRect widget before putting it in the flex, or using a scrollable container rather than a Flex,
+like a ListView.
+The specific RenderFlex in question is: RenderFlex#81e6d relayoutBoundary=up25 OVERFLOWING:
+  needs compositing
+  creator: Row ← Align ← Padding ← Listener ← RawGestureDetector ← GestureDetector ← Semantics ←
+    DefaultSelectionStyle ← Builder ← MouseRegion ← Semantics ← _FocusInheritedScope ← ⋯
+  parentData: offset=Offset(0.0, 0.0) (can use size)
+  constraints: BoxConstraints(0.0<=w<=324.0, 0.0<=h<=Infinity)
+  size: Size(324.0, 104.0)
+  direction: horizontal
+  mainAxisAlignment: start
+  mainAxisSize: max
+  crossAxisAlignment: center
+  textDirection: ltr
+  verticalDirection: down
+  spacing: 0.0
+◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "AlertDialog": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/runner/work/evil_space/evil_space/test/web_app_smoke_test.dart:31:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/runner/work/evil_space/evil_space/test/web_app_smoke_test.dart line 31
+The test description was:
+  public booking offers one-tap TG or name plus phone
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following message was thrown:
+Multiple exceptions (2) were detected during the running of the current test, and at least one was
+unexpected.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+Test failed. See exception logs above.
+The test description was: public booking offers one-tap TG or name plus phone
+
+::endgroup::
+::group::❌ /home/runner/work/evil_space/evil_space/test/widget_test.dart: routing public app boots with an overlay for selectable content (failed)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: null
+  Actual: FlutterError:<A RenderFlex overflowed by 45 pixels on the right.>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///home/runner/work/evil_space/evil_space/test/widget_test.dart:59:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/runner/work/evil_space/evil_space/test/widget_test.dart line 59
+The test description was:
+  public app boots with an overlay for selectable content
+════════════════════════════════════════════════════════════════════════════════════════════════════
+Test failed. See exception logs above.
+The test description was: public app boots with an overlay for selectable content
+
+::endgroup::
+::group::✅ Passing tests
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: localization contains the daily product copy in all supported languages
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: localization falls back to the key when no translation exists
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: site content parses occupancy, prices, openings, and announcements
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: site content normalizes malformed occupancy into safe bounds
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: site content uses safe demo data when sections are empty
+✅ /home/runner/work/evil_space/evil_space/test/widget_test.dart: admin preview is opt-in and locked in normal builds
+::endgroup::
+::group::❌ /home/runner/work/evil_space/evil_space/test/language_gate_test.dart: first visit requires a language choice (failed)
+══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞═════════════════════════════════════════════════════════
+The following assertion was thrown during layout:
+A RenderFlex overflowed by 45 pixels on the right.
+
+The relevant error-causing widget was:
+  Row Row:file:///home/runner/work/evil_space/evil_space/lib/app_shell.dart:1202:16
+
+The overflowing RenderFlex has an orientation of Axis.horizontal.
+The edge of the RenderFlex that is overflowing has been marked in the rendering with a yellow and
+black striped pattern. This is usually caused by the contents being too big for the RenderFlex.
+Consider applying a flex factor (e.g. using an Expanded widget) to force the children of the
+RenderFlex to fit within the available space instead of being sized to their natural size.
+This is considered an error condition because it indicates that there is content that cannot be
+seen. If the content is legitimately bigger than the available space, consider clipping it with a
+ClipRect widget before putting it in the flex, or using a scrollable container rather than a Flex,
+like a ListView.
+The specific RenderFlex in question is: RenderFlex#c98fc relayoutBoundary=up25 DETACHED OVERFLOWING:
+  needs compositing
+  creator: Row ← Align ← Padding ← Listener ← RawGestureDetector ← GestureDetector ← Semantics ←
+    DefaultSelectionStyle ← Builder ← MouseRegion ← Semantics ← _FocusInheritedScope ← ⋯
+  parentData: offset=Offset(0.0, 0.0) (can use size)
+  constraints: BoxConstraints(0.0<=w<=324.0, 0.0<=h<=Infinity)
+  size: Size(324.0, 104.0)
+  direction: horizontal
+  mainAxisAlignment: start
+  mainAxisSize: max
+  crossAxisAlignment: center
+  textDirection: ltr
+  verticalDirection: down
+  spacing: 0.0
+◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞═════════════════════════════════════════════════════════
+The following assertion was thrown during layout:
+A RenderFlex overflowed by 63 pixels on the right.
+
+The relevant error-causing widget was:
+  Row Row:file:///home/runner/work/evil_space/evil_space/lib/app_shell.dart:1202:16
+
+The overflowing RenderFlex has an orientation of Axis.horizontal.
+The edge of the RenderFlex that is overflowing has been marked in the rendering with a yellow and
+black striped pattern. This is usually caused by the contents being too big for the RenderFlex.
+Consider applying a flex factor (e.g. using an Expanded widget) to force the children of the
+RenderFlex to fit within the available space instead of being sized to their natural size.
+This is considered an error condition because it indicates that there is content that cannot be
+seen. If the content is legitimately bigger than the available space, consider clipping it with a
+ClipRect widget before putting it in the flex, or using a scrollable container rather than a Flex,
+like a ListView.
+The specific RenderFlex in question is: RenderFlex#1f3f5 relayoutBoundary=up25 OVERFLOWING:
+  needs compositing
+  creator: Row ← Align ← Padding ← Listener ← RawGestureDetector ← GestureDetector ← Semantics ←
+    DefaultSelectionStyle ← Builder ← MouseRegion ← Semantics ← _FocusInheritedScope ← ⋯
+  parentData: offset=Offset(0.0, 0.0) (can use size)
+  constraints: BoxConstraints(0.0<=w<=324.0, 0.0<=h<=Infinity)
+  size: Size(324.0, 78.0)
+  direction: horizontal
+  mainAxisAlignment: start
+  mainAxisSize: max
+  crossAxisAlignment: center
+  textDirection: ltr
+  verticalDirection: down
+  spacing: 0.0
+◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤
+════════════════════════════════════════════════════════════════════════════════════════════════════
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following message was thrown:
+Multiple exceptions (2) were detected during the running of the current test, and at least one was
+unexpected.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+Test failed. See exception logs above.
+The test description was: first visit requires a language choice
+
+::endgroup::
+
+::error::43 tests passed, 4 failed.

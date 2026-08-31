@@ -706,8 +706,9 @@ class _DailyScreenState extends State<DailyScreen>
 
   String _moneyLabel(int value) {
     if (value % 1000000 == 0) return '${value ~/ 1000000} MLN VND';
-    if (value >= 1000000)
+    if (value >= 1000000) {
       return '${(value / 1000000).toStringAsFixed(1)} MLN VND';
+    }
     if (value % 1000 == 0) return '${value ~/ 1000}K VND';
     return '$value VND';
   }
