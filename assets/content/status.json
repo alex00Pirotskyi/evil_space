@@ -5,8 +5,9 @@
     "occupied": 0
   },
   "prices": [
-    {"label_key": "price_day_pass", "price": "250K VND"},
-    {"label_key": "price_month", "price": "2.5 MLN VND"}
+    {"label_key": "price_day_pass", "price": "200K VND"},
+    {"label_key": "price_month", "price": "2.5 MLN VND"},
+    {"label_key": "price_locker", "price": "1 MLN VND / MONTH"}
   ],
   "openings": [
     {
