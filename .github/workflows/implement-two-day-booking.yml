@@ -55,9 +55,9 @@ jobs:
           node --test worker/booking_rules_test.mjs
       - name: Commit implementation
         run: |
+          git checkout -- .github/workflows/web-ci.yml .github/workflows/implement-two-day-booking.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add worker/entry.js worker/index.js worker/telegram.js lib/coworking_model.dart lib/public_desk_models.dart lib/public_desk_web.dart lib/app_shell.dart lib/localization.dart assets/content/status.json lib/admin_api_models.dart lib/admin_screen.dart .github/workflows/web-ci.yml test/booking_service_day_contract_test.dart
-          git rm .github/workflows/implement-two-day-booking.yml
+          git add worker/entry.js worker/index.js worker/telegram.js lib/coworking_model.dart lib/public_desk_models.dart lib/public_desk_web.dart lib/app_shell.dart lib/localization.dart assets/content/status.json lib/admin_api_models.dart lib/admin_screen.dart test/booking_service_day_contract_test.dart
           git commit -m "Add today and tomorrow desk booking operations"
           git push origin HEAD:feature/kindle-admin-foundation
