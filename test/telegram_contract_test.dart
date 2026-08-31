@@ -87,8 +87,8 @@ void main() {
         ),
       );
       expect(telegram, contains('sendCustomerCancelConfirmation'));
-      expect(telegram, contains('callback_data: `cf:${bookingId}`'));
-      expect(telegram, contains('callback_data: `ck:${bookingId}`'));
+      expect(telegram, contains(r'callback_data: `cf:${bookingId}`'));
+      expect(telegram, contains(r'callback_data: `ck:${bookingId}`'));
 
       final ask = telegram.indexOf("if (data.startsWith('cc:')) {");
       final confirm = telegram.indexOf("if (data.startsWith('cf:')) {", ask);
