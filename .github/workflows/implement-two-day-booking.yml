@@ -32,8 +32,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('lib/app_shell.dart')
-          text = path.read_text()
+          app_path = Path('lib/app_shell.dart')
+          text = app_path.read_text()
 
           start = text.find('  Future<void> _launchTelegramBooking() async {')
           if start < 0:
@@ -50,16 +50,52 @@ jobs:
                   raise SystemExit('unused price helper end not found')
               text = text[:start] + text[end:]
 
-          path.write_text(text)
+          old_availability = "'${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}'"
+          new_availability = "'${status.free}/${status.total}'"
+          if old_availability not in text:
+              raise SystemExit('legacy availability summary not found')
+          text = text.replace(old_availability, new_availability, 1)
+
+          card_start = text.find('  Widget _bookingCard(DeskBookingState booking, bool tomorrow) {')
+          if card_start < 0:
+              raise SystemExit('booking card not found')
+
+          combined_status = "'${widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today')} · ${widget.localization.t(bookingStatusKey)}'"
+          status_only = "widget.localization.t(bookingStatusKey)"
+          status_at = text.find(combined_status, card_start)
+          if status_at < 0:
+              raise SystemExit('combined booking status not found')
+          text = text[:status_at] + status_only + text[status_at + len(combined_status):]
+
+          first_row = text.find('Row(\n  children: [', card_start)
+          if first_row < 0:
+              raise SystemExit('booking card row not found')
+          date_label = "Text(\n  widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today'),\n  style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.55),\n),\nconst SizedBox(height: 8),\n"
+          text = text[:first_row] + date_label + text[first_row:]
+
+          app_path.write_text(text)
+
+          localization_path = Path('lib/localization.dart')
+          localization = localization_path.read_text()
+          old_pending = "'booking_pending': 'YOUR REQUEST IS PENDING',"
+          new_pending = "'booking_pending': 'DESK REQUEST RECEIVED',"
+          if old_pending not in localization:
+              raise SystemExit('english pending booking copy not found')
+          localization = localization.replace(old_pending, new_pending, 1)
+          localization_path.write_text(localization)
           PY
-          dart format lib/app_shell.dart
+          dart format lib/app_shell.dart lib/localization.dart
           dart fix --apply
-          dart format lib/app_shell.dart
+          dart format lib/app_shell.dart lib/localization.dart
           cp lib/app_shell.dart /tmp/fixed_app_shell.dart
+          cp lib/localization.dart /tmp/fixed_localization.dart
           git checkout -- .
           cp /tmp/fixed_app_shell.dart lib/app_shell.dart
-          dart format lib/app_shell.dart
-          test "$(git diff --name-only)" = "lib/app_shell.dart"
+          cp /tmp/fixed_localization.dart lib/localization.dart
+          dart format lib/app_shell.dart lib/localization.dart
+          test -z "$(git diff --name-only | grep -v -E '^(lib/app_shell.dart|lib/localization.dart)$' || true)"
+          test -n "$(git diff -- lib/app_shell.dart)"
+          test -n "$(git diff -- lib/localization.dart)"
 
       - name: Verify Worker and booking rules
         run: |
@@ -87,8 +123,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/app_shell.dart
-          git commit -m "Remove superseded single-day booking flow"
+          git add lib/app_shell.dart lib/localization.dart
+          git commit -m "Finalize two-day public booking flow"
           git push origin HEAD:feature/kindle-admin-foundation
-
-# Final verification rerun after service-day Telegram contract update.
