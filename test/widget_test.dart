@@ -66,15 +66,18 @@ void main() {
     test('contains the daily product copy in all supported languages', () {
       final localization = LocalizationController(AppLanguage.en);
       expect(localization.t('brand_daily'), 'EVIL SPACE / DAILY');
-      expect(localization.t('prices_title'), 'TWO SIMPLE PRICES');
+      expect(localization.t('prices_title'), 'THREE SIMPLE PRICES');
+      expect(localization.t('price_locker'), 'PERSONAL LOCKER');
       expect(localization.t('visit_title'), 'FIND EVIL SPACE');
 
       localization.setLanguage(AppLanguage.ru);
       expect(localization.t('price_month'), 'ОДИН МЕСЯЦ');
+      expect(localization.t('price_locker'), 'ЛИЧНЫЙ ШКАФЧИК');
       expect(localization.t('opening_studio'), 'ПОДКАСТ / СТУДИЯ');
 
       localization.setLanguage(AppLanguage.vi);
-      expect(localization.t('prices_title'), 'HAI MỨC GIÁ ĐƠN GIẢN');
+      expect(localization.t('prices_title'), 'BA MỨC GIÁ ĐƠN GIẢN');
+      expect(localization.t('price_locker'), 'TỦ CÁ NHÂN');
       expect(localization.t('opening_lecture'), 'PHÒNG HỘI THẢO');
       expect(localization.t('contact_map'), 'ẢNH & ĐÁNH GIÁ');
 
@@ -83,7 +86,7 @@ void main() {
 
     test('falls back to the key when no translation exists', () {
       final localization = LocalizationController();
-      expect(localization.t('prices_title'), 'TWO SIMPLE PRICES');
+      expect(localization.t('prices_title'), 'THREE SIMPLE PRICES');
       expect(localization.t('missing_key'), 'missing_key');
       localization.dispose();
     });
@@ -94,7 +97,7 @@ void main() {
       final content = SiteContent.fromJson({
         'status': {'updated': '2026-08-21', 'total': 12, 'occupied': 5},
         'prices': [
-          {'label_key': 'price_day_pass', 'price': '250K'},
+          {'label_key': 'price_day_pass', 'price': '200K'},
         ],
         'announcements': [
           {
@@ -115,7 +118,7 @@ void main() {
       expect(content.status.occupied, 5);
       expect(content.status.free, 7);
       expect(content.status.updated, '2026-08-21');
-      expect(content.prices.single.price, '250K');
+      expect(content.prices.single.price, '200K');
       expect(content.announcements.single.textFor('ru'), 'ПРИВЕТ');
       expect(content.announcements.single.textFor('vi'), 'XIN CHÀO');
       expect(content.openings.single.labelKey, 'opening_studio');
@@ -141,7 +144,11 @@ void main() {
       expect(content.openings, isNotEmpty);
       expect(
         content.prices.map((price) => price.price),
-        orderedEquals(['250K VND', '2.5 MLN VND']),
+        orderedEquals([
+          '200K VND',
+          '2.5 MLN VND',
+          '1 MLN VND / MONTH',
+        ]),
       );
     });
   });
