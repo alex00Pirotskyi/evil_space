@@ -66,7 +66,7 @@ void main() {
     test('contains the daily product copy in all supported languages', () {
       final localization = LocalizationController(AppLanguage.en);
       expect(localization.t('brand_daily'), 'EVIL SPACE / DAILY');
-      expect(localization.t('prices_title'), 'THREE SIMPLE PRICES');
+      expect(localization.t('prices_title'), 'SIMPLE PRICES');
       expect(localization.t('price_locker'), 'PERSONAL LOCKER');
       expect(localization.t('visit_title'), 'FIND EVIL SPACE');
 
@@ -76,7 +76,7 @@ void main() {
       expect(localization.t('opening_studio'), 'ПОДКАСТ / СТУДИЯ');
 
       localization.setLanguage(AppLanguage.vi);
-      expect(localization.t('prices_title'), 'BA MỨC GIÁ ĐƠN GIẢN');
+      expect(localization.t('prices_title'), 'BẢNG GIÁ');
       expect(localization.t('price_locker'), 'TỦ CÁ NHÂN');
       expect(localization.t('opening_lecture'), 'PHÒNG HỘI THẢO');
       expect(localization.t('contact_map'), 'ẢNH & ĐÁNH GIÁ');
@@ -86,7 +86,7 @@ void main() {
 
     test('falls back to the key when no translation exists', () {
       final localization = LocalizationController();
-      expect(localization.t('prices_title'), 'THREE SIMPLE PRICES');
+      expect(localization.t('prices_title'), 'SIMPLE PRICES');
       expect(localization.t('missing_key'), 'missing_key');
       localization.dispose();
     });
@@ -146,6 +146,7 @@ void main() {
         content.prices.map((price) => price.price),
         orderedEquals([
           '200K VND',
+          '100K VND',
           '2.5 MLN VND',
           '1 MLN VND / MONTH',
         ]),

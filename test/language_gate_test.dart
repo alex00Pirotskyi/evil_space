@@ -14,6 +14,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CHOOSE LANGUAGE'), findsNothing);
-    expect(find.text('ТРИ ПРОСТЫЕ ЦЕНЫ'), findsOneWidget);
+    expect(find.text('ПРОСТЫЕ ЦЕНЫ'), findsOneWidget);
   });
 }

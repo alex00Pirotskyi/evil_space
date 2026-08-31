@@ -116,9 +116,7 @@ class _DailyScreenState extends State<DailyScreen>
         const Duration(seconds: 8),
         onTimeout: () => null,
       );
-      final bookingsFuture = Future.wait(
-        currentBookings.map(_refreshBooking),
-      );
+      final bookingsFuture = Future.wait(currentBookings.map(_refreshBooking));
       final results = await Future.wait<Object?>([
         statusFuture,
         bookingsFuture,
@@ -127,12 +125,13 @@ class _DailyScreenState extends State<DailyScreen>
 
       final status = results[0] as SiteStatus?;
       final refreshedBookings = (results[1] as List<DeskBookingState?>)
-.whereType<DeskBookingState>()
-.toList(growable: false);
+          .whereType<DeskBookingState>()
+          .toList(growable: false);
       final statusChanged = status != null && !_sameStatus(_liveStatus, status);
       final bookingContextUnchanged = _sameBookings(_bookings, currentBookings);
       final bookingChanged =
-bookingContextUnchanged && !_sameBookings(_bookings, refreshedBookings);
+          bookingContextUnchanged &&
+          !_sameBookings(_bookings, refreshedBookings);
 
       if (!statusChanged && !bookingChanged) return;
       setState(() {
@@ -151,8 +150,8 @@ bookingContextUnchanged && !_sameBookings(_bookings, refreshedBookings);
   Future<DeskBookingState?> _refreshBooking(DeskBookingState booking) async {
     try {
       return await _deskApi
-.bookingStatus(booking)
-.timeout(const Duration(seconds: 8));
+          .bookingStatus(booking)
+          .timeout(const Duration(seconds: 8));
     } on TimeoutException {
       return booking;
     } on PublicDeskException {
@@ -183,16 +182,17 @@ bookingContextUnchanged && !_sameBookings(_bookings, refreshedBookings);
   bool _sameBookings(List<DeskBookingState> a, List<DeskBookingState> b) {
     if (a.length != b.length) return false;
     final left = [...a]..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
-    final right = [...b]..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
+    final right = [...b]
+      ..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
     for (var index = 0; index < left.length; index += 1) {
       final x = left[index];
       final y = right[index];
       if (x.token != y.token ||
-x.status != y.status ||
-x.serviceDate != y.serviceDate ||
-x.amountVnd != y.amountVnd ||
-x.telegramLinkUrl != y.telegramLinkUrl ||
-x.telegramLinked != y.telegramLinked) {
+          x.status != y.status ||
+          x.serviceDate != y.serviceDate ||
+          x.amountVnd != y.amountVnd ||
+          x.telegramLinkUrl != y.telegramLinkUrl ||
+          x.telegramLinked != y.telegramLinked) {
         return false;
       }
     }
@@ -211,27 +211,30 @@ x.telegramLinked != y.telegramLinked) {
     return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
   }
 
-  String _compactServiceDate(String serviceDate) => serviceDate.replaceAll('-', '');
+  String _compactServiceDate(String serviceDate) =>
+      serviceDate.replaceAll('-', '');
 
   Future<void> _launchTelegramBooking(String serviceDate) async {
-    final url = '$_bookingBotBaseUrl${_compactServiceDate(serviceDate)}_${widget.localization.language.code}';
+    final url =
+        '$_bookingBotBaseUrl${_compactServiceDate(serviceDate)}_${widget.localization.language.code}';
     try {
       final opened = await launchUrl(
         Uri.parse(url),
         mode: LaunchMode.platformDefault,
-        webOnlyWindowName:
-  defaultTargetPlatform == TargetPlatform.iOS ? '_self' : '_blank',
+        webOnlyWindowName: defaultTargetPlatform == TargetPlatform.iOS
+            ? '_self'
+            : '_blank',
       );
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+          const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
         );
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')));
     }
   }
 
@@ -255,34 +258,32 @@ const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
     setState(() => _bookingBusy = true);
     try {
       final booking = await _deskApi
-.book(profile)
-.timeout(const Duration(seconds: 10));
+          .book(profile)
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       setState(() {
         _bookings = [
-..._bookings.where((item) => item.serviceDate != booking.serviceDate),
-booking,
+          ..._bookings.where((item) => item.serviceDate != booking.serviceDate),
+          booking,
         ]..sort((a, b) => a.serviceDate.compareTo(b.serviceDate));
         _bookingBusy = false;
       });
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('REQUEST TIMEOUT')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('REQUEST TIMEOUT')));
     } on PublicDeskException catch (error) {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('COULD NOT SEND REQUEST')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('COULD NOT SEND REQUEST')));
     }
   }
 
@@ -297,13 +298,13 @@ booking,
     setState(() => _bookingBusy = true);
     try {
       await _deskApi
-.deleteBooking(booking)
-.timeout(const Duration(seconds: 10));
+          .deleteBooking(booking)
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       setState(() {
         _bookings = _bookings
-  .where((item) => item.serviceDate != booking.serviceDate)
-  .toList(growable: false);
+            .where((item) => item.serviceDate != booking.serviceDate)
+            .toList(growable: false);
         _bookingBusy = false;
       });
       await _loadPublicState();
@@ -314,15 +315,13 @@ booking,
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('REQUEST TIMEOUT')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('REQUEST TIMEOUT')));
     } on PublicDeskException catch (error) {
       if (!mounted) return;
       setState(() => _bookingBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
@@ -330,8 +329,8 @@ booking,
     _deskApi.clearSavedBooking(booking.serviceDate);
     setState(() {
       _bookings = _bookings
-.where((item) => item.serviceDate != booking.serviceDate)
-.toList(growable: false);
+          .where((item) => item.serviceDate != booking.serviceDate)
+          .toList(growable: false);
     });
   }
 
@@ -366,15 +365,14 @@ booking,
 
   Future<void> _launch(String value) async {
     final uri = Uri.tryParse(value);
-    if (uri == null || !await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.platformDefault)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('COULD NOT OPEN THIS LINK')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('COULD NOT OPEN THIS LINK')));
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -406,7 +404,8 @@ booking,
                                   16,
                                 ),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     _header(compact),
                                     const SizedBox(height: 44),
@@ -464,11 +463,7 @@ booking,
           children: [
             Text(
               '${widget.localization.t('brand_daily')}  ·  ${_dateLabel(now)}  ·  NO. ${_issueNumber(now).toString().padLeft(3, '0')}',
-              style: _mono(
-                10.5,
-                color: BrandPalette.inkMuted,
-                spacing: 0.65,
-              ),
+              style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.65),
             ),
             _languagePicker(),
           ],
@@ -494,36 +489,42 @@ booking,
       label: 'Language',
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: AppLanguage.values.map((language) {
-          final selected = widget.localization.language == language;
-          return Padding(
-            padding: const EdgeInsets.only(left: 2),
-            child: TextButton(
-              onPressed: () => widget.localization.setLanguage(language),
-              style: TextButton.styleFrom(
-                foregroundColor: BrandPalette.ink,
-                minimumSize: const Size(44, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                shape: const RoundedRectangleBorder(),
-                side: selected
-                    ? const BorderSide(color: BrandPalette.ink)
-                    : BorderSide.none,
-              ),
-              child: Text(
-                language.code.toUpperCase(),
-                style: _mono(10.5, spacing: 0.7),
-              ),
-            ),
-          );
-        }).toList(growable: false),
+        children: AppLanguage.values
+            .map((language) {
+              final selected = widget.localization.language == language;
+              return Padding(
+                padding: const EdgeInsets.only(left: 2),
+                child: TextButton(
+                  onPressed: () => widget.localization.setLanguage(language),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: const RoundedRectangleBorder(),
+                    side: selected
+                        ? const BorderSide(color: BrandPalette.ink)
+                        : BorderSide.none,
+                  ),
+                  child: Text(
+                    language.code.toUpperCase(),
+                    style: _mono(10.5, spacing: 0.7),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
 
   Widget _availability(bool compact) {
     final status = _liveStatus ?? _content.status;
-    final todayDate = status.todayDate.isEmpty ? _serviceDateForOffset(0) : status.todayDate;
-    final tomorrowDate = status.tomorrowDate.isEmpty ? _serviceDateForOffset(1) : status.tomorrowDate;
+    final todayDate = status.todayDate.isEmpty
+        ? _serviceDateForOffset(0)
+        : status.todayDate;
+    final tomorrowDate = status.tomorrowDate.isEmpty
+        ? _serviceDateForOffset(1)
+        : status.tomorrowDate;
     final todayBooking = _bookingFor(todayDate);
     final tomorrowBooking = _bookingFor(tomorrowDate);
 
@@ -533,69 +534,77 @@ booking,
         _sectionKicker(widget.localization.t('availability_kicker')),
         const SizedBox(height: 20),
         Row(
-crossAxisAlignment: CrossAxisAlignment.end,
-children: [
-  Text('${status.free}', style: _serif(compact ? 86 : 116, height: 0.78)),
-  const SizedBox(width: 14),
-  Expanded(
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-      child: Text(
-        widget.localization.t(status.free == 1 ? 'desk_free' : 'desks_free'),
-        style: _serif(compact ? 23 : 30, height: 0.96),
-      ),
-    ),
-  ),
-],
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${status.free}',
+              style: _serif(compact ? 86 : 116, height: 0.78),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Text(
+                  widget.localization.t(
+                    status.free == 1 ? 'desk_free' : 'desks_free',
+                  ),
+                  style: _serif(compact ? 23 : 30, height: 0.96),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 22),
         _OccupancyMarks(total: status.total, occupied: status.occupied),
         const SizedBox(height: 12),
         Text(
-'${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
-style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
+          '${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
+          style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
         ),
         const SizedBox(height: 26),
         Row(
-crossAxisAlignment: CrossAxisAlignment.stretch,
-children: [
-  Expanded(
-    child: _PaperButton(
-      label: widget.localization.t('booking_today'),
-      detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
-      icon: Icons.today_outlined,
-      filled: true,
-      onPressed: _bookingBusy || todayBooking != null || status.free <= 0
-          ? null
-          : () => _requestDesk(todayDate),
-    ),
-  ),
-  Expanded(
-    child: _PaperButton(
-      label: widget.localization.t('booking_tomorrow'),
-      detail: _bookingBusy
-          ? '…'
-          : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
-      icon: Icons.event_outlined,
-      onPressed: _bookingBusy || tomorrowBooking != null || status.tomorrowFree <= 0
-          ? null
-          : () => _requestDesk(tomorrowDate),
-    ),
-  ),
-],
+          children: [
+            Expanded(
+              child: _PaperButton(
+                label: widget.localization.t('booking_today'),
+                detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
+                icon: Icons.today_outlined,
+                filled: true,
+                onPressed:
+                    _bookingBusy || todayBooking != null || status.free <= 0
+                    ? null
+                    : () => _requestDesk(todayDate),
+              ),
+            ),
+            Expanded(
+              child: _PaperButton(
+                label: widget.localization.t('booking_tomorrow'),
+                detail: _bookingBusy
+                    ? '…'
+                    : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
+                icon: Icons.event_outlined,
+                onPressed:
+                    _bookingBusy ||
+                        tomorrowBooking != null ||
+                        status.tomorrowFree <= 0
+                    ? null
+                    : () => _requestDesk(tomorrowDate),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Text(
-widget.localization.t('half_day_note'),
-style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.35),
+          widget.localization.t('half_day_note'),
+          style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.35),
         ),
         if (todayBooking != null) ...[
-const SizedBox(height: 16),
-_bookingCard(todayBooking, false),
+          const SizedBox(height: 16),
+          _bookingCard(todayBooking, false),
         ],
         if (tomorrowBooking != null) ...[
-const SizedBox(height: 10),
-_bookingCard(tomorrowBooking, true),
+          const SizedBox(height: 10),
+          _bookingCard(tomorrowBooking, true),
         ],
       ],
     );
@@ -605,78 +614,91 @@ _bookingCard(tomorrowBooking, true),
     final bookingStatusKey = booking.accepted
         ? 'booking_accepted'
         : booking.declined
-  ? 'booking_declined'
-  : booking.cancelled
-      ? 'booking_cancelled'
-      : 'booking_pending';
+        ? 'booking_declined'
+        : booking.cancelled
+        ? 'booking_cancelled'
+        : 'booking_pending';
     final bookingIcon = booking.accepted
         ? Icons.check_circle_outline
         : booking.declined
-  ? Icons.cancel_outlined
-  : booking.cancelled
-      ? Icons.block_outlined
-      : Icons.hourglass_top_outlined;
+        ? Icons.cancel_outlined
+        : booking.cancelled
+        ? Icons.block_outlined
+        : Icons.hourglass_top_outlined;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: booking.accepted ? BrandPalette.paperDeep : BrandPalette.paperLift,
+        color: booking.accepted
+            ? BrandPalette.paperDeep
+            : BrandPalette.paperLift,
         border: Border.all(color: BrandPalette.ink),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-Row(
-  children: [
-    Icon(bookingIcon, size: 24),
-    const SizedBox(width: 14),
-    Expanded(
-      child: Text(
-        '${widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today')} · ${widget.localization.t(bookingStatusKey)}',
-        style: _mono(11.5, spacing: 0.55),
-      ),
-    ),
-    Text(_moneyLabel(booking.amountVnd), style: _serif(18)),
-  ],
-),
-if (booking.telegramLinked) ...[
-  const SizedBox(height: 10),
-  Text(widget.localization.t('booking_telegram_connected'), style: _mono(9, color: BrandPalette.inkMuted)),
-] else if (booking.canConnectTelegram && !booking.finished) ...[
-  const SizedBox(height: 10),
-  OutlinedButton.icon(
-    onPressed: () => _connectBookingTelegram(booking),
-    icon: const Icon(Icons.send_outlined, size: 17),
-    label: Text(widget.localization.t('booking_connect_telegram'), style: _mono(9.5)),
-    style: OutlinedButton.styleFrom(
-      foregroundColor: BrandPalette.ink,
-      minimumSize: const Size.fromHeight(46),
-      side: const BorderSide(color: BrandPalette.ink),
-      shape: const RoundedRectangleBorder(),
-    ),
-  ),
-],
-const SizedBox(height: 8),
-OutlinedButton.icon(
-  onPressed: _bookingBusy
-      ? null
-      : booking.finished
-          ? () => _clearFinishedBooking(booking)
-          : () => _deleteDeskRequest(booking),
-  icon: Icon(booking.finished ? Icons.refresh : Icons.close, size: 17),
-  label: Text(
-    _bookingBusy
-        ? '…'
-        : widget.localization.t(booking.finished ? 'booking_again' : 'booking_delete'),
-    style: _mono(9.5),
-  ),
-  style: OutlinedButton.styleFrom(
-    foregroundColor: BrandPalette.ink,
-    minimumSize: const Size.fromHeight(46),
-    side: const BorderSide(color: BrandPalette.ink),
-    shape: const RoundedRectangleBorder(),
-  ),
-),
+          Row(
+            children: [
+              Icon(bookingIcon, size: 24),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  '${widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today')} · ${widget.localization.t(bookingStatusKey)}',
+                  style: _mono(11.5, spacing: 0.55),
+                ),
+              ),
+              Text(_moneyLabel(booking.amountVnd), style: _serif(18)),
+            ],
+          ),
+          if (booking.telegramLinked) ...[
+            const SizedBox(height: 10),
+            Text(
+              widget.localization.t('booking_telegram_connected'),
+              style: _mono(9, color: BrandPalette.inkMuted),
+            ),
+          ] else if (booking.canConnectTelegram && !booking.finished) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _connectBookingTelegram(booking),
+              icon: const Icon(Icons.send_outlined, size: 17),
+              label: Text(
+                widget.localization.t('booking_connect_telegram'),
+                style: _mono(9.5),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BrandPalette.ink,
+                minimumSize: const Size.fromHeight(46),
+                side: const BorderSide(color: BrandPalette.ink),
+                shape: const RoundedRectangleBorder(),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _bookingBusy
+                ? null
+                : booking.finished
+                ? () => _clearFinishedBooking(booking)
+                : () => _deleteDeskRequest(booking),
+            icon: Icon(
+              booking.finished ? Icons.refresh : Icons.close,
+              size: 17,
+            ),
+            label: Text(
+              _bookingBusy
+                  ? '…'
+                  : widget.localization.t(
+                      booking.finished ? 'booking_again' : 'booking_delete',
+                    ),
+              style: _mono(9.5),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BrandPalette.ink,
+              minimumSize: const Size.fromHeight(46),
+              side: const BorderSide(color: BrandPalette.ink),
+              shape: const RoundedRectangleBorder(),
+            ),
+          ),
         ],
       ),
     );
@@ -684,7 +706,8 @@ OutlinedButton.icon(
 
   String _moneyLabel(int value) {
     if (value % 1000000 == 0) return '${value ~/ 1000000} MLN VND';
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)} MLN VND';
+    if (value >= 1000000)
+      return '${(value / 1000000).toStringAsFixed(1)} MLN VND';
     if (value % 1000 == 0) return '${value ~/ 1000}K VND';
     return '$value VND';
   }
@@ -693,29 +716,31 @@ OutlinedButton.icon(
     return _Section(
       title: widget.localization.t('prices_title'),
       child: Column(
-        children: _content.prices.map((price) {
-          return Container(
-            constraints: const BoxConstraints(minHeight: 76),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.localization.t(price.labelKey),
-                    style: _mono(11, spacing: 0.8),
-                  ),
+        children: _content.prices
+            .map((price) {
+              return Container(
+                constraints: const BoxConstraints(minHeight: 76),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
                 ),
-                Text(
-                  price.price,
-                  textAlign: TextAlign.right,
-                  style: _serif(compact ? 24 : 30),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.localization.t(price.labelKey),
+                        style: _mono(11, spacing: 0.8),
+                      ),
+                    ),
+                    Text(
+                      price.price,
+                      textAlign: TextAlign.right,
+                      style: _serif(compact ? 24 : 30),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        }).toList(growable: false),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
@@ -724,48 +749,50 @@ OutlinedButton.icon(
     return _Section(
       title: widget.localization.t('opening_title'),
       child: Column(
-        children: _content.openings.map((opening) {
-          return Container(
-            constraints: const BoxConstraints(minHeight: 70),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 9,
-                  height: 9,
-                  margin: const EdgeInsets.only(right: 14),
-                  decoration: BoxDecoration(
-                    color: opening.isOpen
-                        ? BrandPalette.ink
-                        : Colors.transparent,
-                    border: Border.all(color: BrandPalette.ink),
-                    shape: BoxShape.circle,
-                  ),
+        children: _content.openings
+            .map((opening) {
+              return Container(
+                constraints: const BoxConstraints(minHeight: 70),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
                 ),
-                Expanded(
-                  child: Text(
-                    widget.localization.t(opening.labelKey),
-                    style: _serif(compact ? 18 : 21),
-                  ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      margin: const EdgeInsets.only(right: 14),
+                      decoration: BoxDecoration(
+                        color: opening.isOpen
+                            ? BrandPalette.ink
+                            : Colors.transparent,
+                        border: Border.all(color: BrandPalette.ink),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        widget.localization.t(opening.labelKey),
+                        style: _serif(compact ? 18 : 21),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      widget.localization.t(
+                        opening.isOpen ? 'now_open' : 'coming_soon',
+                      ),
+                      style: _mono(
+                        9.5,
+                        color: BrandPalette.inkMuted,
+                        spacing: 0.6,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  widget.localization.t(
-                    opening.isOpen ? 'now_open' : 'coming_soon',
-                  ),
-                  style: _mono(
-                    9.5,
-                    color: BrandPalette.inkMuted,
-                    spacing: 0.6,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(growable: false),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
@@ -786,11 +813,7 @@ OutlinedButton.icon(
               width: compact ? 62 : 86,
               child: Text(
                 announcement.date,
-                style: _mono(
-                  10,
-                  color: BrandPalette.inkMuted,
-                  spacing: 0.7,
-                ),
+                style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7),
               ),
             ),
             Expanded(
@@ -897,20 +920,12 @@ OutlinedButton.icon(
             Expanded(
               child: Text(
                 'EVIL SPACE  ·  NHA TRANG',
-                style: _mono(
-                  9.5,
-                  color: BrandPalette.inkMuted,
-                  spacing: 0.75,
-                ),
+                style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75),
               ),
             ),
             Text(
               widget.localization.t('page_one'),
-              style: _mono(
-                9.5,
-                color: BrandPalette.inkMuted,
-                spacing: 0.75,
-              ),
+              style: _mono(9.5, color: BrandPalette.inkMuted, spacing: 0.75),
             ),
           ],
         ),
@@ -919,9 +934,9 @@ OutlinedButton.icon(
   }
 
   Widget _sectionKicker(String text) => Text(
-        text,
-        style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
-      );
+    text,
+    style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
+  );
 
   String _updatedLabel(String raw) {
     final parsed = DateTime.tryParse(raw);
@@ -1002,7 +1017,12 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
     return AlertDialog(
       backgroundColor: BrandPalette.paper,
       shape: const RoundedRectangleBorder(),
-      title: Text(l.t(widget.isTomorrow ? 'booking_title_tomorrow' : 'booking_title_today'), style: _serif(30)),
+      title: Text(
+        l.t(
+          widget.isTomorrow ? 'booking_title_tomorrow' : 'booking_title_today',
+        ),
+        style: _serif(30),
+      ),
       content: SizedBox(
         width: 460,
         child: Column(
@@ -1251,16 +1271,10 @@ class _ContactLink extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Expanded(
-              child: Text(label, style: _mono(10.5, spacing: 0.7)),
-            ),
+            Expanded(child: Text(label, style: _mono(10.5, spacing: 0.7))),
             Text(
               detail,
-              style: _mono(
-                10,
-                color: BrandPalette.inkMuted,
-                spacing: 0.25,
-              ),
+              style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.25),
             ),
             const SizedBox(width: 12),
             const Icon(Icons.arrow_outward, size: 18),
