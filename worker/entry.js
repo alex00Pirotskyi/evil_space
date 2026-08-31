@@ -12,6 +12,13 @@ import {
   notifyAdminsNewBooking,
   notifyAdminsPurchase,
 } from './telegram.js';
+import {
+  bookingWindow,
+  dayPassAmount,
+  isBookableServiceDay,
+  serviceDateKey,
+  serviceDayFromDateKey,
+} from './booking_rules.js';
 
 const MAX_NAME_LENGTH = 100;
 const MAX_CONTACT_LENGTH = 160;
@@ -77,7 +84,7 @@ export default {
 
     if (request.method === 'GET' && url.pathname === '/api/admin/operations') {
       const response = await legacyWorker.fetch(request, env, ctx);
-      return filterOperationsToToday(response);
+      return filterOperationsBookingWindow(response);
     }
 
     if (
@@ -197,25 +204,33 @@ function constantTimeEqual(a, b) {
 
 async function handlePublicStatus(env) {
   const now = nowSeconds();
-  const { start, end } = nhaTrangDayBounds(now);
+  const { today, tomorrow, end } = bookingWindow(now);
   const row = await env.evil_space
     .prepare(`
       SELECT
         COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
-        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS today_occupied,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS tomorrow_occupied
     `)
-    .bind(start, end)
+    .bind(today, tomorrow, tomorrow, end)
     .first();
 
   const total = Math.max(1, Number(row?.total ?? 10));
-  const occupied = Math.min(total, Math.max(0, Number(row?.occupied ?? 0)));
+  const occupied = Math.min(total, Math.max(0, Number(row?.today_occupied ?? 0)));
+  const tomorrowOccupied = Math.min(total, Math.max(0, Number(row?.tomorrow_occupied ?? 0)));
   return json({
     ok: true,
     status: {
       total,
       occupied,
       free: Math.max(0, total - occupied),
-      updated: new Date(start * 1000).toISOString(),
+      updated: new Date(today * 1000).toISOString(),
+      todayDate: serviceDateKey(today),
+      tomorrowDate: serviceDateKey(tomorrow),
+      todayPrice: dayPassAmount(today, now),
+      tomorrowPrice: dayPassAmount(tomorrow, now),
+      tomorrowOccupied,
+      tomorrowFree: Math.max(0, total - tomorrowOccupied),
     },
   });
 }
@@ -230,22 +245,56 @@ async function handlePublicBooking(request, env, ctx) {
       ? body.contactType
       : '';
   const contactValue = cleanText(body.contactValue, MAX_CONTACT_LENGTH);
+  const now = nowSeconds();
+  const serviceDay = serviceDayFromDateKey(body.serviceDate);
 
   if (!name) return jsonError('Name is required.', 400);
   if (!contactType || contactValue.length < 3) {
     return jsonError('Phone or Telegram is required.', 400);
   }
+  if (serviceDay == null || !isBookableServiceDay(serviceDay, now)) {
+    return jsonError('Choose today or tomorrow.', 400);
+  }
 
+  const serviceEnd = serviceDay + 86400;
+  const capacity = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied
+    `)
+    .bind(serviceDay, serviceEnd)
+    .first();
+  if (Number(capacity?.occupied ?? 0) >= Number(capacity?.total ?? 10)) {
+    return jsonError('No desks are left for this day.', 409);
+  }
+
+  const duplicate = await env.evil_space
+    .prepare(`
+      SELECT id
+      FROM booking_requests
+      WHERE service_day = ?
+        AND contact_type = ?
+        AND lower(contact_value) = lower(?)
+        AND status IN ('new', 'processing', 'accepted')
+      LIMIT 1
+    `)
+    .bind(serviceDay, contactType, contactValue)
+    .first();
+  if (duplicate) return jsonError('You already have an active booking for this day.', 409);
+
+  const amountVnd = dayPassAmount(serviceDay, now);
   const token = randomToken(32);
   const tokenHash = await hashToken(token);
   const created = await env.evil_space
     .prepare(`
       INSERT INTO booking_requests
-        (name, contact_type, contact_value, status, created_at, client_token_hash)
-      VALUES (?, ?, ?, 'new', ?, ?)
+        (name, contact_type, contact_value, status, created_at, client_token_hash,
+         service_day, amount_vnd)
+      VALUES (?, ?, ?, 'new', ?, ?, ?, ?)
       RETURNING id
     `)
-    .bind(name, contactType, contactValue, nowSeconds(), tokenHash)
+    .bind(name, contactType, contactValue, now, tokenHash, serviceDay, amountVnd)
     .first();
 
   if (!created?.id) return jsonError('Could not create desk request.', 500);
@@ -266,6 +315,8 @@ async function handlePublicBooking(request, env, ctx) {
       ok: true,
       token,
       status: 'pending',
+      serviceDate: serviceDateKey(serviceDay),
+      amountVnd,
       telegramLinkUrl,
       telegramLinked: false,
       message: 'Desk request sent. Evil Space staff can now see it.',
@@ -284,14 +335,15 @@ async function handlePublicBookingStatus(url, env) {
       SELECT
         b.id,
         b.status,
-        b.created_at,
+        b.service_day,
+        b.amount_vnd,
         CASE
-          WHEN b.customer_id IS NOT NULL AND EXISTS (
-            SELECT 1
-            FROM customer_telegram_links l
-            WHERE l.customer_id = b.customer_id
-          ) THEN 1
-          ELSE 0
+WHEN b.customer_id IS NOT NULL AND EXISTS (
+  SELECT 1
+  FROM customer_telegram_links l
+  WHERE l.customer_id = b.customer_id
+) THEN 1
+ELSE 0
         END AS telegram_linked
       FROM booking_requests b
       WHERE b.client_token_hash = ?
@@ -303,9 +355,9 @@ async function handlePublicBookingStatus(url, env) {
   if (!booking) return jsonError('Booking not found.', 404);
 
   const now = nowSeconds();
-  const { start, end } = nhaTrangDayBounds(now);
-  const createdAt = Number(booking.created_at ?? 0);
-  if (createdAt < start || createdAt >= end) {
+  const { today, end } = bookingWindow(now);
+  const serviceDay = Number(booking.service_day ?? 0);
+  if (serviceDay < today || serviceDay >= end) {
     return jsonError('Booking expired.', 410);
   }
 
@@ -320,11 +372,13 @@ async function handlePublicBookingStatus(url, env) {
   return json({
     ok: true,
     status,
+    serviceDate: serviceDateKey(serviceDay),
+    amountVnd: Number(booking.amount_vnd ?? 0),
     telegramLinked: Number(booking.telegram_linked ?? 0) === 1,
   });
 }
 
-async function filterOperationsToToday(response) {
+async function filterOperationsBookingWindow(response) {
   if (!response.ok) return response;
 
   let payload;
@@ -336,10 +390,10 @@ async function filterOperationsToToday(response) {
 
   const requests = payload?.snapshot?.booking_requests;
   if (Array.isArray(requests)) {
-    const { start, end } = nhaTrangDayBounds(nowSeconds());
+    const { today, end } = bookingWindow(nowSeconds());
     payload.snapshot.booking_requests = requests.filter((booking) => {
-      const createdAt = Number(booking?.created_at ?? 0);
-      return createdAt >= start && createdAt < end;
+      const serviceDay = Number(booking?.service_day ?? 0);
+      return serviceDay >= today && serviceDay < end;
     });
   }
 

@@ -1,9 +1,22 @@
+import {
+  DAY_PASS_VND,
+  HALF_DAY_VND,
+  MONTH_PASS_VND,
+  bookingDayKind,
+  bookingWindow,
+  compactServiceDate,
+  dayPassAmount,
+  isBookableServiceDay,
+  nhaTrangDayBounds,
+  serviceDateKey,
+  serviceDayForOffset,
+  serviceDayFromCompactDate,
+  visitTimestampForServiceDay,
+} from './booking_rules.js';
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const BOT_USERNAME = 'CoworkingEvilAdminBot';
-const DAY_PASS_VND = 200000;
-const MONTH_PASS_VND = 2500000;
 const ADMIN_LINK_TTL = 10 * 60;
-const CUSTOMER_LINK_TTL = 6 * 60 * 60;
+const CUSTOMER_LINK_TTL = 30 * 60 * 60;
 const SESSION_TTL = 30 * 60;
 const MAX_NAME_LENGTH = 100;
 const MAX_TEXT_LENGTH = 180;
@@ -19,14 +32,18 @@ const TEXT = {
     customerPending: '⏳ <b>BOOKING REQUEST SENT</b>',
     customerPendingCopy: 'Your request is waiting for an Evil Space admin.',
     customerAccepted: '✅ <b>BOOKING ACCEPTED</b>',
-    customerAcceptedCopy: 'Your desk at Evil Space is confirmed for today.\nOpen daily 11:00–23:00.\n\nYou can cancel here anytime if your plans change.',
+    customerAcceptedCopy: 'Your desk at Evil Space is confirmed.\nOpen daily 11:00–23:00.\n\nYou can cancel here anytime if your plans change.',
     customerDeclined: '❌ <b>BOOKING DECLINED</b>',
     customerDeclinedCopy: 'We could not confirm this desk request. You can make another request anytime at evils.space.',
     customerCancelled: '🚫 <b>BOOKING CANCELLED</b>',
     customerCancelledCopy: 'Your desk is no longer counted as occupied.',
-    customerNoBooking: 'You do not have an active desk request today.',
+    customerNoBooking: 'You do not have an active desk request for today or tomorrow.',
     unlinked: 'This Telegram account is not linked.\n\nAdmins: open evils.space/admin → Telegram.\nCustomers: open evils.space and press TG when booking.',
     today: 'TODAY',
+    tomorrow: 'TOMORROW',
+    date: 'Date',
+    price: 'Price',
+    halfDay: 'HALF DAY · AFTER 16:00',
     bookings: 'BOOKINGS',
     dayPass: 'DAY PASS',
     month: 'MONTH',
@@ -106,7 +123,7 @@ const TEXT = {
     password: 'Password',
     languageTitle: '🌐 <b>LANGUAGE</b>\n\nChoose the language for this bot.',
     languageChanged: 'Language updated.',
-    bookingAlreadyActive: 'You already have an active desk request today.',
+    bookingAlreadyActive: 'You already have an active desk request for this day.',
     purchaseNotification: '🛒 <b>NEW PURCHASE REQUEST</b>',
     purchaseNotificationCopy: 'Open /buy to manage the shared list.',
     help: 'EVIL SPACE ADMIN\n\n/menu — main menu\n/today — today\n/bookings — pending desk requests\n/day Name — day pass\n/month Name — new month pass\n/customer Alex — search customers\n/income — income\n/buy Item — add purchase request\n/settings — notifications\n/language — language\n/cancel — cancel current action',
@@ -119,14 +136,18 @@ const TEXT = {
     customerPending: '⏳ <b>ЗАПРОС НА БРОНЬ ОТПРАВЛЕН</b>',
     customerPendingCopy: 'Запрос ожидает подтверждения администратора Evil Space.',
     customerAccepted: '✅ <b>БРОНЬ ПОДТВЕРЖДЕНА</b>',
-    customerAcceptedCopy: 'Ваш стол в Evil Space подтверждён на сегодня.\nРаботаем ежедневно 11:00–23:00.\n\nЕсли планы изменятся, бронь можно отменить здесь.',
+    customerAcceptedCopy: 'Ваш стол в Evil Space подтверждён.\nРаботаем ежедневно 11:00–23:00.\n\nЕсли планы изменятся, бронь можно отменить здесь.',
     customerDeclined: '❌ <b>БРОНЬ ОТКЛОНЕНА</b>',
     customerDeclinedCopy: 'Мы не смогли подтвердить этот запрос. Новый запрос можно отправить в любое время на evils.space.',
     customerCancelled: '🚫 <b>БРОНЬ ОТМЕНЕНА</b>',
     customerCancelledCopy: 'Стол больше не считается занятым.',
-    customerNoBooking: 'У вас нет активной брони на сегодня.',
+    customerNoBooking: 'У вас нет активной брони на сегодня или завтра.',
     unlinked: 'Этот Telegram не подключён.\n\nАдминистратор: откройте evils.space/admin → Telegram.\nКлиент: откройте evils.space и при бронировании нажмите TG.',
     today: 'СЕГОДНЯ',
+    tomorrow: 'ЗАВТРА',
+    date: 'Дата',
+    price: 'Цена',
+    halfDay: 'ПОЛДНЯ · ПОСЛЕ 16:00',
     bookings: 'БРОНИ',
     dayPass: 'ДЕНЬ',
     month: 'МЕСЯЦ',
@@ -206,7 +227,7 @@ const TEXT = {
     password: 'Пароль',
     languageTitle: '🌐 <b>ЯЗЫК</b>\n\nВыберите язык бота.',
     languageChanged: 'Язык изменён.',
-    bookingAlreadyActive: 'У вас уже есть активный запрос на сегодня.',
+    bookingAlreadyActive: 'У вас уже есть активный запрос на этот день.',
     purchaseNotification: '🛒 <b>НОВАЯ ПОКУПКА</b>',
     purchaseNotificationCopy: 'Откройте /buy для общего списка покупок.',
     help: 'EVIL SPACE ADMIN\n\n/menu — меню\n/today — сегодня\n/bookings — ожидающие брони\n/day Имя — дневной пропуск\n/month Имя — месячный абонемент\n/customer Alex — поиск клиентов\n/income — доход\n/buy Товар — список покупок\n/settings — уведомления\n/language — язык\n/cancel — отменить текущее действие',
@@ -227,6 +248,10 @@ const TEXT = {
     customerNoBooking: 'Hôm nay bạn không có yêu cầu đặt bàn đang hoạt động.',
     unlinked: 'Tài khoản Telegram này chưa được kết nối.\n\nQuản trị viên: mở evils.space/admin → Telegram.\nKhách: mở evils.space và nhấn TG khi đặt bàn.',
     today: 'HÔM NAY',
+    tomorrow: 'NGÀY MAI',
+    date: 'Ngày',
+    price: 'Giá',
+    halfDay: 'NỬA NGÀY · SAU 16:00',
     bookings: 'ĐẶT BÀN',
     dayPass: 'VÉ NGÀY',
     month: 'THÁNG',
@@ -427,8 +452,10 @@ export async function createCustomerTelegramLink(env, bookingId, rawLanguage = '
   const id = toPositiveInt(bookingId);
   if (!id) return null;
   const now = nowSeconds();
-  const { end } = nhaTrangDayBounds(now);
-  const expiresAt = Math.min(end, now + CUSTOMER_LINK_TTL);
+  const booking = await bookingById(env, id);
+  if (!booking) return null;
+  const serviceDay = Number(booking.service_day ?? 0);
+  const expiresAt = Math.min(serviceDay + 86400, now + CUSTOMER_LINK_TTL);
   if (expiresAt <= now) return null;
   const language = normalizeLanguage(rawLanguage);
 
@@ -441,7 +468,7 @@ export async function createCustomerTelegramLink(env, bookingId, rawLanguage = '
     env.evil_space
       .prepare(`
         INSERT INTO customer_telegram_link_tokens
-          (token_hash, booking_id, created_at, expires_at, used_at, language)
+(token_hash, booking_id, created_at, expires_at, used_at, language)
         VALUES (?, ?, ?, ?, NULL, ?)
       `)
       .bind(tokenHash, id, now, expiresAt, language),
@@ -489,7 +516,7 @@ export async function handlePublicBookingCancel(request, env, ctx) {
   const tokenHash = await hashToken(token);
   const booking = await env.evil_space
     .prepare(`
-      SELECT id, status, customer_id, accepted_visit_id, created_at
+      SELECT id, status, customer_id, accepted_visit_id, created_at, service_day, amount_vnd
       FROM booking_requests
       WHERE client_token_hash = ?
       LIMIT 1
@@ -880,7 +907,7 @@ async function handleCustomerCallback(env, callback, userId, chatId, data) {
   if (!bookingId) return answerCallback(env, callback.id, tr(lang, 'invalidBooking'), true);
   const booking = await env.evil_space
     .prepare(`
-      SELECT b.id, b.status, b.customer_id, b.accepted_visit_id, b.created_at
+      SELECT b.id, b.status, b.customer_id, b.accepted_visit_id, b.created_at, b.service_day, b.amount_vnd
       FROM booking_requests b
       JOIN customer_telegram_links l ON l.customer_id = b.customer_id
       WHERE b.id = ? AND l.telegram_user_id = ?
@@ -889,9 +916,7 @@ async function handleCustomerCallback(env, callback, userId, chatId, data) {
     .first();
   if (!booking) return answerCallback(env, callback.id, tr(lang, 'bookingNotYours'), true);
 
-  const { start, end } = nhaTrangDayBounds(nowSeconds());
-  const createdAt = Number(booking.created_at ?? 0);
-  if (createdAt < start || createdAt >= end) {
+  if (!isBookableServiceDay(Number(booking.service_day ?? 0), nowSeconds())) {
     return answerCallback(env, callback.id, tr(lang, 'bookingExpired'), true);
   }
 
@@ -997,7 +1022,8 @@ async function pairCustomer(env, user, chatId, token) {
   const pending = await env.evil_space
     .prepare(`
       SELECT t.booking_id, t.expires_at, t.language,
-             b.id, b.name, b.contact_type, b.contact_value, b.status, b.customer_id, b.created_at
+   b.id, b.name, b.contact_type, b.contact_value, b.status, b.customer_id,
+   b.created_at, b.service_day, b.amount_vnd
       FROM customer_telegram_link_tokens t
       JOIN booking_requests b ON b.id = t.booking_id
       WHERE t.token_hash = ? AND t.used_at IS NULL
@@ -1007,9 +1033,7 @@ async function pairCustomer(env, user, chatId, token) {
   if (!pending || Number(pending.expires_at) <= now) {
     return sendText(env, chatId, 'This booking link expired. Return to evils.space and create a new desk request if needed.');
   }
-  const { start, end } = nhaTrangDayBounds(now);
-  const createdAt = Number(pending.created_at ?? 0);
-  if (createdAt < start || createdAt >= end || !['new', 'accepted'].includes(pending.status)) {
+  if (!isBookableServiceDay(Number(pending.service_day ?? 0), now) || !['new', 'accepted'].includes(pending.status)) {
     return sendText(env, chatId, 'This booking is no longer active.');
   }
 
@@ -1029,25 +1053,37 @@ async function pairCustomer(env, user, chatId, token) {
   }
 }
 
-async function bookViaTelegram(env, user, chatId, rawLanguage) {
-  const language = normalizeLanguage(rawLanguage);
+async function bookViaTelegram(env, user, chatId, rawPayload) {
+  const now = nowSeconds();
+  let language = 'en';
+  let serviceDay = null;
+  const match = /^(\d{8})_(en|ru|vi)$/.exec(String(rawPayload ?? ''));
+  if (match) {
+    serviceDay = serviceDayFromCompactDate(match[1]);
+    language = normalizeLanguage(match[2]);
+  } else {
+    language = normalizeLanguage(rawPayload);
+    serviceDay = serviceDayForOffset(0, now);
+  }
+  if (serviceDay == null || !isBookableServiceDay(serviceDay, now)) {
+    return sendText(env, chatId, 'This booking date is no longer available. Return to evils.space and choose today or tomorrow.');
+  }
+
   const identity = telegramBookingIdentity(user);
   const customer = await ensureTelegramCustomer(env, user, identity);
   await upsertCustomerTelegramLink(env, customer.id, user, chatId, language);
 
-  const now = nowSeconds();
-  const { start, end } = nhaTrangDayBounds(now);
   const existing = await env.evil_space
     .prepare(`
       SELECT id, status
       FROM booking_requests
       WHERE customer_id = ?
-        AND created_at >= ? AND created_at < ?
+        AND service_day = ?
         AND status IN ('new', 'processing', 'accepted')
       ORDER BY id DESC
       LIMIT 1
     `)
-    .bind(customer.id, start, end)
+    .bind(customer.id, serviceDay)
     .first();
 
   if (existing?.id) {
@@ -1059,14 +1095,21 @@ async function bookViaTelegram(env, user, chatId, rawLanguage) {
     return;
   }
 
+  const capacity = await serviceDayCapacity(env, serviceDay);
+  if (capacity.occupied >= capacity.total) {
+    return sendText(env, chatId, 'No desks are left for this day.');
+  }
+
+  const amountVnd = dayPassAmount(serviceDay, now);
   const created = await env.evil_space
     .prepare(`
       INSERT INTO booking_requests
-        (name, contact_type, contact_value, status, created_at, customer_id)
-      VALUES (?, 'telegram', ?, 'new', ?, ?)
+        (name, contact_type, contact_value, status, created_at, customer_id,
+         service_day, amount_vnd)
+      VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)
       RETURNING id
     `)
-    .bind(identity.name, identity.contact, now, customer.id)
+    .bind(identity.name, identity.contact, now, customer.id, serviceDay, amountVnd)
     .first();
   if (!created?.id) throw new Error('Could not create Telegram booking.');
 
@@ -1214,16 +1257,17 @@ async function sendToday(env, admin, chatId) {
 
 async function sendPendingBookings(env, admin, chatId) {
   const lang = normalizeLanguage(admin.language);
-  const { start, end } = nhaTrangDayBounds(nowSeconds());
+  const { today, end } = bookingWindow(nowSeconds());
   const result = await env.evil_space
     .prepare(`
-      SELECT id, name, contact_type, contact_value, status, created_at
+      SELECT id, name, contact_type, contact_value, status, created_at,
+   service_day, amount_vnd, handled_at, handled_by_email
       FROM booking_requests
-      WHERE status = 'new' AND created_at >= ? AND created_at < ?
-      ORDER BY created_at ASC, id ASC
+      WHERE status = 'new' AND service_day >= ? AND service_day < ?
+      ORDER BY service_day ASC, created_at ASC, id ASC
       LIMIT 50
     `)
-    .bind(start, end)
+    .bind(today, end)
     .all();
   const bookings = result.results ?? [];
   if (!bookings.length) {
@@ -1269,11 +1313,15 @@ function bookingAdminText(booking, status, actor = '', language = 'en') {
       : status === 'cancelled'
         ? tr(lang, 'bookingCancelledTitle')
         : tr(lang, 'newDeskRequest');
+  const serviceDay = Number(booking.service_day ?? 0);
+  const kind = bookingDayKind(serviceDay, nowSeconds());
+  const dayLabel = kind === 'tomorrow' ? tr(lang, 'tomorrow') : tr(lang, 'today');
   return [
     `<b>${heading}</b>`,
     '',
     `<b>${escapeHtml(booking.name ?? '')}</b>`,
     `${contact}: ${escapeHtml(booking.contact_value ?? '')}`,
+    `${dayLabel} · ${formatLocalDate(serviceDay)} · <b>${formatMoney(booking.amount_vnd)}</b>`,
     `${tr(lang, 'time')}: ${formatLocalTime(booking.created_at)}`,
     actor ? `${tr(lang, 'by')}: ${escapeHtml(actor)}` : '',
   ].filter(Boolean).join('\n');
@@ -1329,10 +1377,12 @@ async function prepareNamedOperation(env, admin, chatId, state, value) {
   if (!name) return sendText(env, chatId, tr(lang, 'nameRequired'));
   await setAdminState(env, admin, state, { name });
   const isMonth = state === 'confirm_month';
+  const now = nowSeconds();
+  const todayPrice = dayPassAmount(serviceDayForOffset(0, now), now);
   return sendText(
     env,
     chatId,
-    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : '200K VND'}\n\n${tr(lang, 'confirmQuestion')}`,
+    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : formatMoney(todayPrice)}\n\n${tr(lang, 'confirmQuestion')}`,
     {
       inline_keyboard: [[
         { text: tr(lang, 'confirm'), callback_data: isMonth ? 'op:month:ok' : 'op:day:ok' },
@@ -1537,18 +1587,19 @@ async function setCustomerLanguage(env, telegramUserId, language) {
 
 async function acceptBooking(env, bookingId, admin) {
   const now = nowSeconds();
-  const { start, end } = nhaTrangDayBounds(now);
   const existing = await bookingById(env, bookingId);
   if (!existing) throw new OperationError('Booking not found.', 404);
-  const createdAt = Number(existing.created_at ?? 0);
-  if (createdAt < start || createdAt >= end) throw new OperationError('This desk request expired at midnight.', 410);
+  const serviceDay = Number(existing.service_day ?? 0);
+  if (!isBookableServiceDay(serviceDay, now)) {
+    throw new OperationError('This desk request is no longer for today or tomorrow.', 410);
+  }
 
   const claimed = await env.evil_space
     .prepare(`
       UPDATE booking_requests
       SET status = 'processing', handled_at = ?, handled_by_email = ?
       WHERE id = ? AND status = 'new'
-      RETURNING id, name, contact_type, contact_value, created_at
+      RETURNING id, name, contact_type, contact_value, created_at, service_day, amount_vnd
     `)
     .bind(now, admin.email, bookingId)
     .first();
@@ -1562,27 +1613,36 @@ async function acceptBooking(env, bookingId, admin) {
     });
     const current = await bookingById(env, bookingId);
     const customerId = toPositiveInt(current?.customer_id) ?? customer.id;
+    const serviceStart = Number(claimed.service_day);
+    const serviceEnd = serviceStart + 86400;
     const already = await env.evil_space
       .prepare(`
         SELECT id FROM visits
         WHERE customer_id = ? AND created_at >= ? AND created_at < ?
         LIMIT 1
       `)
-      .bind(customerId, start, end)
+      .bind(customerId, serviceStart, serviceEnd)
       .first();
 
     let acceptedVisitId = null;
     if (!already) {
+      const visitTime = visitTimestampForServiceDay(serviceStart, now);
+      const amountVnd = Number(claimed.amount_vnd ?? dayPassAmount(serviceStart, now));
       const visit = await env.evil_space
         .prepare(`
-          INSERT INTO visits
-            (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
-          VALUES (?, 'day', NULL, ?, ?, ?, ?)
-          RETURNING id
+INSERT INTO visits
+  (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
+SELECT ?, 'day', NULL, ?, ?, ?, ?
+WHERE (
+  SELECT COUNT(*) FROM visits
+  WHERE created_at >= ? AND created_at < ?
+) < COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10)
+RETURNING id
         `)
-        .bind(claimed.name, DAY_PASS_VND, now, admin.email, customerId)
+        .bind(claimed.name, amountVnd, visitTime, admin.email, customerId, serviceStart, serviceEnd)
         .first();
       acceptedVisitId = toPositiveInt(visit?.id);
+      if (!acceptedVisitId) throw new OperationError('No desks are left for this day.', 409);
     }
 
     await env.evil_space
@@ -1593,7 +1653,7 @@ async function acceptBooking(env, bookingId, admin) {
       `)
       .bind(customerId, acceptedVisitId, bookingId)
       .run();
-    await audit(env, admin, 'booking.accept', 'booking', bookingId, claimed.name);
+    await audit(env, admin, 'booking.accept', 'booking', bookingId, `${claimed.name} · ${serviceDateKey(serviceStart)} · ${formatMoney(claimed.amount_vnd)}`);
     return { ...claimed, id: bookingId, customer_id: customerId, accepted_visit_id: acceptedVisitId };
   } catch (error) {
     await env.evil_space
@@ -1606,23 +1666,24 @@ async function acceptBooking(env, bookingId, admin) {
 
 async function declineBooking(env, bookingId, admin) {
   const now = nowSeconds();
-  const { start, end } = nhaTrangDayBounds(now);
   const existing = await bookingById(env, bookingId);
   if (!existing) throw new OperationError('Booking not found.', 404);
-  const createdAt = Number(existing.created_at ?? 0);
-  if (createdAt < start || createdAt >= end) throw new OperationError('This desk request expired at midnight.', 410);
+  const serviceDay = Number(existing.service_day ?? 0);
+  if (!isBookableServiceDay(serviceDay, now)) {
+    throw new OperationError('This desk request is no longer for today or tomorrow.', 410);
+  }
 
   const declined = await env.evil_space
     .prepare(`
       UPDATE booking_requests
       SET status = 'declined', handled_at = ?, handled_by_email = ?
       WHERE id = ? AND status = 'new'
-      RETURNING id, name, contact_type, contact_value, created_at
+      RETURNING id, name, contact_type, contact_value, created_at, service_day, amount_vnd
     `)
     .bind(now, admin.email, bookingId)
     .first();
   if (!declined) throw new OperationError('Booking request was already handled.', 409);
-  await audit(env, admin, 'booking.decline', 'booking', bookingId, declined.name);
+  await audit(env, admin, 'booking.decline', 'booking', bookingId, `${declined.name} · ${serviceDateKey(serviceDay)} · ${formatMoney(declined.amount_vnd)}`);
   return declined;
 }
 
@@ -1659,7 +1720,7 @@ async function addDayPass(env, rawName, admin) {
       VALUES (?, 'day', NULL, ?, ?, ?, ?)
       RETURNING id
     `)
-    .bind(name, DAY_PASS_VND, now, admin.email, customer.id)
+    .bind(name, dayPassAmount(serviceDayForOffset(0, now), now), now, admin.email, customer.id)
     .first();
   await audit(env, admin, 'day_pass.create', 'visit', visit?.id, name);
   return visit;
@@ -1797,9 +1858,11 @@ async function sendCustomerPending(env, chatId, bookingId, language, connected =
   const lang = normalizeLanguage(language);
   const heading = connected ? tr(lang, 'customerConnected') : tr(lang, 'customerPending');
   const copy = connected ? tr(lang, 'customerConnectedCopy') : tr(lang, 'customerPendingCopy');
+  const booking = await bookingById(env, bookingId);
+  const details = booking ? bookingCustomerDetails(booking, lang) : '';
   await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: `${heading}\n\n${copy}`,
+    text: `${heading}\n\n${details}${details ? '\n\n' : ''}${copy}`,
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
@@ -1827,15 +1890,17 @@ async function sendCustomerCancelConfirmation(env, chatId, bookingId, language) 
 
 async function sendCustomerAccepted(env, chatId, bookingId, language) {
   const lang = normalizeLanguage(language);
+  const booking = await bookingById(env, bookingId);
+  const details = booking ? bookingCustomerDetails(booking, lang) : '';
   await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: `${tr(lang, 'customerAccepted')}\n\n${tr(lang, 'customerAcceptedCopy')}`,
+    text: `${tr(lang, 'customerAccepted')}\n\n${details}${details ? '\n\n' : ''}${tr(lang, 'customerAcceptedCopy')}`,
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
         [
-          { text: `❌ ${tr(lang, 'cancelBooking')}`, callback_data: `cc:${bookingId}` },
-          { text: `📶 ${tr(lang, 'wifi')}`, callback_data: `cw:${bookingId}` },
+{ text: `❌ ${tr(lang, 'cancelBooking')}`, callback_data: `cc:${bookingId}` },
+{ text: `📶 ${tr(lang, 'wifi')}`, callback_data: `cw:${bookingId}` },
         ],
         [{ text: tr(lang, 'directions'), url: 'https://www.google.com/maps/dir/?api=1&destination=Evil%20Space%2C%2060%20Cao%20V%C4%83n%20B%C3%A9%2C%20Nha%20Trang' }],
         [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
@@ -1876,30 +1941,35 @@ async function sendCustomerCancelled(env, chatId, language) {
 
 async function sendCustomerHome(env, customer, chatId) {
   const lang = normalizeLanguage(customer?.language);
-  const { start, end } = nhaTrangDayBounds(nowSeconds());
-  const booking = await env.evil_space
+  const { today, end } = bookingWindow(nowSeconds());
+  const result = await env.evil_space
     .prepare(`
       SELECT id, status
       FROM booking_requests
-      WHERE customer_id = ? AND created_at >= ? AND created_at < ?
-      ORDER BY id DESC
-      LIMIT 1
+      WHERE customer_id = ? AND service_day >= ? AND service_day < ?
+        AND status IN ('new', 'processing', 'accepted')
+      ORDER BY service_day ASC, id DESC
+      LIMIT 2
     `)
-    .bind(customer.customer_id, start, end)
-    .first();
+    .bind(customer.customer_id, today, end)
+    .all();
+  const bookings = result.results ?? [];
 
-  if (booking?.status === 'accepted') {
-    return sendCustomerAccepted(env, chatId, booking.id, lang);
+  if (!bookings.length) {
+    return sendText(env, chatId, tr(lang, 'customerNoBooking'), {
+      inline_keyboard: [
+        [{ text: tr(lang, 'openSite'), url: 'https://evils.space' }],
+        [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
+      ],
+    });
   }
-  if (booking?.status === 'new' || booking?.status === 'processing') {
-    return sendCustomerPending(env, chatId, booking.id, lang);
+  for (const booking of bookings) {
+    if (booking.status === 'accepted') {
+      await sendCustomerAccepted(env, chatId, booking.id, lang);
+    } else {
+      await sendCustomerPending(env, chatId, booking.id, lang);
+    }
   }
-  return sendText(env, chatId, tr(lang, 'customerNoBooking'), {
-    inline_keyboard: [
-      [{ text: tr(lang, 'openSite'), url: 'https://evils.space' }],
-      [{ text: `🌐 ${tr(lang, 'language')}`, callback_data: `cl:${lang}` }],
-    ],
-  });
 }
 
 async function customerTelegramForBooking(env, bookingId) {
@@ -1917,22 +1987,29 @@ async function customerTelegramForBooking(env, bookingId) {
 
 async function todaySummary(env) {
   const now = nowSeconds();
-  const { start, end } = nhaTrangDayBounds(now);
+  const { today, tomorrow, end } = bookingWindow(now);
   const row = await env.evil_space
     .prepare(`
       SELECT
         COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
         (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied,
-        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND created_at >= ? AND created_at < ?) AS pending,
+        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND service_day = ?) AS pending_today,
+        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND service_day = ?) AS pending_tomorrow,
         COALESCE((SELECT SUM(amount) FROM visits WHERE created_at >= ? AND created_at < ?), 0) AS income
     `)
-    .bind(start, end, start, end, start, end)
+    .bind(today, tomorrow, today, tomorrow, today, tomorrow)
     .first();
+  const pendingToday = Math.max(0, Number(row?.pending_today ?? 0));
+  const pendingTomorrow = Math.max(0, Number(row?.pending_tomorrow ?? 0));
   return {
     total: Math.max(1, Number(row?.total ?? 10)),
     occupied: Math.max(0, Number(row?.occupied ?? 0)),
-    pending: Math.max(0, Number(row?.pending ?? 0)),
+    pending: pendingToday + pendingTomorrow,
+    pendingToday,
+    pendingTomorrow,
     income: Math.max(0, Number(row?.income ?? 0)),
+    tomorrowFree: Math.max(0, Number(row?.total ?? 10) - Number((await serviceDayCapacity(env, tomorrow)).occupied ?? 0)),
+    end,
   };
 }
 
@@ -2027,13 +2104,37 @@ async function bookingById(env, id) {
   return env.evil_space
     .prepare(`
       SELECT id, name, contact_type, contact_value, status, created_at,
-             handled_at, handled_by_email, customer_id, accepted_visit_id
+   handled_at, handled_by_email, customer_id, accepted_visit_id,
+   service_day, amount_vnd
       FROM booking_requests
       WHERE id = ?
       LIMIT 1
     `)
     .bind(id)
     .first();
+}
+
+async function serviceDayCapacity(env, serviceDay) {
+  const row = await env.evil_space
+    .prepare(`
+      SELECT
+        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
+        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied
+    `)
+    .bind(serviceDay, serviceDay + 86400)
+    .first();
+  return {
+    total: Math.max(1, Number(row?.total ?? 10)),
+    occupied: Math.max(0, Number(row?.occupied ?? 0)),
+  };
+}
+
+function bookingCustomerDetails(booking, language) {
+  const lang = normalizeLanguage(language);
+  const serviceDay = Number(booking.service_day ?? 0);
+  const kind = bookingDayKind(serviceDay, nowSeconds());
+  const label = kind === 'tomorrow' ? tr(lang, 'tomorrow') : tr(lang, 'today');
+  return `<b>${label} · ${formatLocalDate(serviceDay)} · ${formatMoney(booking.amount_vnd)}</b>`;
 }
 
 async function customerById(env, id) {
@@ -2185,14 +2286,6 @@ function addCalendarMonth(now) {
   return Math.floor(date.getTime() / 1000);
 }
 
-function nhaTrangDayBounds(now) {
-  const offset = 7 * 3600;
-  const local = new Date((now + offset) * 1000);
-  const localMidnightUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) / 1000;
-  const start = localMidnightUtc - offset;
-  return { start, end: start + 86400 };
-}
-
 function cookieValue(request, name) {
   const raw = request.headers.get('cookie') ?? '';
   for (const part of raw.split(';')) {
@@ -2303,4 +2396,6 @@ export const telegramTest = {
   nhaTrangDayBounds,
   normalizeLanguage,
   telegramBookingIdentity,
+  dayPassAmount,
+  serviceDateKey,
 };

@@ -50,7 +50,7 @@ class _DailyScreenState extends State<DailyScreen>
   Timer? _statusTimer;
   SiteContent _content = SiteContent.demo;
   SiteStatus? _liveStatus;
-  DeskBookingState? _booking;
+  List<DeskBookingState> _bookings = const [];
   bool _bookingBusy = false;
   bool _qrScrollScheduled = false;
   bool _publicRefreshInFlight = false;
@@ -64,7 +64,7 @@ class _DailyScreenState extends State<DailyScreen>
       duration: const Duration(milliseconds: 320),
     );
     widget.localization.addListener(_handleLocalizationChanged);
-    _booking = _deskApi.savedBooking();
+    _bookings = _deskApi.savedBookings();
     unawaited(_loadContent());
     unawaited(_loadPublicState());
     _statusTimer = Timer.periodic(
@@ -110,33 +110,34 @@ class _DailyScreenState extends State<DailyScreen>
     }
 
     _publicRefreshInFlight = true;
-    final currentBooking = _booking;
+    final currentBookings = List<DeskBookingState>.from(_bookings);
     try {
       final statusFuture = _deskApi.status().timeout(
         const Duration(seconds: 8),
         onTimeout: () => null,
       );
-      final bookingFuture = currentBooking == null
-          ? Future<DeskBookingState?>.value(null)
-          : _refreshBooking(currentBooking);
+      final bookingsFuture = Future.wait(
+        currentBookings.map(_refreshBooking),
+      );
       final results = await Future.wait<Object?>([
         statusFuture,
-        bookingFuture,
+        bookingsFuture,
       ]);
       if (!mounted) return;
 
       final status = results[0] as SiteStatus?;
-      final refreshedBooking = results[1] as DeskBookingState?;
+      final refreshedBookings = (results[1] as List<DeskBookingState?>)
+.whereType<DeskBookingState>()
+.toList(growable: false);
       final statusChanged = status != null && !_sameStatus(_liveStatus, status);
-      final bookingContextUnchanged = _sameBooking(_booking, currentBooking);
-      final bookingChanged = currentBooking != null &&
-          bookingContextUnchanged &&
-          !_sameBooking(_booking, refreshedBooking);
+      final bookingContextUnchanged = _sameBookings(_bookings, currentBookings);
+      final bookingChanged =
+bookingContextUnchanged && !_sameBookings(_bookings, refreshedBookings);
 
       if (!statusChanged && !bookingChanged) return;
       setState(() {
         if (statusChanged) _liveStatus = status;
-        if (bookingChanged) _booking = refreshedBooking;
+        if (bookingChanged) _bookings = refreshedBookings;
       });
     } finally {
       _publicRefreshInFlight = false;
@@ -150,8 +151,8 @@ class _DailyScreenState extends State<DailyScreen>
   Future<DeskBookingState?> _refreshBooking(DeskBookingState booking) async {
     try {
       return await _deskApi
-          .bookingStatus(booking)
-          .timeout(const Duration(seconds: 8));
+.bookingStatus(booking)
+.timeout(const Duration(seconds: 8));
     } on TimeoutException {
       return booking;
     } on PublicDeskException {
@@ -164,6 +165,11 @@ class _DailyScreenState extends State<DailyScreen>
     if (a == null || b == null) return false;
     return a.total == b.total &&
         a.occupied == b.occupied &&
+        a.tomorrowOccupied == b.tomorrowOccupied &&
+        a.todayPrice == b.todayPrice &&
+        a.tomorrowPrice == b.tomorrowPrice &&
+        a.todayDate == b.todayDate &&
+        a.tomorrowDate == b.tomorrowDate &&
         _statusDayKey(a.updated) == _statusDayKey(b.updated);
   }
 
@@ -174,13 +180,159 @@ class _DailyScreenState extends State<DailyScreen>
     return '${local.year}-${local.month}-${local.day}';
   }
 
-  bool _sameBooking(DeskBookingState? a, DeskBookingState? b) {
-    if (identical(a, b)) return true;
-    if (a == null || b == null) return false;
-    return a.token == b.token &&
-        a.status == b.status &&
-        a.telegramLinkUrl == b.telegramLinkUrl &&
-        a.telegramLinked == b.telegramLinked;
+  bool _sameBookings(List<DeskBookingState> a, List<DeskBookingState> b) {
+    if (a.length != b.length) return false;
+    final left = [...a]..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
+    final right = [...b]..sort((x, y) => x.serviceDate.compareTo(y.serviceDate));
+    for (var index = 0; index < left.length; index += 1) {
+      final x = left[index];
+      final y = right[index];
+      if (x.token != y.token ||
+x.status != y.status ||
+x.serviceDate != y.serviceDate ||
+x.amountVnd != y.amountVnd ||
+x.telegramLinkUrl != y.telegramLinkUrl ||
+x.telegramLinked != y.telegramLinked) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  DeskBookingState? _bookingFor(String serviceDate) {
+    for (final booking in _bookings) {
+      if (booking.serviceDate == serviceDate) return booking;
+    }
+    return null;
+  }
+
+  String _serviceDateForOffset(int days) {
+    final local = _nhaTrangNow().add(Duration(days: days));
+    return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+  }
+
+  String _compactServiceDate(String serviceDate) => serviceDate.replaceAll('-', '');
+
+  Future<void> _launchTelegramBooking(String serviceDate) async {
+    final url = '$_bookingBotBaseUrl${_compactServiceDate(serviceDate)}_${widget.localization.language.code}';
+    try {
+      final opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName:
+  defaultTargetPlatform == TargetPlatform.iOS ? '_self' : '_blank',
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT OPEN TELEGRAM')),
+      );
+    }
+  }
+
+  Future<void> _requestDesk(String serviceDate) async {
+    if (_bookingBusy || _bookingFor(serviceDate) != null) return;
+
+    final profile = await showDialog<DeskBookingProfile>(
+      context: context,
+      builder: (_) => _DeskBookingDialog(
+        localization: widget.localization,
+        serviceDate: serviceDate,
+        isTomorrow: serviceDate == _serviceDateForOffset(1),
+        onTelegram: () => unawaited(_launchTelegramBooking(serviceDate)),
+      ),
+    );
+    if (!mounted || profile == null) return;
+    await _sendDeskRequest(profile);
+  }
+
+  Future<void> _sendDeskRequest(DeskBookingProfile profile) async {
+    setState(() => _bookingBusy = true);
+    try {
+      final booking = await _deskApi
+.book(profile)
+.timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      setState(() {
+        _bookings = [
+..._bookings.where((item) => item.serviceDate != booking.serviceDate),
+booking,
+        ]..sort((a, b) => a.serviceDate.compareTo(b.serviceDate));
+        _bookingBusy = false;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('REQUEST TIMEOUT')),
+      );
+    } on PublicDeskException catch (error) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('COULD NOT SEND REQUEST')),
+      );
+    }
+  }
+
+  Future<void> _connectBookingTelegram(DeskBookingState booking) async {
+    final url = booking.telegramLinkUrl;
+    if (url == null || !booking.canConnectTelegram) return;
+    await _launch(url);
+  }
+
+  Future<void> _deleteDeskRequest(DeskBookingState booking) async {
+    if (_bookingBusy) return;
+    setState(() => _bookingBusy = true);
+    try {
+      await _deskApi
+.deleteBooking(booking)
+.timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      setState(() {
+        _bookings = _bookings
+  .where((item) => item.serviceDate != booking.serviceDate)
+  .toList(growable: false);
+        _bookingBusy = false;
+      });
+      await _loadPublicState();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.localization.t('booking_deleted'))),
+      );
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('REQUEST TIMEOUT')),
+      );
+    } on PublicDeskException catch (error) {
+      if (!mounted) return;
+      setState(() => _bookingBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  }
+
+  void _clearFinishedBooking(DeskBookingState booking) {
+    _deskApi.clearSavedBooking(booking.serviceDate);
+    setState(() {
+      _bookings = _bookings
+.where((item) => item.serviceDate != booking.serviceDate)
+.toList(growable: false);
+    });
   }
 
   void _handleLocalizationChanged() {
@@ -480,26 +632,10 @@ class _DailyScreenState extends State<DailyScreen>
 
   Widget _availability(bool compact) {
     final status = _liveStatus ?? _content.status;
-    final dayPrice = _priceFor('price_day_pass').price;
-    final booking = _booking;
-    final bookingStatusKey = booking == null
-        ? ''
-        : booking.accepted
-            ? 'booking_accepted'
-            : booking.declined
-                ? 'booking_declined'
-                : booking.cancelled
-                    ? 'booking_cancelled'
-                    : 'booking_pending';
-    final bookingIcon = booking == null
-        ? Icons.hourglass_top_outlined
-        : booking.accepted
-            ? Icons.check_circle_outline
-            : booking.declined
-                ? Icons.cancel_outlined
-                : booking.cancelled
-                    ? Icons.block_outlined
-                    : Icons.hourglass_top_outlined;
+    final todayDate = status.todayDate.isEmpty ? _serviceDateForOffset(0) : status.todayDate;
+    final tomorrowDate = status.tomorrowDate.isEmpty ? _serviceDateForOffset(1) : status.tomorrowDate;
+    final todayBooking = _bookingFor(todayDate);
+    final tomorrowBooking = _bookingFor(tomorrowDate);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -507,123 +643,160 @@ class _DailyScreenState extends State<DailyScreen>
         _sectionKicker(widget.localization.t('availability_kicker')),
         const SizedBox(height: 20),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              '${status.free}',
-              style: _serif(compact ? 86 : 116, height: 0.78),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Text(
-                  widget.localization.t(
-                    status.free == 1 ? 'desk_free' : 'desks_free',
-                  ),
-                  style: _serif(compact ? 23 : 30, height: 0.96),
-                ),
-              ),
-            ),
-          ],
+crossAxisAlignment: CrossAxisAlignment.end,
+children: [
+  Text('${status.free}', style: _serif(compact ? 86 : 116, height: 0.78)),
+  const SizedBox(width: 14),
+  Expanded(
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Text(
+        widget.localization.t(status.free == 1 ? 'desk_free' : 'desks_free'),
+        style: _serif(compact ? 23 : 30, height: 0.96),
+      ),
+    ),
+  ),
+],
         ),
         const SizedBox(height: 22),
         _OccupancyMarks(total: status.total, occupied: status.occupied),
         const SizedBox(height: 12),
         Text(
-          '${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
-          style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
+'${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
+style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
         ),
         const SizedBox(height: 26),
-        if (booking == null)
-          _PaperButton(
-            label: widget.localization.t('availability_action'),
-            detail: _bookingBusy ? '…' : dayPrice,
-            icon: Icons.arrow_outward,
-            filled: true,
-            onPressed: _bookingBusy ? null : _requestDesk,
-          )
-        else ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: booking.accepted
-                  ? BrandPalette.paperDeep
-                  : BrandPalette.paperLift,
-              border: Border.all(color: BrandPalette.ink),
-            ),
-            child: Row(
-              children: [
-                Icon(bookingIcon, size: 24),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    widget.localization.t(bookingStatusKey),
-                    style: _mono(11.5, spacing: 0.55),
-                  ),
-                ),
-                Text(dayPrice, style: _serif(18)),
-              ],
-            ),
-          ),
-          if (booking.telegramLinked) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.notifications_active_outlined, size: 17),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.localization.t('booking_telegram_connected'),
-                    style: _mono(9, color: BrandPalette.inkMuted),
-                  ),
-                ),
-              ],
-            ),
-          ] else if (booking.canConnectTelegram && !booking.finished) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => _connectBookingTelegram(booking),
-              icon: const Icon(Icons.send_outlined, size: 17),
-              label: Text(
-                widget.localization.t('booking_connect_telegram'),
-                style: _mono(9.5),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BrandPalette.ink,
-                minimumSize: const Size.fromHeight(48),
-                side: const BorderSide(color: BrandPalette.ink),
-                shape: const RoundedRectangleBorder(),
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _bookingBusy
-                ? null
-                : booking.finished
-                    ? _clearFinishedBooking
-                    : _deleteDeskRequest,
-            icon: Icon(booking.finished ? Icons.refresh : Icons.close, size: 17),
-            label: Text(
-              _bookingBusy
-                  ? '…'
-                  : widget.localization.t(
-                      booking.finished ? 'booking_again' : 'booking_delete',
-                    ),
-              style: _mono(9.5),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: BrandPalette.ink,
-              minimumSize: const Size.fromHeight(48),
-              side: const BorderSide(color: BrandPalette.ink),
-              shape: const RoundedRectangleBorder(),
-            ),
-          ),
+        Row(
+crossAxisAlignment: CrossAxisAlignment.stretch,
+children: [
+  Expanded(
+    child: _PaperButton(
+      label: widget.localization.t('booking_today'),
+      detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
+      icon: Icons.today_outlined,
+      filled: true,
+      onPressed: _bookingBusy || todayBooking != null || status.free <= 0
+          ? null
+          : () => _requestDesk(todayDate),
+    ),
+  ),
+  Expanded(
+    child: _PaperButton(
+      label: widget.localization.t('booking_tomorrow'),
+      detail: _bookingBusy
+          ? '…'
+          : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
+      icon: Icons.event_outlined,
+      onPressed: _bookingBusy || tomorrowBooking != null || status.tomorrowFree <= 0
+          ? null
+          : () => _requestDesk(tomorrowDate),
+    ),
+  ),
+],
+        ),
+        const SizedBox(height: 8),
+        Text(
+widget.localization.t('half_day_note'),
+style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.35),
+        ),
+        if (todayBooking != null) ...[
+const SizedBox(height: 16),
+_bookingCard(todayBooking, false),
+        ],
+        if (tomorrowBooking != null) ...[
+const SizedBox(height: 10),
+_bookingCard(tomorrowBooking, true),
         ],
       ],
     );
+  }
+
+  Widget _bookingCard(DeskBookingState booking, bool tomorrow) {
+    final bookingStatusKey = booking.accepted
+        ? 'booking_accepted'
+        : booking.declined
+  ? 'booking_declined'
+  : booking.cancelled
+      ? 'booking_cancelled'
+      : 'booking_pending';
+    final bookingIcon = booking.accepted
+        ? Icons.check_circle_outline
+        : booking.declined
+  ? Icons.cancel_outlined
+  : booking.cancelled
+      ? Icons.block_outlined
+      : Icons.hourglass_top_outlined;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: booking.accepted ? BrandPalette.paperDeep : BrandPalette.paperLift,
+        border: Border.all(color: BrandPalette.ink),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+Row(
+  children: [
+    Icon(bookingIcon, size: 24),
+    const SizedBox(width: 14),
+    Expanded(
+      child: Text(
+        '${widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today')} · ${widget.localization.t(bookingStatusKey)}',
+        style: _mono(11.5, spacing: 0.55),
+      ),
+    ),
+    Text(_moneyLabel(booking.amountVnd), style: _serif(18)),
+  ],
+),
+if (booking.telegramLinked) ...[
+  const SizedBox(height: 10),
+  Text(widget.localization.t('booking_telegram_connected'), style: _mono(9, color: BrandPalette.inkMuted)),
+] else if (booking.canConnectTelegram && !booking.finished) ...[
+  const SizedBox(height: 10),
+  OutlinedButton.icon(
+    onPressed: () => _connectBookingTelegram(booking),
+    icon: const Icon(Icons.send_outlined, size: 17),
+    label: Text(widget.localization.t('booking_connect_telegram'), style: _mono(9.5)),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: BrandPalette.ink,
+      minimumSize: const Size.fromHeight(46),
+      side: const BorderSide(color: BrandPalette.ink),
+      shape: const RoundedRectangleBorder(),
+    ),
+  ),
+],
+const SizedBox(height: 8),
+OutlinedButton.icon(
+  onPressed: _bookingBusy
+      ? null
+      : booking.finished
+          ? () => _clearFinishedBooking(booking)
+          : () => _deleteDeskRequest(booking),
+  icon: Icon(booking.finished ? Icons.refresh : Icons.close, size: 17),
+  label: Text(
+    _bookingBusy
+        ? '…'
+        : widget.localization.t(booking.finished ? 'booking_again' : 'booking_delete'),
+    style: _mono(9.5),
+  ),
+  style: OutlinedButton.styleFrom(
+    foregroundColor: BrandPalette.ink,
+    minimumSize: const Size.fromHeight(46),
+    side: const BorderSide(color: BrandPalette.ink),
+    shape: const RoundedRectangleBorder(),
+  ),
+),
+        ],
+      ),
+    );
+  }
+
+  String _moneyLabel(int value) {
+    if (value % 1000000 == 0) return '${value ~/ 1000000} MLN VND';
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)} MLN VND';
+    if (value % 1000 == 0) return '${value ~/ 1000}K VND';
+    return '$value VND';
   }
 
   Widget _prices(bool compact) {
@@ -897,10 +1070,14 @@ class _DeskBookingDialog extends StatefulWidget {
   const _DeskBookingDialog({
     required this.localization,
     required this.onTelegram,
+    required this.serviceDate,
+    required this.isTomorrow,
   });
 
   final LocalizationController localization;
   final VoidCallback onTelegram;
+  final String serviceDate;
+  final bool isTomorrow;
 
   @override
   State<_DeskBookingDialog> createState() => _DeskBookingDialogState();
@@ -931,6 +1108,7 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
         name: name,
         contactType: 'phone',
         contactValue: phone,
+        serviceDate: widget.serviceDate,
       ),
     );
   }
@@ -941,7 +1119,7 @@ class _DeskBookingDialogState extends State<_DeskBookingDialog> {
     return AlertDialog(
       backgroundColor: BrandPalette.paper,
       shape: const RoundedRectangleBorder(),
-      title: Text(l.t('booking_title'), style: _serif(30)),
+      title: Text(l.t(widget.isTomorrow ? 'booking_title_tomorrow' : 'booking_title_today'), style: _serif(30)),
       content: SizedBox(
         width: 460,
         child: Column(

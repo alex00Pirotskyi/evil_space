@@ -7,23 +7,40 @@ class SiteStatus {
     required this.total,
     required this.occupied,
     required this.updated,
+    this.todayDate = '',
+    this.tomorrowDate = '',
+    this.todayPrice = 200000,
+    this.tomorrowPrice = 200000,
+    this.tomorrowOccupied = 0,
   });
 
   final int total;
   final int occupied;
   final String updated;
+  final String todayDate;
+  final String tomorrowDate;
+  final int todayPrice;
+  final int tomorrowPrice;
+  final int tomorrowOccupied;
 
   int get free => (total - occupied).clamp(0, total).toInt();
+  int get tomorrowFree => (total - tomorrowOccupied).clamp(0, total).toInt();
 
   factory SiteStatus.fromJson(Map<String, dynamic> json) {
     final rawTotal = (json['total'] as num?)?.toInt() ?? 10;
     final normalizedTotal = rawTotal.clamp(1, 999).toInt();
     final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 0;
+    final rawTomorrow = (json['tomorrowOccupied'] as num?)?.toInt() ?? 0;
 
     return SiteStatus(
       total: normalizedTotal,
       occupied: rawOccupied.clamp(0, normalizedTotal).toInt(),
       updated: json['updated'] as String? ?? 'LOCAL',
+      todayDate: json['todayDate']?.toString() ?? '',
+      tomorrowDate: json['tomorrowDate']?.toString() ?? '',
+      todayPrice: (json['todayPrice'] as num?)?.toInt() ?? 200000,
+      tomorrowPrice: (json['tomorrowPrice'] as num?)?.toInt() ?? 200000,
+      tomorrowOccupied: rawTomorrow.clamp(0, normalizedTotal).toInt(),
     );
   }
 }
@@ -144,6 +161,7 @@ class SiteContent {
     status: SiteStatus(total: 10, occupied: 0, updated: 'DEMO'),
     prices: [
       SitePrice(labelKey: 'price_day_pass', price: '200K VND'),
+      SitePrice(labelKey: 'price_half_day', price: '100K VND'),
       SitePrice(labelKey: 'price_month', price: '2.5 MLN VND'),
       SitePrice(labelKey: 'price_locker', price: '1 MLN VND / MONTH'),
     ],

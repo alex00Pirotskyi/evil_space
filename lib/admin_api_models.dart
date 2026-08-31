@@ -113,6 +113,11 @@ class BookingRequestRecord {
     required this.contactType,
     required this.contactValue,
     required this.createdAt,
+    required this.status,
+    required this.serviceDay,
+    required this.amountVnd,
+    this.handledAt,
+    this.handledByEmail,
   });
 
   final int id;
@@ -120,6 +125,13 @@ class BookingRequestRecord {
   final String contactType;
   final String contactValue;
   final int createdAt;
+  final String status;
+  final int serviceDay;
+  final int amountVnd;
+  final int? handledAt;
+  final String? handledByEmail;
+
+  bool get accepted => status == 'accepted';
 
   factory BookingRequestRecord.fromJson(Map<String, dynamic> json) {
     return BookingRequestRecord(
@@ -128,6 +140,11 @@ class BookingRequestRecord {
       contactType: json['contact_type']?.toString() ?? '',
       contactValue: json['contact_value']?.toString() ?? '',
       createdAt: _asInt(json['created_at']) ?? 0,
+      status: json['status']?.toString() ?? 'new',
+      serviceDay: _asInt(json['service_day']) ?? 0,
+      amountVnd: _asInt(json['amount_vnd']) ?? 200000,
+      handledAt: _asInt(json['handled_at']),
+      handledByEmail: json['handled_by_email']?.toString(),
     );
   }
 }

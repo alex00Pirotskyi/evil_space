@@ -1,3 +1,4 @@
+import { DAY_PASS_VND, dayPassAmount, serviceDayForOffset } from './booking_rules.js';
 const encoder = new TextEncoder();
 
 const OWNER_EMAIL = 'evilssspace79@gmail.com';
@@ -6,7 +7,6 @@ const SESSION_COOKIE = '__Host-evil_admin_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const APPROVAL_TTL_SECONDS = 60 * 60 * 24;
 const PBKDF2_ITERATIONS = 50000;
-const DAY_PASS_VND = 200000;
 const MONTH_PASS_VND = 2500000;
 const MAX_NAME_LENGTH = 100;
 const MAX_PURCHASE_LENGTH = 180;
@@ -506,7 +506,7 @@ async function handleDayPass(request, env) {
         (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
       VALUES (?, 'day', NULL, ?, ?, ?, ?)
     `)
-    .bind(name, DAY_PASS_VND, now, session.email, customer.id)
+    .bind(name, dayPassAmount(serviceDayForOffset(0, now), now), now, session.email, customer.id)
     .run();
 
   return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
@@ -841,12 +841,15 @@ async function operationsSnapshot(env) {
       .all(),
     env.evil_space
       .prepare(`
-        SELECT id, name, contact_type, contact_value, status, created_at
+        SELECT id, name, contact_type, contact_value, status, created_at,
+     service_day, amount_vnd, handled_at, handled_by_email
         FROM booking_requests
-        WHERE status = 'new'
-        ORDER BY created_at DESC, id DESC
+        WHERE service_day >= ? AND service_day < ?
+AND (status = 'new' OR (status = 'accepted' AND service_day >= ?))
+        ORDER BY service_day ASC, created_at DESC, id DESC
         LIMIT 100
       `)
+      .bind(start, end + 86400, end)
       .all(),
     env.evil_space
       .prepare(`

@@ -3,16 +3,19 @@ class DeskBookingProfile {
     required this.name,
     required this.contactType,
     required this.contactValue,
+    required this.serviceDate,
   });
 
   final String name;
   final String contactType;
   final String contactValue;
+  final String serviceDate;
 
   Map<String, dynamic> toJson() => {
     'name': name,
     'contactType': contactType,
     'contactValue': contactValue,
+    'serviceDate': serviceDate,
   };
 
   factory DeskBookingProfile.fromJson(Map<String, dynamic> json) {
@@ -20,13 +23,15 @@ class DeskBookingProfile {
       name: json['name']?.toString() ?? '',
       contactType: json['contactType']?.toString() ?? '',
       contactValue: json['contactValue']?.toString() ?? '',
+      serviceDate: json['serviceDate']?.toString() ?? '',
     );
   }
 
   bool get valid =>
       name.trim().isNotEmpty &&
       (contactType == 'phone' || contactType == 'telegram') &&
-      contactValue.trim().isNotEmpty;
+      contactValue.trim().isNotEmpty &&
+      RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(serviceDate);
 }
 
 class DeskBookingState {
@@ -35,12 +40,16 @@ class DeskBookingState {
     required this.status,
     this.telegramLinkUrl,
     this.telegramLinked = false,
+    required this.serviceDate,
+    required this.amountVnd,
   });
 
   final String token;
   final String status;
   final String? telegramLinkUrl;
   final bool telegramLinked;
+  final String serviceDate;
+  final int amountVnd;
 
   bool get pending => status == 'pending';
   bool get accepted => status == 'accepted';
@@ -53,13 +62,17 @@ class DeskBookingState {
       telegramLinkUrl!.startsWith('https://t.me/');
   bool get valid =>
       token.length >= 32 &&
-      (pending || accepted || declined || cancelled);
+      (pending || accepted || declined || cancelled) &&
+      RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(serviceDate) &&
+      amountVnd > 0;
 
   Map<String, dynamic> toJson() => {
     'token': token,
     'status': status,
     if (telegramLinkUrl != null) 'telegramLinkUrl': telegramLinkUrl,
     'telegramLinked': telegramLinked,
+    'serviceDate': serviceDate,
+    'amountVnd': amountVnd,
   };
 
   factory DeskBookingState.fromJson(Map<String, dynamic> json) {
@@ -68,6 +81,8 @@ class DeskBookingState {
       status: json['status']?.toString() ?? '',
       telegramLinkUrl: json['telegramLinkUrl']?.toString(),
       telegramLinked: json['telegramLinked'] == true,
+      serviceDate: json['serviceDate']?.toString() ?? '',
+      amountVnd: (json['amountVnd'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -76,6 +91,8 @@ class DeskBookingState {
     status: value,
     telegramLinkUrl: telegramLinkUrl,
     telegramLinked: telegramLinked,
+    serviceDate: serviceDate,
+    amountVnd: amountVnd,
   );
 }
 

@@ -166,7 +166,7 @@ class _AdminScreenState extends State<AdminScreen> {
             value: 'day',
             icon: Icons.wb_sunny_outlined,
             title: t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'),
-            subtitle: '200K VND',
+            subtitle: _money(_currentDayPassAmount()),
           ),
           _Choice(
             value: 'month',
@@ -314,17 +314,14 @@ class _AdminScreenState extends State<AdminScreen> {
   Future<void> _acceptBooking(BookingRequestRecord booking) async {
     await _apply(
       () => widget.api.acceptBooking(booking.id),
-      success: t(
-        'Клиент добавлен на сегодня',
-        'Customer added for today',
-      ),
+      success: '${t('ПРИНЯТО', 'ACCEPTED')} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)}',
     );
   }
 
   Future<void> _declineBooking(BookingRequestRecord booking) async {
     await _apply(
       () => widget.api.declineBooking(booking.id),
-      success: t('Запрос отклонён', 'Request declined'),
+      success: '${t('ОТКЛОНЕНО', 'DECLINED')} · ${_bookingDayLabel(booking)} · ${_money(booking.amountVnd)}',
     );
   }
 
@@ -642,10 +639,9 @@ class _AdminScreenState extends State<AdminScreen> {
       ]),
       if (snapshot.bookingRequests.isNotEmpty) ...[
         const SizedBox(height: 28),
-        _sectionTitle(
-          '${t('ЗАПРОСЫ С САЙТА', 'WEBSITE REQUESTS')} · ${snapshot.bookingRequests.length}',
-        ),
-        ...snapshot.bookingRequests.map(_bookingRow),
+        _bookingGroup(snapshot.bookingRequests, tomorrow: false),
+        const SizedBox(height: 20),
+        _bookingGroup(snapshot.bookingRequests, tomorrow: true),
       ],
       const SizedBox(height: 28),
       _sectionTitle(t('СЕГОДНЯ', 'TODAY')),
@@ -664,10 +660,28 @@ class _AdminScreenState extends State<AdminScreen> {
     ]);
   }
 
+  Widget _bookingGroup(
+    List<BookingRequestRecord> bookings, {
+    required bool tomorrow,
+  }) {
+    final rows = bookings
+        .where((booking) => _isTomorrowBooking(booking) == tomorrow)
+        .toList(growable: false);
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final title = tomorrow
+        ? t('БРОНИ НА ЗАВТРА', 'TOMORROW BOOKINGS')
+        : t('БРОНИ НА СЕГОДНЯ', 'TODAY BOOKINGS');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionTitle('$title · ${rows.length}'),
+        ...rows.map(_bookingRow),
+      ],
+    );
+  }
+
   Widget _bookingRow(BookingRequestRecord booking) {
-    final type = booking.contactType == 'telegram'
-        ? 'TG'
-        : t('ТЕЛ', 'PHONE');
+    final type = booking.contactType == 'telegram' ? 'TG' : t('ТЕЛ', 'PHONE');
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 13),
       decoration: const BoxDecoration(
@@ -675,48 +689,88 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(booking.name, style: _serif(19)),
-                const SizedBox(height: 5),
-                Text(
-                  '$type · ${booking.contactValue} · ${_time(booking.createdAt)}',
-                  style: _mono(9.5, color: BrandPalette.inkMuted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            alignment: WrapAlignment.end,
-            children: [
-              OutlinedButton(
-                onPressed: _busy ? null : () => _declineBooking(booking),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: BrandPalette.ink,
-                  minimumSize: const Size(0, 42),
-                  side: const BorderSide(color: BrandPalette.ink),
-                  shape: const RoundedRectangleBorder(),
-                ),
-                child: Text(t('ОТКЛОНИТЬ', 'DECLINE'), style: _mono(9)),
-              ),
-              FilledButton(
-                onPressed: _busy ? null : () => _acceptBooking(booking),
-                style: _darkButton(minHeight: 42),
-                child: Text(
-                  t('ПРИНЯТЬ', 'ACCEPT'),
-                  style: _mono(9.5, color: BrandPalette.paperLift),
-                ),
-              ),
-            ],
-          ),
+Expanded(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(booking.name, style: _serif(19)),
+      const SizedBox(height: 5),
+      Text(
+        '$type · ${booking.contactValue} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)} · ${_time(booking.createdAt)}',
+        style: _mono(9.5, color: BrandPalette.inkMuted),
+      ),
+      if (booking.accepted && (booking.handledByEmail?.isNotEmpty ?? false)) ...[
+        const SizedBox(height: 5),
+        Text(
+          '${t('ПРИНЯТО', 'ACCEPTED')} · ${booking.handledByEmail}',
+          style: _mono(9, color: BrandPalette.inkMuted),
+        ),
+      ],
+    ],
+  ),
+),
+const SizedBox(width: 10),
+if (booking.accepted)
+  Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: BrandPalette.ink,
+      border: Border.all(color: BrandPalette.ink),
+    ),
+    child: Text(
+      t('ПРИНЯТО', 'ACCEPTED'),
+      style: _mono(9, color: BrandPalette.paperLift),
+    ),
+  )
+else
+  Wrap(
+    spacing: 7,
+    runSpacing: 7,
+    alignment: WrapAlignment.end,
+    children: [
+      OutlinedButton(
+        onPressed: _busy ? null : () => _declineBooking(booking),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: BrandPalette.ink,
+          minimumSize: const Size(0, 42),
+          side: const BorderSide(color: BrandPalette.ink),
+          shape: const RoundedRectangleBorder(),
+        ),
+        child: Text(t('ОТКЛОНИТЬ', 'DECLINE'), style: _mono(9)),
+      ),
+      FilledButton(
+        onPressed: _busy ? null : () => _acceptBooking(booking),
+        style: _darkButton(minHeight: 42),
+        child: Text(
+          '${t('ПРИНЯТЬ', 'ACCEPT')} · ${_money(booking.amountVnd)}',
+          style: _mono(9.5, color: BrandPalette.paperLift),
+        ),
+      ),
+    ],
+  ),
         ],
       ),
     );
+  }
+
+  bool _isTomorrowBooking(BookingRequestRecord booking) {
+    final local = DateTime.fromMillisecondsSinceEpoch(
+      booking.serviceDay * 1000,
+      isUtc: true,
+    ).add(const Duration(hours: 7));
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    return local.year == tomorrow.year &&
+        local.month == tomorrow.month &&
+        local.day == tomorrow.day;
+  }
+
+  String _bookingDayLabel(BookingRequestRecord booking) =>
+      _isTomorrowBooking(booking) ? t('ЗАВТРА', 'TOMORROW') : t('СЕГОДНЯ', 'TODAY');
+
+  int _currentDayPassAmount() {
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+    return now.hour >= 16 ? 100000 : 200000;
   }
 
   Widget _month(OperationsSnapshot snapshot) {
@@ -882,6 +936,7 @@ class _AdminScreenState extends State<AdminScreen> {
       const SizedBox(height: 30),
       _sectionTitle(t('ТАРИФЫ', 'PRICES')),
       _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', '200K VND'),
+      _row(t('ПОЛДНЯ · ПОСЛЕ 16:00', 'HALF DAY · AFTER 16:00'), '', '100K VND'),
       _row(t('МЕСЯЧНЫЙ ПРОПУСК', 'MONTH PASS'), '', '2.5 MLN VND'),
     ]);
   }
