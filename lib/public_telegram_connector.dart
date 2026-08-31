@@ -57,11 +57,13 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   }
 
   void _refresh() {
-    final booking = _deskApi.savedBooking();
-    final next = booking?.canConnectTelegram == true &&
-            (booking!.pending || booking.accepted)
-        ? booking.telegramLinkUrl
-        : null;
+    String? next;
+    for (final booking in _deskApi.savedBookings()) {
+      if (booking.canConnectTelegram && (booking.pending || booking.accepted)) {
+        next = booking.telegramLinkUrl;
+        break;
+      }
+    }
     if (!mounted || next == _telegramUrl) return;
     setState(() => _telegramUrl = next);
   }
