@@ -1207,7 +1207,14 @@ class _PaperButton extends StatelessWidget {
                 style: _mono(11, color: foreground, spacing: 0.75),
               ),
             ),
-            Text(detail, style: _serif(19, color: foreground)),
+            Flexible(
+              flex: 2,
+              child: Text(
+                detail,
+                textAlign: TextAlign.right,
+                style: _serif(19, color: foreground),
+              ),
+            ),
             const SizedBox(width: 12),
             Icon(icon, size: 19),
           ],

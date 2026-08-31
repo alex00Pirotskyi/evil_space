@@ -23,8 +23,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TODAY'), findsOneWidget);
-    await tester.tap(find.text('TODAY'));
+    final todayButton = find.text('TODAY');
+    expect(todayButton, findsOneWidget);
+    await tester.ensureVisible(todayButton);
+    await tester.pumpAndSettle();
+    await tester.tap(todayButton);
     await tester.pumpAndSettle();
 
     final dialog = find.byType(AlertDialog);
