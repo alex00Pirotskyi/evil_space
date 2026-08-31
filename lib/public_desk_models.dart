@@ -31,7 +31,7 @@ class DeskBookingProfile {
       name.trim().isNotEmpty &&
       (contactType == 'phone' || contactType == 'telegram') &&
       contactValue.trim().isNotEmpty &&
-      RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(serviceDate);
+      RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(serviceDate);
 }
 
 class DeskBookingState {
@@ -63,7 +63,7 @@ class DeskBookingState {
   bool get valid =>
       token.length >= 32 &&
       (pending || accepted || declined || cancelled) &&
-      RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(serviceDate) &&
+      RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(serviceDate) &&
       amountVnd > 0;
 
   Map<String, dynamic> toJson() => {
