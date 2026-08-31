@@ -923,13 +923,6 @@ OutlinedButton.icon(
         style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
       );
 
-  SitePrice _priceFor(String key) {
-    for (final price in _content.prices) {
-      if (price.labelKey == key) return price;
-    }
-    return SiteContent.demo.prices.first;
-  }
-
   String _updatedLabel(String raw) {
     final parsed = DateTime.tryParse(raw);
     if (parsed == null) return widget.localization.t('local_data');
