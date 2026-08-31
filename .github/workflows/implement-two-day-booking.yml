@@ -34,7 +34,12 @@ jobs:
           patch = []
           for line in lines[start:end]:
               patch.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/two_day_patch.py').write_text('\n'.join(patch) + '\n')
+          script = '\n'.join(patch) + '\n'
+          script = script.replace(
+              "re.subn(pattern, new.rstrip() + '\\n', text, count=1, flags=re.S)",
+              "re.subn(pattern, lambda _: new.rstrip() + '\\n', text, count=1, flags=re.S)",
+          )
+          Path('/tmp/two_day_patch.py').write_text(script)
           PY
           python3 /tmp/two_day_patch.py
       - name: Verify patched sources
