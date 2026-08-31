@@ -166,7 +166,7 @@ class _AdminScreenState extends State<AdminScreen> {
             value: 'day',
             icon: Icons.wb_sunny_outlined,
             title: t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'),
-            subtitle: '250K VND',
+            subtitle: '200K VND',
           ),
           _Choice(
             value: 'month',
@@ -881,7 +881,7 @@ class _AdminScreenState extends State<AdminScreen> {
       Text(labels[_incomePeriod], style: _mono(11)),
       const SizedBox(height: 30),
       _sectionTitle(t('ТАРИФЫ', 'PRICES')),
-      _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', '250K VND'),
+      _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', '200K VND'),
       _row(t('МЕСЯЧНЫЙ ПРОПУСК', 'MONTH PASS'), '', '2.5 MLN VND'),
     ]);
   }
