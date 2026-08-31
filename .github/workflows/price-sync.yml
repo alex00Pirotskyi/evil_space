@@ -1,0 +1,56 @@
+name: Price sync
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/price-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+      - name: Sync operational pricing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('worker/index.js'): [
+                  ('const DAY_PASS_VND = 250000;', 'const DAY_PASS_VND = 200000;'),
+              ],
+              Path('worker/telegram.js'): [
+                  ('const DAY_PASS_VND = 250000;', 'const DAY_PASS_VND = 200000;'),
+                  ("${isMonth ? '2.5 MLN VND' : '250K VND'}", "${isMonth ? '2.5 MLN VND' : '200K VND'}"),
+              ],
+          }
+
+          for path, edits in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new in edits:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f'{path}: expected exactly one occurrence of {old!r}, found {count}')
+                  text = text.replace(old, new)
+              path.write_text(text, encoding='utf-8')
+
+          assert 'const DAY_PASS_VND = 250000;' not in Path('worker/index.js').read_text(encoding='utf-8')
+          telegram = Path('worker/telegram.js').read_text(encoding='utf-8')
+          assert 'const DAY_PASS_VND = 250000;' not in telegram
+          assert "'250K VND'" not in telegram
+          PY
+      - name: Commit synchronized prices
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/index.js worker/telegram.js
+          git rm .github/workflows/price-sync.yml
+          git commit -m "Sync 200K day pass across backend"
+          git push origin HEAD:feature/kindle-admin-foundation
