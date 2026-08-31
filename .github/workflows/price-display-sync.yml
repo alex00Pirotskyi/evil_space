@@ -1,0 +1,54 @@
+name: Price display sync
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/price-display-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+      - name: Replace stale product price displays
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/admin_screen.dart')
+          text = path.read_text(encoding='utf-8')
+          count = text.count("'250K VND'")
+          if count != 2:
+              raise SystemExit(f'admin_screen.dart: expected 2 stale 250K displays, found {count}')
+          path.write_text(text.replace("'250K VND'", "'200K VND'"), encoding='utf-8')
+
+          roots = [Path('lib'), Path('worker'), Path('assets'), Path('test')]
+          stale = []
+          for root in roots:
+              for candidate in root.rglob('*'):
+                  if not candidate.is_file():
+                      continue
+                  try:
+                      body = candidate.read_text(encoding='utf-8')
+                  except UnicodeDecodeError:
+                      continue
+                  if '250K VND' in body or 'DAY_PASS_VND = 250000' in body:
+                      stale.append(str(candidate))
+          if stale:
+              raise SystemExit('stale 250K product pricing remains in: ' + ', '.join(stale))
+          PY
+      - name: Commit synchronized displays
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/admin_screen.dart
+          git rm .github/workflows/price-display-sync.yml
+          git commit -m "Sync 200K day pass displays"
+          git push origin HEAD:feature/kindle-admin-foundation
