@@ -56,6 +56,28 @@ jobs:
               raise SystemExit('legacy availability summary not found')
           text = text.replace(old_availability, new_availability, 1)
 
+          helper_start = text.find('  String _updatedLabel(')
+          if helper_start < 0:
+              raise SystemExit('unused updated-label helper not found')
+          helper_brace = text.find('{', helper_start)
+          if helper_brace < 0:
+              raise SystemExit('updated-label helper body not found')
+          depth = 0
+          helper_end = None
+          for index in range(helper_brace, len(text)):
+              if text[index] == '{':
+                  depth += 1
+              elif text[index] == '}':
+                  depth -= 1
+                  if depth == 0:
+                      helper_end = index + 1
+                      while helper_end < len(text) and text[helper_end] in '\r\n':
+                          helper_end += 1
+                      break
+          if helper_end is None:
+              raise SystemExit('updated-label helper end not found')
+          text = text[:helper_start] + text[helper_end:]
+
           card_start = text.find('  Widget _bookingCard(DeskBookingState booking, bool tomorrow) {')
           if card_start < 0:
               raise SystemExit('booking card not found')
