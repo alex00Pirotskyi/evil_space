@@ -55,41 +55,34 @@ jobs:
 
           path = Path('test/telegram_contract_test.dart')
           text = path.read_text()
-          old = '''    test('booking prices come from the shared Nha Trang rules', () {
-      expect(bookingRules, contains('export const DAY_PASS_VND = 200000;'));
-      expect(bookingRules, contains('export const HALF_DAY_VND = 100000;'));
-      expect(bookingRules, contains('export const MONTH_PASS_VND = 2500000;'));
-      expect(
-        worker,
-        contains('dayPassAmount(serviceDayForOffset(0, now), now)'),
-      );
-      expect(
-        telegram,
-        contains('dayPassAmount(serviceDayForOffset(0, now), now)'),
-      );
-      expect(worker, isNot(contains('250K VND')));
-      expect(telegram, isNot(contains('250K VND')));
-    });'''
-          new = '''    test('booking prices come from editable pricing and promotion rules', () {
-      final pricing = File('worker/pricing.js').readAsStringSync();
-      final pricingMigration = File(
-        'migrations/0009_pricing_promotions.sql',
-      ).readAsStringSync();
-      expect(pricing, contains('DEFAULT_DAY_PASS_VND = 200000'));
-      expect(pricing, contains('resolvePricing'));
-      expect(pricing, contains('promotionApplies'));
-      expect(pricingMigration, contains('pricing_settings'));
-      expect(pricingMigration, contains('promotions'));
-      expect(entry, contains('resolvePricing(env, serviceDay, now)'));
-      expect(worker, contains('resolvePricing(env, serviceDayForOffset(0, now), now)'));
-      expect(telegram, contains('resolvePricing(env, serviceDay, now)'));
-      expect(bookingRules, isNot(contains('HALF_DAY_VND')));
-      expect(worker, isNot(contains('250K VND')));
-      expect(telegram, isNot(contains('250K VND')));
-    });'''
-          if old not in text:
-              raise SystemExit('stale shared pricing contract block not found')
-          path.write_text(text.replace(old, new, 1))
+          start_marker = "    test('booking prices come from the shared Nha Trang rules', () {"
+          start = text.find(start_marker)
+          if start < 0:
+              raise SystemExit('stale shared pricing contract start not found')
+          end = text.find("\n\n    test(", start + len(start_marker))
+          if end < 0:
+              raise SystemExit('stale shared pricing contract end not found')
+          lines = [
+              "    test('booking prices come from editable pricing and promotion rules', () {",
+              "      final pricing = File('worker/pricing.js').readAsStringSync();",
+              "      final pricingMigration = File(",
+              "        'migrations/0009_pricing_promotions.sql',",
+              "      ).readAsStringSync();",
+              "      expect(pricing, contains('DEFAULT_DAY_PASS_VND = 200000'));",
+              "      expect(pricing, contains('resolvePricing'));",
+              "      expect(pricing, contains('promotionApplies'));",
+              "      expect(pricingMigration, contains('pricing_settings'));",
+              "      expect(pricingMigration, contains('promotions'));",
+              "      expect(entry, contains('resolvePricing(env, serviceDay, now)'));",
+              "      expect(worker, contains('resolvePricing(env, serviceDayForOffset(0, now), now)'));",
+              "      expect(telegram, contains('resolvePricing(env, serviceDay, now)'));",
+              "      expect(bookingRules, isNot(contains('HALF_DAY_VND')));",
+              "      expect(worker, isNot(contains('250K VND')));",
+              "      expect(telegram, isNot(contains('250K VND')));",
+              "    });",
+          ]
+          text = text[:start] + '\n'.join(lines) + text[end:]
+          path.write_text(text)
           PY
 
       - name: Format touched Dart files
