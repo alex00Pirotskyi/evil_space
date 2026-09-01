@@ -24,6 +24,19 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Complete Telegram pricing patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/implement_pricing_promotions.py')
+          text = path.read_text()
+          needle = "text = text.replace(\"    .bind(name, membership.id, MONTH_PASS_VND, now, admin.email, customer.id)\", \"    .bind(name, membership.id, (await resolvePricing(env, serviceDayForOffset(0, now), now)).monthPassVnd, now, admin.email, customer.id)\", 1)"
+          addition = needle + "\ntext = text.replace(\"  const todayPrice = dayPassAmount(serviceDayForOffset(0, now), now);\", \"  const pricing = await resolvePricing(env, serviceDayForOffset(0, now), now);\", 1)\ntext = text.replace(\"${isMonth ? '2.5 MLN VND' : formatMoney(todayPrice)}\", \"${formatMoney(isMonth ? pricing.monthPassVnd : pricing.dayPassVnd)}\", 1)"
+          if needle not in text:
+              raise SystemExit('Telegram pricing insertion point missing')
+          path.write_text(text.replace(needle, addition, 1))
+          PY
+
       - name: Implement dynamic pricing and promotions
         run: python3 .github/implement_pricing_promotions.py
 
