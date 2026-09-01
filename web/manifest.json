@@ -1,12 +1,12 @@
 {
   "name": "Evil Space Daily",
   "short_name": "Evil Space",
-  "description": "Live coworking status for Evil Space in Nha Trang, Vietnam.",
+  "description": "Quiet daily coworking status for Evil Space in Nha Trang.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#352822",
-  "theme_color": "#352822",
+  "background_color": "#F2F0E8",
+  "theme_color": "#F2F0E8",
   "orientation": "any",
   "lang": "en",
   "prefer_related_applications": false,
@@ -15,6 +15,18 @@
       "src": "favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/Icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/Icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     }
   ]

@@ -1,0 +1,150 @@
+name: Finalize two-day booking compile
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/implement-two-day-booking.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Remove superseded booking implementation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app_path = Path('lib/app_shell.dart')
+          text = app_path.read_text()
+
+          start = text.find('  Future<void> _launchTelegramBooking() async {')
+          if start < 0:
+              raise SystemExit('legacy booking block not found')
+          end = text.find('  @override\n  Widget build(BuildContext context)', start)
+          if end < 0:
+              raise SystemExit('legacy booking block end not found')
+          text = text[:start] + text[end:]
+
+          start = text.find('  SitePrice _priceFor(String key) {')
+          if start >= 0:
+              end = text.find('  String _updatedLabel(', start)
+              if end < 0:
+                  raise SystemExit('unused price helper end not found')
+              text = text[:start] + text[end:]
+
+          old_availability = "'${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}'"
+          new_availability = "'${status.free}/${status.total}'"
+          if old_availability not in text:
+              raise SystemExit('legacy availability summary not found')
+          text = text.replace(old_availability, new_availability, 1)
+
+          helper_start = text.find('  String _updatedLabel(')
+          if helper_start < 0:
+              raise SystemExit('unused updated-label helper not found')
+          helper_brace = text.find('{', helper_start)
+          if helper_brace < 0:
+              raise SystemExit('updated-label helper body not found')
+          depth = 0
+          helper_end = None
+          for index in range(helper_brace, len(text)):
+              if text[index] == '{':
+                  depth += 1
+              elif text[index] == '}':
+                  depth -= 1
+                  if depth == 0:
+                      helper_end = index + 1
+                      while helper_end < len(text) and text[helper_end] in '\r\n':
+                          helper_end += 1
+                      break
+          if helper_end is None:
+              raise SystemExit('updated-label helper end not found')
+          text = text[:helper_start] + text[helper_end:]
+
+          card_start = text.find('  Widget _bookingCard(DeskBookingState booking, bool tomorrow) {')
+          if card_start < 0:
+              raise SystemExit('booking card not found')
+
+          combined_status = "'${widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today')} · ${widget.localization.t(bookingStatusKey)}'"
+          status_only = "widget.localization.t(bookingStatusKey)"
+          status_at = text.find(combined_status, card_start)
+          if status_at < 0:
+              raise SystemExit('combined booking status not found')
+          text = text[:status_at] + status_only + text[status_at + len(combined_status):]
+
+          first_row = text.find('Row(\n  children: [', card_start)
+          if first_row < 0:
+              raise SystemExit('booking card row not found')
+          date_label = "Text(\n  widget.localization.t(tomorrow ? 'booking_tomorrow' : 'booking_today'),\n  style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.55),\n),\nconst SizedBox(height: 8),\n"
+          text = text[:first_row] + date_label + text[first_row:]
+
+          app_path.write_text(text)
+
+          localization_path = Path('lib/localization.dart')
+          localization = localization_path.read_text()
+          old_pending = "'booking_pending': 'YOUR REQUEST IS PENDING',"
+          new_pending = "'booking_pending': 'DESK REQUEST RECEIVED',"
+          if old_pending not in localization:
+              raise SystemExit('english pending booking copy not found')
+          localization = localization.replace(old_pending, new_pending, 1)
+          localization_path.write_text(localization)
+          PY
+          dart format lib/app_shell.dart lib/localization.dart
+          dart fix --apply
+          dart format lib/app_shell.dart lib/localization.dart
+          cp lib/app_shell.dart /tmp/fixed_app_shell.dart
+          cp lib/localization.dart /tmp/fixed_localization.dart
+          git checkout -- .
+          cp /tmp/fixed_app_shell.dart lib/app_shell.dart
+          cp /tmp/fixed_localization.dart lib/localization.dart
+          dart format lib/app_shell.dart lib/localization.dart
+          test -z "$(git diff --name-only | grep -v -E '^(lib/app_shell.dart|lib/localization.dart)$' || true)"
+          test -n "$(git diff -- lib/app_shell.dart)"
+          test -n "$(git diff -- lib/localization.dart)"
+
+      - name: Verify Worker and booking rules
+        run: |
+          node --check worker/index.js
+          node --check worker/entry.js
+          node --check worker/telegram.js
+          node --check worker/booking_rules.js
+          node --test worker/telegram_test.mjs worker/booking_rules_test.mjs
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Test
+        run: flutter test --no-pub
+
+      - name: Build optimized Wasm web
+        run: flutter build web --release --wasm --no-pub --dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
+
+      - name: Verify release
+        run: |
+          node --check build/web/flutter_bootstrap.js
+          dart run tool/verify_release.dart build/web
+
+      - name: Commit verified fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/app_shell.dart lib/localization.dart
+          git commit -m "Finalize two-day public booking flow"
+          git push origin HEAD:feature/kindle-admin-foundation

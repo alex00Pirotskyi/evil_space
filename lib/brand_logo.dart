@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:evil_space/brand_surface.dart';
 
 class EvilCoworkingLogo extends StatelessWidget {
-  const EvilCoworkingLogo({
-    super.key,
-    this.width,
-  });
+  const EvilCoworkingLogo({super.key, this.width});
 
   static const double aspectRatio = 2.262548262548;
 
@@ -17,9 +14,7 @@ class EvilCoworkingLogo extends StatelessWidget {
     final logo = AspectRatio(
       aspectRatio: aspectRatio,
       child: const RepaintBoundary(
-        child: CustomPaint(
-          painter: _EvilCoworkingLogoPainter(),
-        ),
+        child: CustomPaint(painter: _EvilCoworkingLogoPainter()),
       ),
     );
 
@@ -27,10 +22,7 @@ class EvilCoworkingLogo extends StatelessWidget {
       return logo;
     }
 
-    return SizedBox(
-      width: width,
-      child: logo,
-    );
+    return SizedBox(width: width, child: logo);
   }
 }
 
@@ -364,7 +356,7 @@ class _EvilCoworkingLogoPainter extends CustomPainter {
       path,
       Paint()
         ..isAntiAlias = true
-        ..color = BrandPalette.cream,
+        ..color = BrandPalette.ink,
     );
 
     canvas.restore();

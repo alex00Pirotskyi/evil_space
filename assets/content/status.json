@@ -1,14 +1,25 @@
 {
   "status": {
-    "updated": "2026-08-20",
+    "updated": "2026-08-29",
     "total": 10,
-    "occupied": 3
+    "occupied": 0
   },
   "prices": [
-    {"label_key": "price_day_pass", "price": "250K"},
-    {"label_key": "price_week", "price": "1.0M"},
-    {"label_key": "price_hot_desk", "price": "3.2M"},
-    {"label_key": "price_private_desk", "price": "3.5M"}
+    {"label_key": "price_day_pass", "price": "200K VND"},
+    {"label_key": "price_month", "price": "2.5 MLN VND"},
+    {"label_key": "price_locker", "price": "1 MLN VND / MONTH"}
+  ],
+  "openings": [
+    {
+      "label_key": "opening_studio",
+      "opening_date": "2026-10-20",
+      "is_open": false
+    },
+    {
+      "label_key": "opening_lecture",
+      "opening_date": "2026-10-20",
+      "is_open": false
+    }
   ],
   "announcements": [
     {

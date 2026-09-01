@@ -1,6 +1,7 @@
 enum AppRoute {
   home('/'),
-  qr('/qr');
+  qr('/qr'),
+  admin('/admin');
 
   const AppRoute(this.path);
 
@@ -12,6 +13,10 @@ enum AppRoute {
 
     if (normalized == '/qr') {
       return AppRoute.qr;
+    }
+
+    if (normalized == '/admin' || normalized.startsWith('/admin/')) {
+      return AppRoute.admin;
     }
 
     // Legacy deep links intentionally resolve to the one-page landing site.
