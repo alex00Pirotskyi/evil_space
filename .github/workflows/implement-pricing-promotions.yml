@@ -24,17 +24,32 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Complete Telegram pricing patch
+      - name: Prepare push-safe pricing implementation
         run: |
           python3 - <<'PY'
           from pathlib import Path
           path = Path('.github/implement_pricing_promotions.py')
           text = path.read_text()
+
           needle = "text = text.replace(\"    .bind(name, membership.id, MONTH_PASS_VND, now, admin.email, customer.id)\", \"    .bind(name, membership.id, (await resolvePricing(env, serviceDayForOffset(0, now), now)).monthPassVnd, now, admin.email, customer.id)\", 1)"
           addition = needle + "\ntext = text.replace(\"  const todayPrice = dayPassAmount(serviceDayForOffset(0, now), now);\", \"  const pricing = await resolvePricing(env, serviceDayForOffset(0, now), now);\", 1)\ntext = text.replace(\"${isMonth ? '2.5 MLN VND' : formatMoney(todayPrice)}\", \"${formatMoney(isMonth ? pricing.monthPassVnd : pricing.dayPassVnd)}\", 1)"
           if needle not in text:
               raise SystemExit('Telegram pricing insertion point missing')
-          path.write_text(text.replace(needle, addition, 1))
+          text = text.replace(needle, addition, 1)
+
+          web_start = text.find("replace_once(\n    '.github/workflows/web-ci.yml',")
+          if web_start < 0:
+              raise SystemExit('web-ci patch block not found')
+          web_end = text.find("\n)\n\n# Sanity checks", web_start)
+          if web_end < 0:
+              raise SystemExit('web-ci patch block end not found')
+          text = text[:web_start] + text[web_end + 3:]
+
+          workflow_unlink = "Path('.github/workflows/implement-pricing-promotions.yml').unlink(missing_ok=True)"
+          if workflow_unlink not in text:
+              raise SystemExit('temporary workflow cleanup marker not found')
+          text = text.replace(workflow_unlink, "pass", 1)
+          path.write_text(text)
           PY
 
       - name: Implement dynamic pricing and promotions
@@ -81,8 +96,7 @@ jobs:
               "      expect(telegram, isNot(contains('250K VND')));",
               "    });",
           ]
-          text = text[:start] + '\n'.join(lines) + text[end:]
-          path.write_text(text)
+          path.write_text(text[:start] + '\n'.join(lines) + text[end:])
           PY
 
       - name: Format touched Dart files
@@ -133,5 +147,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          git diff --cached --name-only | grep -qv '^.github/workflows/'
+          if git diff --cached --name-only | grep -q '^.github/workflows/'; then
+            echo 'Workflow file unexpectedly changed in feature commit'
+            git diff --cached --name-only
+            exit 1
+          fi
           git commit -m "Add admin pricing and scheduled promotions"
           git push origin HEAD:feature/kindle-admin-foundation
