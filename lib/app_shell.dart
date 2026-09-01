@@ -562,36 +562,39 @@ class _DailyScreenState extends State<DailyScreen>
           style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
         ),
         const SizedBox(height: 26),
-        Row(
-          children: [
-            Expanded(
-              child: _PaperButton(
-                label: widget.localization.t('booking_today'),
-                detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
-                icon: Icons.today_outlined,
-                filled: true,
-                onPressed:
-                    _bookingBusy || todayBooking != null || status.free <= 0
-                    ? null
-                    : () => _requestDesk(todayDate),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _PaperButton(
+                  label: widget.localization.t('booking_today'),
+                  detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
+                  icon: Icons.today_outlined,
+                  filled: true,
+                  onPressed:
+                      _bookingBusy || todayBooking != null || status.free <= 0
+                      ? null
+                      : () => _requestDesk(todayDate),
+                ),
               ),
-            ),
-            Expanded(
-              child: _PaperButton(
-                label: widget.localization.t('booking_tomorrow'),
-                detail: _bookingBusy
-                    ? '…'
-                    : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
-                icon: Icons.event_outlined,
-                onPressed:
-                    _bookingBusy ||
-                        tomorrowBooking != null ||
-                        status.tomorrowFree <= 0
-                    ? null
-                    : () => _requestDesk(tomorrowDate),
+              Expanded(
+                child: _PaperButton(
+                  label: widget.localization.t('booking_tomorrow'),
+                  detail: _bookingBusy
+                      ? '…'
+                      : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
+                  icon: Icons.event_outlined,
+                  onPressed:
+                      _bookingBusy ||
+                          tomorrowBooking != null ||
+                          status.tomorrowFree <= 0
+                      ? null
+                      : () => _requestDesk(tomorrowDate),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         if (status.todayPromoDescription.isNotEmpty) ...[
           const SizedBox(height: 10),
