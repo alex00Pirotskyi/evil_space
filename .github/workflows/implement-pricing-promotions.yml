@@ -40,8 +40,72 @@ jobs:
       - name: Implement dynamic pricing and promotions
         run: python3 .github/implement_pricing_promotions.py
 
-      - name: Format Dart
-        run: dart format lib test tool
+      - name: Update dynamic pricing contract tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('test/telegram_start_booking_contract_test.dart')
+          text = path.read_text()
+          old = "    expect(bookingFlow, contains('dayPassAmount(serviceDay, now)'));"
+          new = "    expect(bookingFlow, contains('resolvePricing(env, serviceDay, now)'));"
+          if old not in text:
+              raise SystemExit('stale Telegram start pricing assertion not found')
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path('test/telegram_contract_test.dart')
+          text = path.read_text()
+          old = '''    test('booking prices come from the shared Nha Trang rules', () {
+      expect(bookingRules, contains('export const DAY_PASS_VND = 200000;'));
+      expect(bookingRules, contains('export const HALF_DAY_VND = 100000;'));
+      expect(bookingRules, contains('export const MONTH_PASS_VND = 2500000;'));
+      expect(
+        worker,
+        contains('dayPassAmount(serviceDayForOffset(0, now), now)'),
+      );
+      expect(
+        telegram,
+        contains('dayPassAmount(serviceDayForOffset(0, now), now)'),
+      );
+      expect(worker, isNot(contains('250K VND')));
+      expect(telegram, isNot(contains('250K VND')));
+    });'''
+          new = '''    test('booking prices come from editable pricing and promotion rules', () {
+      final pricing = File('worker/pricing.js').readAsStringSync();
+      final pricingMigration = File(
+        'migrations/0009_pricing_promotions.sql',
+      ).readAsStringSync();
+      expect(pricing, contains('DEFAULT_DAY_PASS_VND = 200000'));
+      expect(pricing, contains('resolvePricing'));
+      expect(pricing, contains('promotionApplies'));
+      expect(pricingMigration, contains('pricing_settings'));
+      expect(pricingMigration, contains('promotions'));
+      expect(entry, contains('resolvePricing(env, serviceDay, now)'));
+      expect(worker, contains('resolvePricing(env, serviceDayForOffset(0, now), now)'));
+      expect(telegram, contains('resolvePricing(env, serviceDay, now)'));
+      expect(bookingRules, isNot(contains('HALF_DAY_VND')));
+      expect(worker, isNot(contains('250K VND')));
+      expect(telegram, isNot(contains('250K VND')));
+    });'''
+          if old not in text:
+              raise SystemExit('stale shared pricing contract block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Format touched Dart files
+        run: |
+          dart format \
+            lib/admin_api_models.dart \
+            lib/admin_api_stub.dart \
+            lib/admin_api_web.dart \
+            lib/admin_screen.dart \
+            lib/app_shell.dart \
+            lib/coworking_model.dart \
+            lib/localization.dart \
+            test/booking_service_day_contract_test.dart \
+            test/telegram_contract_test.dart \
+            test/telegram_start_booking_contract_test.dart \
+            test/widget_test.dart
 
       - name: Install dependencies
         run: flutter pub get
