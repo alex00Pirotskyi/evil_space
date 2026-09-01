@@ -30,74 +30,22 @@ jobs:
           from pathlib import Path
           path = Path('lib/app_shell.dart')
           text = path.read_text()
-          old = '''        Row(
-          children: [
-            Expanded(
-              child: _PaperButton(
-                label: widget.localization.t('booking_today'),
-                detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
-                icon: Icons.today_outlined,
-                filled: true,
-                onPressed:
-                    _bookingBusy || todayBooking != null || status.free <= 0
-                    ? null
-                    : () => _requestDesk(todayDate),
-              ),
-            ),
-            Expanded(
-              child: _PaperButton(
-                label: widget.localization.t('booking_tomorrow'),
-                detail: _bookingBusy
-                    ? '…'
-                    : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
-                icon: Icons.event_outlined,
-                onPressed:
-                    _bookingBusy ||
-                        tomorrowBooking != null ||
-                        status.tomorrowFree <= 0
-                    ? null
-                    : () => _requestDesk(tomorrowDate),
-              ),
-            ),
-          ],
-        ),'''
-          new = '''        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: _PaperButton(
-                  label: widget.localization.t('booking_today'),
-                  detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
-                  icon: Icons.today_outlined,
-                  filled: true,
-                  onPressed:
-                      _bookingBusy || todayBooking != null || status.free <= 0
-                      ? null
-                      : () => _requestDesk(todayDate),
-                ),
-              ),
-              Expanded(
-                child: _PaperButton(
-                  label: widget.localization.t('booking_tomorrow'),
-                  detail: _bookingBusy
-                      ? '…'
-                      : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
-                  icon: Icons.event_outlined,
-                  onPressed:
-                      _bookingBusy ||
-                          tomorrowBooking != null ||
-                          status.tomorrowFree <= 0
-                      ? null
-                      : () => _requestDesk(tomorrowDate),
-                ),
-              ),
-            ],
-          ),
-        ),'''
-          if old not in text:
-              raise SystemExit('booking button row not found')
-          path.write_text(text.replace(old, new, 1))
+          start_marker = "\n        Row(\n          children: [\n            Expanded(\n              child: _PaperButton(\n                label: widget.localization.t('booking_today'),"
+          end_marker = "\n        if (status.todayPromoDescription.isNotEmpty)"
+          start = text.find(start_marker)
+          if start < 0:
+              raise SystemExit('booking row start not found')
+          end = text.find(end_marker, start)
+          if end < 0:
+              raise SystemExit('booking row end not found')
+          block = text[start:end]
+          block = block.replace(
+              "\n        Row(\n",
+              "\n        IntrinsicHeight(\n          child: Row(\n            crossAxisAlignment: CrossAxisAlignment.stretch,\n",
+              1,
+          )
+          block += "\n        ),"
+          path.write_text(text[:start] + block + text[end:])
           PY
           dart format lib/app_shell.dart
 
