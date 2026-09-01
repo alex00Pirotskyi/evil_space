@@ -1,4 +1,10 @@
-import { DAY_PASS_VND, dayPassAmount, serviceDayForOffset } from './booking_rules.js';
+import { serviceDayForOffset, serviceDayFromDateKey } from './booking_rules.js';
+import {
+  DEFAULT_DAY_PASS_VND,
+  listPromotions,
+  pricingSnapshot,
+  resolvePricing,
+} from './pricing.js';
 const encoder = new TextEncoder();
 
 const OWNER_EMAIL = 'evilssspace79@gmail.com';
@@ -7,7 +13,6 @@ const SESSION_COOKIE = '__Host-evil_admin_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const APPROVAL_TTL_SECONDS = 60 * 60 * 24;
 const PBKDF2_ITERATIONS = 50000;
-const MONTH_PASS_VND = 2500000;
 const MAX_NAME_LENGTH = 100;
 const MAX_PURCHASE_LENGTH = 180;
 const MAX_CONTACT_LENGTH = 160;
@@ -62,6 +67,22 @@ export default {
       }
       if (request.method === 'GET' && url.pathname === '/api/admin/operations') {
         return handleOperations(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/admin/pricing') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handlePricingUpdate(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/admin/promotions') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleCreatePromotion(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/admin/promotions/toggle') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleTogglePromotion(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/admin/promotions/delete') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return handleDeletePromotion(request, env);
       }
       if (request.method === 'POST' && url.pathname === '/api/admin/day-pass') {
         if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
@@ -491,6 +512,117 @@ async function handleOperations(request, env) {
   return json({ ok: true, snapshot: await operationsSnapshot(env) });
 }
 
+async function handlePricingUpdate(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  if (!body) return jsonError('Invalid request.', 400);
+
+  const dayPassVnd = toPriceInt(body.dayPassVnd);
+  const monthPassVnd = toPriceInt(body.monthPassVnd);
+  const lockerMonthVnd = toPriceInt(body.lockerMonthVnd);
+  if (!dayPassVnd || !monthPassVnd || !lockerMonthVnd) {
+    return jsonError('All base prices must be positive VND amounts.', 400);
+  }
+
+  await env.evil_space
+    .prepare(`
+      UPDATE pricing_settings
+      SET day_pass_vnd = ?, month_pass_vnd = ?, locker_month_vnd = ?,
+          updated_at = ?, updated_by_email = ?
+      WHERE id = 1
+    `)
+    .bind(dayPassVnd, monthPassVnd, lockerMonthVnd, nowSeconds(), session.email)
+    .run();
+  return json({ ok: true, snapshot: await operationsSnapshot(env) });
+}
+
+async function handleCreatePromotion(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  if (!body) return jsonError('Invalid request.', 400);
+
+  const description = cleanText(body.description, 240);
+  const startDay = serviceDayFromDateKey(body.startDate);
+  const endDay = serviceDayFromDateKey(body.endDate);
+  if (!description) return jsonError('Promotion description is required.', 400);
+  if (startDay == null || endDay == null || endDay < startDay) {
+    return jsonError('Choose a valid promotion date range.', 400);
+  }
+
+  const hasStartTime = typeof body.startTime === 'string' && body.startTime.trim() !== '';
+  const hasEndTime = typeof body.endTime === 'string' && body.endTime.trim() !== '';
+  if (hasStartTime !== hasEndTime) {
+    return jsonError('Set both start and end time, or leave both empty.', 400);
+  }
+  const startMinute = hasStartTime ? parseTimeMinute(body.startTime) : null;
+  const endMinute = hasEndTime ? parseTimeMinute(body.endTime) : null;
+  if (hasStartTime && (startMinute == null || endMinute == null || endMinute <= startMinute)) {
+    return jsonError('Choose a valid daily time window.', 400);
+  }
+
+  const dayPassVnd = optionalPriceInt(body.dayPassVnd);
+  const monthPassVnd = optionalPriceInt(body.monthPassVnd);
+  const lockerMonthVnd = optionalPriceInt(body.lockerMonthVnd);
+  if (dayPassVnd === false || monthPassVnd === false || lockerMonthVnd === false) {
+    return jsonError('Promotion prices must be positive VND amounts.', 400);
+  }
+  if (dayPassVnd == null && monthPassVnd == null && lockerMonthVnd == null) {
+    return jsonError('Set at least one promotional price.', 400);
+  }
+
+  await env.evil_space
+    .prepare(`
+      INSERT INTO promotions
+        (description, start_day, end_day, start_minute, end_minute,
+         day_pass_vnd, month_pass_vnd, locker_month_vnd, enabled,
+         created_at, created_by_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `)
+    .bind(
+      description,
+      startDay,
+      endDay,
+      startMinute,
+      endMinute,
+      dayPassVnd,
+      monthPassVnd,
+      lockerMonthVnd,
+      nowSeconds(),
+      session.email,
+    )
+    .run();
+  return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
+}
+
+async function handleTogglePromotion(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  const id = toPositiveInt(body?.id);
+  if (!id || typeof body?.enabled !== 'boolean') {
+    return jsonError('Promotion and enabled state are required.', 400);
+  }
+  const result = await env.evil_space
+    .prepare('UPDATE promotions SET enabled = ? WHERE id = ?')
+    .bind(body.enabled ? 1 : 0, id)
+    .run();
+  if (!result.meta?.changes) return jsonError('Promotion not found.', 404);
+  return json({ ok: true, snapshot: await operationsSnapshot(env) });
+}
+
+async function handleDeletePromotion(request, env) {
+  const session = await authenticatedAdmin(request, env);
+  if (!session) return jsonError('Sign in required.', 401);
+  const body = await readJson(request);
+  const id = toPositiveInt(body?.id);
+  if (!id) return jsonError('Promotion is required.', 400);
+  const result = await env.evil_space.prepare('DELETE FROM promotions WHERE id = ?').bind(id).run();
+  if (!result.meta?.changes) return jsonError('Promotion not found.', 404);
+  return json({ ok: true, snapshot: await operationsSnapshot(env) });
+}
+
 async function handleDayPass(request, env) {
   const session = await authenticatedAdmin(request, env);
   if (!session) return jsonError('Sign in required.', 401);
@@ -500,13 +632,14 @@ async function handleDayPass(request, env) {
 
   const now = nowSeconds();
   const customer = await ensureCustomer(env, { name });
+  const pricing = await resolvePricing(env, serviceDayForOffset(0, now), now);
   await env.evil_space
     .prepare(`
       INSERT INTO visits
         (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
       VALUES (?, 'day', NULL, ?, ?, ?, ?)
     `)
-    .bind(name, dayPassAmount(serviceDayForOffset(0, now), now), now, session.email, customer.id)
+    .bind(name, pricing.dayPassVnd, now, session.email, customer.id)
     .run();
 
   return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
@@ -534,6 +667,7 @@ async function handleNewMonth(request, env) {
   }
 
   const expiresAt = addCalendarMonth(now);
+  const pricing = await resolvePricing(env, serviceDayForOffset(0, now), now);
   const membership = await env.evil_space
     .prepare(`
       INSERT INTO memberships (name, starts_at, expires_at, created_at, customer_id)
@@ -549,7 +683,7 @@ async function handleNewMonth(request, env) {
         (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
       VALUES (?, 'month', ?, ?, ?, ?, ?)
     `)
-    .bind(name, membership.id, MONTH_PASS_VND, now, session.email, customer.id)
+    .bind(name, membership.id, pricing.monthPassVnd, now, session.email, customer.id)
     .run();
 
   return json({ ok: true, snapshot: await operationsSnapshot(env) }, 201);
@@ -636,7 +770,7 @@ async function handleAcceptBooking(request, env) {
           (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
         VALUES (?, 'day', NULL, ?, ?, ?, ?)
       `)
-      .bind(booking.name, DAY_PASS_VND, now, session.email, customer.id)
+      .bind(booking.name, DEFAULT_DAY_PASS_VND, now, session.email, customer.id)
       .run();
   }
 
@@ -898,6 +1032,11 @@ AND (status = 'new' OR (status = 'accepted' AND service_day >= ?))
       .first(),
   ]);
 
+  const [pricing, promotions] = await Promise.all([
+    pricingSnapshot(env, now),
+    listPromotions(env),
+  ]);
+
   return {
     today_visits: todayVisits.results ?? [],
     active_memberships: activeMemberships.results ?? [],
@@ -905,6 +1044,8 @@ AND (status = 'new' OR (status = 'accepted' AND service_day >= ?))
     customers: customers.results ?? [],
     to_buy: toBuy.results ?? [],
     purchase_history: history.results ?? [],
+    pricing,
+    promotions,
     income: {
       today: Number(income?.today ?? 0),
       seven_days: Number(income?.seven_days ?? 0),
@@ -960,6 +1101,26 @@ function cleanOptionalText(value, maxLength) {
 function toPositiveInt(value) {
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
+function toPriceInt(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 && number <= 1000000000 ? number : null;
+}
+
+function optionalPriceInt(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return toPriceInt(value) ?? false;
+}
+
+function parseTimeMinute(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
 }
 
 async function readJson(request) {

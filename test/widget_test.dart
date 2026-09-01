@@ -144,12 +144,7 @@ void main() {
       expect(content.openings, isNotEmpty);
       expect(
         content.prices.map((price) => price.price),
-        orderedEquals([
-          '200K VND',
-          '100K VND',
-          '2.5 MLN VND',
-          '1 MLN VND / MONTH',
-        ]),
+        orderedEquals(['200K VND', '2.5 MLN VND', '1 MLN VND / MONTH']),
       );
     });
   });

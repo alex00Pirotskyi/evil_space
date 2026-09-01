@@ -593,11 +593,22 @@ class _DailyScreenState extends State<DailyScreen>
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          widget.localization.t('half_day_note'),
-          style: _mono(9, color: BrandPalette.inkMuted, spacing: 0.35),
-        ),
+        if (status.todayPromoDescription.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _promoNotice(
+            widget.localization.t('booking_today'),
+            status.todayPromoDescription,
+          ),
+        ],
+        if (status.tomorrowPromoDescription.isNotEmpty &&
+            status.tomorrowPromoDescription !=
+                status.todayPromoDescription) ...[
+          const SizedBox(height: 8),
+          _promoNotice(
+            widget.localization.t('booking_tomorrow'),
+            status.tomorrowPromoDescription,
+          ),
+        ],
         if (todayBooking != null) ...[
           const SizedBox(height: 16),
           _bookingCard(todayBooking, false),
@@ -607,6 +618,21 @@ class _DailyScreenState extends State<DailyScreen>
           _bookingCard(tomorrowBooking, true),
         ],
       ],
+    );
+  }
+
+  Widget _promoNotice(String dayLabel, String description) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: BrandPalette.paperDeep,
+        border: Border.all(color: BrandPalette.ink),
+      ),
+      child: Text(
+        '${widget.localization.t('promo_label')} · $dayLabel · $description',
+        style: _mono(9.5, spacing: 0.45, height: 1.35),
+      ),
     );
   }
 
@@ -714,10 +740,16 @@ class _DailyScreenState extends State<DailyScreen>
   }
 
   Widget _prices(bool compact) {
+    final status = _liveStatus ?? _content.status;
+    final prices = <(String, int)>[
+      ('price_day_pass', status.baseDayPassPrice),
+      ('price_month', status.baseMonthPassPrice),
+      ('price_locker', status.baseLockerMonthPrice),
+    ];
     return _Section(
       title: widget.localization.t('prices_title'),
       child: Column(
-        children: _content.prices
+        children: prices
             .map((price) {
               return Container(
                 constraints: const BoxConstraints(minHeight: 76),
@@ -728,12 +760,12 @@ class _DailyScreenState extends State<DailyScreen>
                   children: [
                     Expanded(
                       child: Text(
-                        widget.localization.t(price.labelKey),
+                        widget.localization.t(price.$1),
                         style: _mono(11, spacing: 0.8),
                       ),
                     ),
                     Text(
-                      price.price,
+                      _moneyLabel(price.$2),
                       textAlign: TextAlign.right,
                       style: _serif(compact ? 24 : 30),
                     ),

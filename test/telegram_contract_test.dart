@@ -14,15 +14,12 @@ void main() {
     late String setup;
 
     setUpAll(() {
-      migration = File(
-        'migrations/0006_telegram_admin_client.sql',
-      ).readAsStringSync();
-      languageMigration = File(
-        'migrations/0007_telegram_languages.sql',
-      ).readAsStringSync();
-      serviceDayMigration = File(
-        'migrations/0008_booking_service_day.sql',
-      ).readAsStringSync();
+      migration = File('migrations/0006_telegram_admin_client.sql')
+          .readAsStringSync();
+      languageMigration = File('migrations/0007_telegram_languages.sql')
+          .readAsStringSync();
+      serviceDayMigration = File('migrations/0008_booking_service_day.sql')
+          .readAsStringSync();
       entry = File('worker/entry.js').readAsStringSync();
       worker = File('worker/index.js').readAsStringSync();
       telegram = File('worker/telegram.js').readAsStringSync();
@@ -77,40 +74,50 @@ void main() {
       expect(telegram, contains('TELEGRAM_WEBHOOK_SECRET'));
     });
 
-    test('booking prices come from the shared Nha Trang rules', () {
-      expect(bookingRules, contains('export const DAY_PASS_VND = 200000;'));
-      expect(bookingRules, contains('export const HALF_DAY_VND = 100000;'));
-      expect(bookingRules, contains('export const MONTH_PASS_VND = 2500000;'));
+    test('booking prices come from editable pricing and promotion rules', () {
+      final pricing = File('worker/pricing.js').readAsStringSync();
+      final pricingMigration = File('migrations/0009_pricing_promotions.sql')
+          .readAsStringSync();
+      expect(pricing, contains('DEFAULT_DAY_PASS_VND = 200000'));
+      expect(pricing, contains('resolvePricing'));
+      expect(pricing, contains('promotionApplies'));
+      expect(pricingMigration, contains('pricing_settings'));
+      expect(pricingMigration, contains('promotions'));
+      expect(entry, contains('resolvePricing(env, serviceDay, now)'));
       expect(
         worker,
-        contains('dayPassAmount(serviceDayForOffset(0, now), now)'),
+        contains('resolvePricing(env, serviceDayForOffset(0, now), now)'),
       );
-      expect(
-        telegram,
-        contains('dayPassAmount(serviceDayForOffset(0, now), now)'),
-      );
+      expect(telegram, contains('resolvePricing(env, serviceDay, now)'));
+      expect(bookingRules, isNot(contains('HALF_DAY_VND')));
       expect(worker, isNot(contains('250K VND')));
       expect(telegram, isNot(contains('250K VND')));
     });
 
-    test('one-tap TG booking uses verified identity, absolute date and language', () {
-      expect(telegram, contains("payload.startsWith('book_')"));
-      expect(telegram, contains('telegramBookingIdentity(user)'));
-      expect(telegram, contains('serviceDayFromCompactDate'));
-      expect(telegram, contains("contact_type, contact_value"));
-      expect(
-        telegram,
-        contains("VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)"),
-      );
-      expect(telegram, contains('notifyAdminsNewBooking(env, created.id)'));
-    });
+    test(
+      'one-tap TG booking uses verified identity, absolute date and language',
+      () {
+        expect(telegram, contains("payload.startsWith('book_')"));
+        expect(telegram, contains('telegramBookingIdentity(user)'));
+        expect(telegram, contains('serviceDayFromCompactDate'));
+        expect(telegram, contains("contact_type, contact_value"));
+        expect(
+          telegram,
+          contains("VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)"),
+        );
+        expect(telegram, contains('notifyAdminsNewBooking(env, created.id)'));
+      },
+    );
 
-    test('future accepted bookings use their service day for occupancy and income', () {
-      expect(telegram, contains('visitTimestampForServiceDay'));
-      expect(telegram, contains('serviceStart, serviceEnd'));
-      expect(telegram, contains('claimed.amount_vnd'));
-      expect(telegram, contains('No desks are left for this day.'));
-    });
+    test(
+      'future accepted bookings use their service day for occupancy and income',
+      () {
+        expect(telegram, contains('visitTimestampForServiceDay'));
+        expect(telegram, contains('serviceStart, serviceEnd'));
+        expect(telegram, contains('claimed.amount_vnd'));
+        expect(telegram, contains('No desks are left for this day.'));
+      },
+    );
 
     test('admin Telegram acknowledgement includes date and locked price', () {
       expect(telegram, contains('bookingDayKind(serviceDay, nowSeconds())'));
@@ -169,32 +176,36 @@ void main() {
       expect(setup, contains("'setWebhook'"));
     });
 
-    test('tracked integration sources contain no literal Telegram bot token', () {
-      final tokenPattern = RegExp(r'\b\d{6,12}:[A-Za-z0-9_-]{30,}\b');
-      final files = <String>[
-        'worker/entry.js',
-        'worker/index.js',
-        'worker/telegram.js',
-        'worker/booking_rules.js',
-        'worker/telegram_test.mjs',
-        'worker/booking_rules_test.mjs',
-        'tool/release.dart',
-        'tool/telegram_setup.dart',
-        'wrangler.toml',
-        'lib/admin_portal.dart',
-        'lib/admin_api_web.dart',
-        'lib/public_desk_web.dart',
-      ];
+    test(
+      'tracked integration sources contain no literal Telegram bot token',
+      () {
+        final tokenPattern = RegExp(r'\b\d{6,12}:[A-Za-z0-9_-]{30,}\b');
+        final files = <String>[
+          'worker/entry.js',
+          'worker/index.js',
+          'worker/telegram.js',
+          'worker/booking_rules.js',
+          'worker/pricing.js',
+          'worker/telegram_test.mjs',
+          'worker/booking_rules_test.mjs',
+          'tool/release.dart',
+          'tool/telegram_setup.dart',
+          'wrangler.toml',
+          'lib/admin_portal.dart',
+          'lib/admin_api_web.dart',
+          'lib/public_desk_web.dart',
+        ];
 
-      for (final path in files) {
-        final text = File(path).readAsStringSync();
-        expect(
-          tokenPattern.hasMatch(text),
-          isFalse,
-          reason: 'possible Telegram bot token committed in $path',
-        );
-      }
-    });
+        for (final path in files) {
+          final text = File(path).readAsStringSync();
+          expect(
+            tokenPattern.hasMatch(text),
+            isFalse,
+            reason: 'possible Telegram bot token committed in $path',
+          );
+        }
+      },
+    );
   });
 
   group('Telegram Flutter contract', () {
@@ -233,28 +244,36 @@ void main() {
       expect(api, contains("'/api/admin/booking/decline'"));
     });
 
-    test('admin displays full-day and half-day prices', () {
+    test('admin exposes editable base pricing and scheduled promotions', () {
       final screen = File('lib/admin_screen.dart').readAsStringSync();
-      expect(screen, contains("'200K VND'"));
-      expect(screen, contains("'100K VND'"));
-      expect(screen, isNot(contains("'250K VND'")));
+      final api = File('lib/admin_api_web.dart').readAsStringSync();
+      final worker = File('worker/index.js').readAsStringSync();
+      expect(screen, contains("t('ЦЕНЫ', 'PRICES')"));
+      expect(screen, contains("t('ИЗМЕНИТЬ ЦЕНЫ', 'EDIT PRICES')"));
+      expect(screen, contains("t('ДОБАВИТЬ АКЦИЮ', 'ADD PROMO')"));
+      expect(api, contains("'/api/admin/pricing'"));
+      expect(api, contains("'/api/admin/promotions'"));
+      expect(worker, contains('handleCreatePromotion'));
+      expect(worker, contains('handlePricingUpdate'));
     });
 
-    test('public pricing includes half day and monthly personal locker', () {
-      final content = File('assets/content/status.json').readAsStringSync();
-      final localization = File('lib/localization.dart').readAsStringSync();
-      expect(content, contains('"price_half_day"'));
-      expect(content, contains('"100K VND"'));
-      expect(content, contains('"price_locker"'));
-      expect(content, contains('"1 MLN VND / MONTH"'));
-      expect(
-        localization,
-        contains("'price_half_day': 'HALF DAY · AFTER 16:00'"),
-      );
-      expect(localization, contains("'price_locker': 'PERSONAL LOCKER'"));
-      expect(localization, contains("'price_locker': 'ЛИЧНЫЙ ШКАФЧИК'"));
-      expect(localization, contains("'price_locker': 'TỦ CÁ NHÂN'"));
-    });
+    test(
+      'public pricing has no fixed half-day promo and keeps personal locker',
+      () {
+        final content = File('assets/content/status.json').readAsStringSync();
+        final localization = File('lib/localization.dart').readAsStringSync();
+        final shell = File('lib/app_shell.dart').readAsStringSync();
+        expect(content, isNot(contains('"price_half_day"')));
+        expect(content, isNot(contains('"100K VND"')));
+        expect(content, contains('"price_locker"'));
+        expect(content, contains('"1 MLN VND / MONTH"'));
+        expect(localization, isNot(contains('price_half_day')));
+        expect(shell, isNot(contains('half_day_note')));
+        expect(localization, contains("'price_locker': 'PERSONAL LOCKER'"));
+        expect(localization, contains("'price_locker': 'ЛИЧНЫЙ ШКАФЧИК'"));
+        expect(localization, contains("'price_locker': 'TỦ CÁ NHÂN'"));
+      },
+    );
 
     test('admin Telegram pairing receives the selected web language', () {
       final router = File('lib/app_router.dart').readAsStringSync();

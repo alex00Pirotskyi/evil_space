@@ -1,11 +1,7 @@
 import {
-  DAY_PASS_VND,
-  HALF_DAY_VND,
-  MONTH_PASS_VND,
   bookingDayKind,
   bookingWindow,
   compactServiceDate,
-  dayPassAmount,
   isBookableServiceDay,
   nhaTrangDayBounds,
   serviceDateKey,
@@ -13,6 +9,7 @@ import {
   serviceDayFromCompactDate,
   visitTimestampForServiceDay,
 } from './booking_rules.js';
+import { resolvePricing } from './pricing.js';
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const BOT_USERNAME = 'CoworkingEvilAdminBot';
 const ADMIN_LINK_TTL = 10 * 60;
@@ -43,7 +40,6 @@ const TEXT = {
     tomorrow: 'TOMORROW',
     date: 'Date',
     price: 'Price',
-    halfDay: 'HALF DAY · AFTER 16:00',
     bookings: 'BOOKINGS',
     dayPass: 'DAY PASS',
     month: 'MONTH',
@@ -147,7 +143,6 @@ const TEXT = {
     tomorrow: 'ЗАВТРА',
     date: 'Дата',
     price: 'Цена',
-    halfDay: 'ПОЛДНЯ · ПОСЛЕ 16:00',
     bookings: 'БРОНИ',
     dayPass: 'ДЕНЬ',
     month: 'МЕСЯЦ',
@@ -251,7 +246,6 @@ const TEXT = {
     tomorrow: 'NGÀY MAI',
     date: 'Ngày',
     price: 'Giá',
-    halfDay: 'NỬA NGÀY · SAU 16:00',
     bookings: 'ĐẶT BÀN',
     dayPass: 'VÉ NGÀY',
     month: 'THÁNG',
@@ -1100,7 +1094,7 @@ async function bookViaTelegram(env, user, chatId, rawPayload) {
     return sendText(env, chatId, 'No desks are left for this day.');
   }
 
-  const amountVnd = dayPassAmount(serviceDay, now);
+  const amountVnd = (await resolvePricing(env, serviceDay, now)).dayPassVnd;
   const created = await env.evil_space
     .prepare(`
       INSERT INTO booking_requests
@@ -1378,11 +1372,11 @@ async function prepareNamedOperation(env, admin, chatId, state, value) {
   await setAdminState(env, admin, state, { name });
   const isMonth = state === 'confirm_month';
   const now = nowSeconds();
-  const todayPrice = dayPassAmount(serviceDayForOffset(0, now), now);
+  const pricing = await resolvePricing(env, serviceDayForOffset(0, now), now);
   return sendText(
     env,
     chatId,
-    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${isMonth ? '2.5 MLN VND' : formatMoney(todayPrice)}\n\n${tr(lang, 'confirmQuestion')}`,
+    `${isMonth ? tr(lang, 'month') : tr(lang, 'dayPass')}\n\n<b>${escapeHtml(name)}</b>\n${formatMoney(isMonth ? pricing.monthPassVnd : pricing.dayPassVnd)}\n\n${tr(lang, 'confirmQuestion')}`,
     {
       inline_keyboard: [[
         { text: tr(lang, 'confirm'), callback_data: isMonth ? 'op:month:ok' : 'op:day:ok' },
@@ -1627,7 +1621,8 @@ async function acceptBooking(env, bookingId, admin) {
     let acceptedVisitId = null;
     if (!already) {
       const visitTime = visitTimestampForServiceDay(serviceStart, now);
-      const amountVnd = Number(claimed.amount_vnd ?? dayPassAmount(serviceStart, now));
+      const fallbackPricing = await resolvePricing(env, serviceStart, now);
+      const amountVnd = Number(claimed.amount_vnd ?? fallbackPricing.dayPassVnd);
       const visit = await env.evil_space
         .prepare(`
 INSERT INTO visits
@@ -1720,7 +1715,7 @@ async function addDayPass(env, rawName, admin) {
       VALUES (?, 'day', NULL, ?, ?, ?, ?)
       RETURNING id
     `)
-    .bind(name, dayPassAmount(serviceDayForOffset(0, now), now), now, admin.email, customer.id)
+    .bind(name, (await resolvePricing(env, serviceDayForOffset(0, now), now)).dayPassVnd, now, admin.email, customer.id)
     .first();
   await audit(env, admin, 'day_pass.create', 'visit', visit?.id, name);
   return visit;
@@ -1752,7 +1747,7 @@ async function addMonthPass(env, rawName, admin) {
         (name, kind, membership_id, amount, created_at, created_by_email, customer_id)
       VALUES (?, 'month', ?, ?, ?, ?, ?)
     `)
-    .bind(name, membership.id, MONTH_PASS_VND, now, admin.email, customer.id)
+    .bind(name, membership.id, (await resolvePricing(env, serviceDayForOffset(0, now), now)).monthPassVnd, now, admin.email, customer.id)
     .run();
   await audit(env, admin, 'month_pass.create', 'membership', membership.id, name);
   return membership;
@@ -2396,6 +2391,5 @@ export const telegramTest = {
   nhaTrangDayBounds,
   normalizeLanguage,
   telegramBookingIdentity,
-  dayPassAmount,
   serviceDateKey,
 };

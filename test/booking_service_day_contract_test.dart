@@ -4,13 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('booking service day migration and backend contract stay wired', () {
-    final migration = File('migrations/0008_booking_service_day.sql').readAsStringSync();
+    final migration = File('migrations/0008_booking_service_day.sql')
+        .readAsStringSync();
     final entry = File('worker/entry.js').readAsStringSync();
     final telegram = File('worker/telegram.js').readAsStringSync();
     expect(migration, contains('service_day'));
     expect(migration, contains('amount_vnd'));
-    expect(entry, contains('todayPrice: dayPassAmount(today, now)'));
-    expect(entry, contains('tomorrowPrice: dayPassAmount(tomorrow, now)'));
+    expect(entry, contains('resolvePricing(env, today, now)'));
+    expect(entry, contains('resolvePricing(env, tomorrow, now)'));
     expect(entry, contains('serviceDayFromDateKey(body.serviceDate)'));
     expect(telegram, contains('visitTimestampForServiceDay'));
     expect(telegram, contains('service_day, amount_vnd'));
@@ -21,12 +22,11 @@ void main() {
     final localization = File('lib/localization.dart').readAsStringSync();
     expect(shell, contains("widget.localization.t('booking_today')"));
     expect(shell, contains("widget.localization.t('booking_tomorrow')"));
-    expect(shell, contains("widget.localization.t('half_day_note')"));
+    expect(shell, contains('_promoNotice'));
     expect(shell, contains('_bookingFor(todayDate)'));
     expect(shell, contains('_bookingFor(tomorrowDate)'));
-    expect(localization, contains("'price_half_day': 'HALF DAY · AFTER 16:00'"));
-    expect(localization, contains("'price_half_day': 'ПОЛДНЯ · ПОСЛЕ 16:00'"));
-    expect(localization, contains("'price_half_day': 'NỬA NGÀY · SAU 16:00'"));
+    expect(localization, isNot(contains('price_half_day')));
+    expect(localization, contains("'promo_label': 'PROMO'"));
   });
 
   test('admin acknowledgement includes service day and locked amount', () {
@@ -39,11 +39,14 @@ void main() {
     expect(screen, contains("t('ПРИНЯТО', 'ACCEPTED')"));
   });
 
-  test('old created-at midnight expiry is removed from active booking paths', () {
-    final entry = File('worker/entry.js').readAsStringSync();
-    final telegram = File('worker/telegram.js').readAsStringSync();
-    expect(entry, contains('serviceDay < today || serviceDay >= end'));
-    expect(telegram, contains('isBookableServiceDay(serviceDay, now)'));
-    expect(telegram, contains("service_day = ?"));
-  });
+  test(
+    'old created-at midnight expiry is removed from active booking paths',
+    () {
+      final entry = File('worker/entry.js').readAsStringSync();
+      final telegram = File('worker/telegram.js').readAsStringSync();
+      expect(entry, contains('serviceDay < today || serviceDay >= end'));
+      expect(telegram, contains('isBookableServiceDay(serviceDay, now)'));
+      expect(telegram, contains("service_day = ?"));
+    },
+  );
 }

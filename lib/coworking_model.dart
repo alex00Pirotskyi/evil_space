@@ -11,6 +11,11 @@ class SiteStatus {
     this.tomorrowDate = '',
     this.todayPrice = 200000,
     this.tomorrowPrice = 200000,
+    this.baseDayPassPrice = 200000,
+    this.baseMonthPassPrice = 2500000,
+    this.baseLockerMonthPrice = 1000000,
+    this.todayPromoDescription = '',
+    this.tomorrowPromoDescription = '',
     this.tomorrowOccupied = 0,
   });
 
@@ -21,6 +26,11 @@ class SiteStatus {
   final String tomorrowDate;
   final int todayPrice;
   final int tomorrowPrice;
+  final int baseDayPassPrice;
+  final int baseMonthPassPrice;
+  final int baseLockerMonthPrice;
+  final String todayPromoDescription;
+  final String tomorrowPromoDescription;
   final int tomorrowOccupied;
 
   int get free => (total - occupied).clamp(0, total).toInt();
@@ -40,6 +50,14 @@ class SiteStatus {
       tomorrowDate: json['tomorrowDate']?.toString() ?? '',
       todayPrice: (json['todayPrice'] as num?)?.toInt() ?? 200000,
       tomorrowPrice: (json['tomorrowPrice'] as num?)?.toInt() ?? 200000,
+      baseDayPassPrice: (json['baseDayPassPrice'] as num?)?.toInt() ?? 200000,
+      baseMonthPassPrice:
+          (json['baseMonthPassPrice'] as num?)?.toInt() ?? 2500000,
+      baseLockerMonthPrice:
+          (json['baseLockerMonthPrice'] as num?)?.toInt() ?? 1000000,
+      todayPromoDescription: json['todayPromoDescription']?.toString() ?? '',
+      tomorrowPromoDescription:
+          json['tomorrowPromoDescription']?.toString() ?? '',
       tomorrowOccupied: rawTomorrow.clamp(0, normalizedTotal).toInt(),
     );
   }
@@ -161,7 +179,6 @@ class SiteContent {
     status: SiteStatus(total: 10, occupied: 0, updated: 'DEMO'),
     prices: [
       SitePrice(labelKey: 'price_day_pass', price: '200K VND'),
-      SitePrice(labelKey: 'price_half_day', price: '100K VND'),
       SitePrice(labelKey: 'price_month', price: '2.5 MLN VND'),
       SitePrice(labelKey: 'price_locker', price: '1 MLN VND / MONTH'),
     ],

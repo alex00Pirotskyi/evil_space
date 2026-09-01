@@ -103,6 +103,51 @@ class AdminApi {
     return OperationsSnapshot.fromJson(_snapshotMap(data));
   }
 
+  Future<OperationsSnapshot> updatePricing({
+    required int dayPassVnd,
+    required int monthPassVnd,
+    required int lockerMonthVnd,
+  }) async {
+    return _operation('POST', '/api/admin/pricing', {
+      'dayPassVnd': dayPassVnd,
+      'monthPassVnd': monthPassVnd,
+      'lockerMonthVnd': lockerMonthVnd,
+    });
+  }
+
+  Future<OperationsSnapshot> createPromotion({
+    required String description,
+    required String startDate,
+    required String endDate,
+    String? startTime,
+    String? endTime,
+    int? dayPassVnd,
+    int? monthPassVnd,
+    int? lockerMonthVnd,
+  }) async {
+    return _operation('POST', '/api/admin/promotions', {
+      'description': description,
+      'startDate': startDate,
+      'endDate': endDate,
+      'startTime': startTime,
+      'endTime': endTime,
+      'dayPassVnd': dayPassVnd,
+      'monthPassVnd': monthPassVnd,
+      'lockerMonthVnd': lockerMonthVnd,
+    });
+  }
+
+  Future<OperationsSnapshot> setPromotionEnabled(int id, bool enabled) async {
+    return _operation('POST', '/api/admin/promotions/toggle', {
+      'id': id,
+      'enabled': enabled,
+    });
+  }
+
+  Future<OperationsSnapshot> deletePromotion(int id) async {
+    return _operation('POST', '/api/admin/promotions/delete', {'id': id});
+  }
+
   Future<OperationsSnapshot> addDayPass(String name) async {
     return _operation('POST', '/api/admin/day-pass', {'name': name});
   }
@@ -112,11 +157,9 @@ class AdminApi {
   }
 
   Future<OperationsSnapshot> checkInMembership(int membershipId) async {
-    return _operation(
-      'POST',
-      '/api/admin/month-active',
-      {'membershipId': membershipId},
-    );
+    return _operation('POST', '/api/admin/month-active', {
+      'membershipId': membershipId,
+    });
   }
 
   Future<OperationsSnapshot> acceptBooking(int id) async {
@@ -130,19 +173,15 @@ class AdminApi {
   }
 
   Future<OperationsSnapshot> updateCustomer(CustomerRecord customer) async {
-    return _operation(
-      'POST',
-      '/api/admin/customers/update',
-      {
-        'id': customer.id,
-        'name': customer.name,
-        'phone': customer.phone,
-        'email': customer.email,
-        'telegram': customer.telegram,
-        'contactOther': customer.contactOther,
-        'notes': customer.notes,
-      },
-    );
+    return _operation('POST', '/api/admin/customers/update', {
+      'id': customer.id,
+      'name': customer.name,
+      'phone': customer.phone,
+      'email': customer.email,
+      'telegram': customer.telegram,
+      'contactOther': customer.contactOther,
+      'notes': customer.notes,
+    });
   }
 
   Future<OperationsSnapshot> updateCustomerFields({
@@ -154,19 +193,15 @@ class AdminApi {
     required String contactOther,
     required String notes,
   }) async {
-    return _operation(
-      'POST',
-      '/api/admin/customers/update',
-      {
-        'id': id,
-        'name': name,
-        'phone': phone,
-        'email': email,
-        'telegram': telegram,
-        'contactOther': contactOther,
-        'notes': notes,
-      },
-    );
+    return _operation('POST', '/api/admin/customers/update', {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'telegram': telegram,
+      'contactOther': contactOther,
+      'notes': notes,
+    });
   }
 
   Future<OperationsSnapshot> deleteCustomer(int id) async {
@@ -178,11 +213,7 @@ class AdminApi {
   }
 
   Future<OperationsSnapshot> markPurchaseBought(int id) async {
-    return _operation(
-      'POST',
-      '/api/admin/purchases/bought',
-      {'id': id},
-    );
+    return _operation('POST', '/api/admin/purchases/bought', {'id': id});
   }
 
   Future<OperationsSnapshot> _operation(

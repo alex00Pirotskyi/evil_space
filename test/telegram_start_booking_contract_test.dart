@@ -29,7 +29,7 @@ void main() {
     expect(bookingFlow, contains('serviceDayFromCompactDate(match[1])'));
     expect(bookingFlow, contains('isBookableServiceDay(serviceDay, now)'));
     expect(bookingFlow, contains('AND service_day = ?'));
-    expect(bookingFlow, contains('dayPassAmount(serviceDay, now)'));
+    expect(bookingFlow, contains('resolvePricing(env, serviceDay, now)'));
     expect(
       bookingFlow,
       contains("VALUES (?, 'telegram', ?, 'new', ?, ?, ?, ?)"),

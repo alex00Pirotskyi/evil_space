@@ -37,6 +37,28 @@ class AdminApi {
 
   Future<OperationsSnapshot> operations() async => _webOnly();
 
+  Future<OperationsSnapshot> updatePricing({
+    required int dayPassVnd,
+    required int monthPassVnd,
+    required int lockerMonthVnd,
+  }) async => _webOnly();
+
+  Future<OperationsSnapshot> createPromotion({
+    required String description,
+    required String startDate,
+    required String endDate,
+    String? startTime,
+    String? endTime,
+    int? dayPassVnd,
+    int? monthPassVnd,
+    int? lockerMonthVnd,
+  }) async => _webOnly();
+
+  Future<OperationsSnapshot> setPromotionEnabled(int id, bool enabled) async =>
+      _webOnly();
+
+  Future<OperationsSnapshot> deletePromotion(int id) async => _webOnly();
+
   Future<OperationsSnapshot> addDayPass(String name) async => _webOnly();
 
   Future<OperationsSnapshot> addMonthPass(String name) async => _webOnly();

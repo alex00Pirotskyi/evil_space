@@ -14,11 +14,11 @@ import {
 } from './telegram.js';
 import {
   bookingWindow,
-  dayPassAmount,
   isBookableServiceDay,
   serviceDateKey,
   serviceDayFromDateKey,
 } from './booking_rules.js';
+import { resolvePricing } from './pricing.js';
 
 const MAX_NAME_LENGTH = 100;
 const MAX_CONTACT_LENGTH = 160;
@@ -218,6 +218,10 @@ async function handlePublicStatus(env) {
   const total = Math.max(1, Number(row?.total ?? 10));
   const occupied = Math.min(total, Math.max(0, Number(row?.today_occupied ?? 0)));
   const tomorrowOccupied = Math.min(total, Math.max(0, Number(row?.tomorrow_occupied ?? 0)));
+  const [todayPricing, tomorrowPricing] = await Promise.all([
+    resolvePricing(env, today, now),
+    resolvePricing(env, tomorrow, now),
+  ]);
   return json({
     ok: true,
     status: {
@@ -227,8 +231,13 @@ async function handlePublicStatus(env) {
       updated: new Date(today * 1000).toISOString(),
       todayDate: serviceDateKey(today),
       tomorrowDate: serviceDateKey(tomorrow),
-      todayPrice: dayPassAmount(today, now),
-      tomorrowPrice: dayPassAmount(tomorrow, now),
+      baseDayPassPrice: todayPricing.base.dayPassVnd,
+      baseMonthPassPrice: todayPricing.base.monthPassVnd,
+      baseLockerMonthPrice: todayPricing.base.lockerMonthVnd,
+      todayPrice: todayPricing.dayPassVnd,
+      tomorrowPrice: tomorrowPricing.dayPassVnd,
+      todayPromoDescription: todayPricing.promotion?.description ?? '',
+      tomorrowPromoDescription: tomorrowPricing.promotion?.description ?? '',
       tomorrowOccupied,
       tomorrowFree: Math.max(0, total - tomorrowOccupied),
     },
@@ -283,7 +292,7 @@ async function handlePublicBooking(request, env, ctx) {
     .first();
   if (duplicate) return jsonError('You already have an active booking for this day.', 409);
 
-  const amountVnd = dayPassAmount(serviceDay, now);
+  const amountVnd = (await resolvePricing(env, serviceDay, now)).dayPassVnd;
   const token = randomToken(32);
   const tokenHash = await hashToken(token);
   const created = await env.evil_space

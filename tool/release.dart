@@ -25,7 +25,12 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/index.js']);
   await _run('node', ['--check', 'worker/entry.js']);
   await _run('node', ['--check', 'worker/telegram.js']);
-  await _run('node', ['--test', 'worker/telegram_test.mjs']);
+  await _run('node', [
+    '--test',
+    'worker/telegram_test.mjs',
+    'worker/booking_rules_test.mjs',
+    'worker/pricing_test.mjs',
+  ]);
 
   if (verifyOnly) {
     stdout.writeln('Verification complete. No build or deployment performed.');

@@ -74,9 +74,9 @@ class _AdminScreenState extends State<AdminScreen> {
     }
 
     try {
-      final snapshot = await widget.api
-          .operations()
-          .timeout(const Duration(seconds: 10));
+      final snapshot = await widget.api.operations().timeout(
+        const Duration(seconds: 10),
+      );
       if (!mounted) return;
       setState(() {
         _snapshot = snapshot;
@@ -126,9 +126,8 @@ class _AdminScreenState extends State<AdminScreen> {
         _loading = false;
       });
       if (success != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(success)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(success)));
       }
     } on TimeoutException {
       if (!mounted) return;
@@ -166,13 +165,13 @@ class _AdminScreenState extends State<AdminScreen> {
             value: 'day',
             icon: Icons.wb_sunny_outlined,
             title: t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'),
-            subtitle: _money(_currentDayPassAmount()),
+            subtitle: _money(_snapshot?.pricing.currentDayPassVnd ?? 200000),
           ),
           _Choice(
             value: 'month',
             icon: Icons.calendar_month_outlined,
             title: t('МЕСЯЧНЫЙ ПРОПУСК', 'MONTH PASS'),
-            subtitle: '2.5 MLN VND',
+            subtitle: _money(_snapshot?.pricing.currentMonthPassVnd ?? 2500000),
           ),
         ],
       ),
@@ -199,10 +198,7 @@ class _AdminScreenState extends State<AdminScreen> {
             value: 'new',
             icon: Icons.person_add_alt_1_outlined,
             title: t('НОВЫЙ', 'NEW'),
-            subtitle: t(
-              'Новый абонемент на 1 месяц',
-              'New 1-month membership',
-            ),
+            subtitle: t('Новый абонемент на 1 месяц', 'New 1-month membership'),
           ),
           _Choice(
             value: 'active',
@@ -226,10 +222,7 @@ class _AdminScreenState extends State<AdminScreen> {
       if (name == null) return;
       await _apply(
         () => widget.api.addMonthPass(name),
-        success: t(
-          'Абонемент создан на 1 месяц',
-          '1-month membership created',
-        ),
+        success: t('Абонемент создан на 1 месяц', '1-month membership created'),
       );
       return;
     }
@@ -238,8 +231,7 @@ class _AdminScreenState extends State<AdminScreen> {
         _snapshot?.activeMemberships ?? const <MembershipRecord>[];
     if (memberships.isEmpty) {
       await _load();
-      memberships =
-          _snapshot?.activeMemberships ?? const <MembershipRecord>[];
+      memberships = _snapshot?.activeMemberships ?? const <MembershipRecord>[];
     }
     if (!mounted) return;
 
@@ -256,10 +248,8 @@ class _AdminScreenState extends State<AdminScreen> {
 
     final membership = await showDialog<MembershipRecord>(
       context: context,
-      builder: (dialogContext) => _MembershipDialog(
-        russian: _russian,
-        memberships: memberships,
-      ),
+      builder: (dialogContext) =>
+          _MembershipDialog(russian: _russian, memberships: memberships),
     );
 
     if (!mounted || membership == null) return;
@@ -314,24 +304,24 @@ class _AdminScreenState extends State<AdminScreen> {
   Future<void> _acceptBooking(BookingRequestRecord booking) async {
     await _apply(
       () => widget.api.acceptBooking(booking.id),
-      success: '${t('ПРИНЯТО', 'ACCEPTED')} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)}',
+      success:
+          '${t('ПРИНЯТО', 'ACCEPTED')} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)}',
     );
   }
 
   Future<void> _declineBooking(BookingRequestRecord booking) async {
     await _apply(
       () => widget.api.declineBooking(booking.id),
-      success: '${t('ОТКЛОНЕНО', 'DECLINED')} · ${_bookingDayLabel(booking)} · ${_money(booking.amountVnd)}',
+      success:
+          '${t('ОТКЛОНЕНО', 'DECLINED')} · ${_bookingDayLabel(booking)} · ${_money(booking.amountVnd)}',
     );
   }
 
   Future<void> _editCustomer(CustomerRecord customer) async {
     final result = await showDialog<_CustomerEditResult>(
       context: context,
-      builder: (_) => _CustomerEditorDialog(
-        russian: _russian,
-        customer: customer,
-      ),
+      builder: (_) =>
+          _CustomerEditorDialog(russian: _russian, customer: customer),
     );
     if (!mounted || result == null) return;
 
@@ -390,10 +380,7 @@ class _AdminScreenState extends State<AdminScreen> {
     _purchaseController.clear();
     await _apply(
       () => widget.api.addPurchase(title),
-      success: t(
-        'Добавлено для всех админов',
-        'Shared with all admins',
-      ),
+      success: t('Добавлено для всех админов', 'Shared with all admins'),
     );
   }
 
@@ -438,16 +425,8 @@ class _AdminScreenState extends State<AdminScreen> {
         children: [
           const EvilCoworkingLogo(width: 104),
           const Spacer(),
-          _smallToggle(
-            'RU',
-            _russian,
-            () => setState(() => _russian = true),
-          ),
-          _smallToggle(
-            'EN',
-            !_russian,
-            () => setState(() => _russian = false),
-          ),
+          _smallToggle('RU', _russian, () => setState(() => _russian = true)),
+          _smallToggle('EN', !_russian, () => setState(() => _russian = false)),
           const SizedBox(width: 8),
           IconButton(
             tooltip: t('Администраторы', 'Admins'),
@@ -471,6 +450,7 @@ class _AdminScreenState extends State<AdminScreen> {
       t('МЕСЯЦ', 'MONTH'),
       t('КЛИЕНТЫ', 'CUSTOMERS'),
       t('ДОХОД', 'INCOME'),
+      t('ЦЕНЫ', 'PRICES'),
       '${t('КУПИТЬ', 'BUY')}${snapshot == null || snapshot.toBuy.isEmpty ? '' : ' ${snapshot.toBuy.length}'}',
     ];
     final icons = const [
@@ -478,6 +458,7 @@ class _AdminScreenState extends State<AdminScreen> {
       Icons.calendar_month_outlined,
       Icons.people_outline,
       Icons.payments_outlined,
+      Icons.local_offer_outlined,
       Icons.shopping_cart_outlined,
     ];
 
@@ -496,15 +477,10 @@ class _AdminScreenState extends State<AdminScreen> {
           return TextButton.icon(
             onPressed: () => setState(() => _section = index),
             icon: Icon(icons[index], size: 18),
-            label: Text(
-              labels[index],
-              style: _mono(10, color: foreground),
-            ),
+            label: Text(labels[index], style: _mono(10, color: foreground)),
             style: TextButton.styleFrom(
               foregroundColor: foreground,
-              backgroundColor: selected
-                  ? BrandPalette.ink
-                  : Colors.transparent,
+              backgroundColor: selected ? BrandPalette.ink : Colors.transparent,
               minimumSize: const Size(118, 44),
               shape: const RoundedRectangleBorder(),
             ),
@@ -599,6 +575,7 @@ class _AdminScreenState extends State<AdminScreen> {
       1 => _month(snapshot),
       2 => _customers(snapshot),
       3 => _income(snapshot),
+      4 => _pricing(snapshot),
       _ => _buy(snapshot),
     };
   }
@@ -652,9 +629,7 @@ class _AdminScreenState extends State<AdminScreen> {
           (visit) => _row(
             visit.name,
             '${_time(visit.createdAt)}  ·  ${visit.kind == 'day' ? t('ДЕНЬ', 'DAY') : t('МЕСЯЦ', 'MONTH')}',
-            visit.amount == 0
-                ? t('АКТИВЕН', 'ACTIVE')
-                : _money(visit.amount),
+            visit.amount == 0 ? t('АКТИВЕН', 'ACTIVE') : _money(visit.amount),
           ),
         ),
     ]);
@@ -689,65 +664,66 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       child: Row(
         children: [
-Expanded(
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(booking.name, style: _serif(19)),
-      const SizedBox(height: 5),
-      Text(
-        '$type · ${booking.contactValue} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)} · ${_time(booking.createdAt)}',
-        style: _mono(9.5, color: BrandPalette.inkMuted),
-      ),
-      if (booking.accepted && (booking.handledByEmail?.isNotEmpty ?? false)) ...[
-        const SizedBox(height: 5),
-        Text(
-          '${t('ПРИНЯТО', 'ACCEPTED')} · ${booking.handledByEmail}',
-          style: _mono(9, color: BrandPalette.inkMuted),
-        ),
-      ],
-    ],
-  ),
-),
-const SizedBox(width: 10),
-if (booking.accepted)
-  Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: BrandPalette.ink,
-      border: Border.all(color: BrandPalette.ink),
-    ),
-    child: Text(
-      t('ПРИНЯТО', 'ACCEPTED'),
-      style: _mono(9, color: BrandPalette.paperLift),
-    ),
-  )
-else
-  Wrap(
-    spacing: 7,
-    runSpacing: 7,
-    alignment: WrapAlignment.end,
-    children: [
-      OutlinedButton(
-        onPressed: _busy ? null : () => _declineBooking(booking),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: BrandPalette.ink,
-          minimumSize: const Size(0, 42),
-          side: const BorderSide(color: BrandPalette.ink),
-          shape: const RoundedRectangleBorder(),
-        ),
-        child: Text(t('ОТКЛОНИТЬ', 'DECLINE'), style: _mono(9)),
-      ),
-      FilledButton(
-        onPressed: _busy ? null : () => _acceptBooking(booking),
-        style: _darkButton(minHeight: 42),
-        child: Text(
-          '${t('ПРИНЯТЬ', 'ACCEPT')} · ${_money(booking.amountVnd)}',
-          style: _mono(9.5, color: BrandPalette.paperLift),
-        ),
-      ),
-    ],
-  ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(booking.name, style: _serif(19)),
+                const SizedBox(height: 5),
+                Text(
+                  '$type · ${booking.contactValue} · ${_bookingDayLabel(booking)} · ${_date(booking.serviceDay)} · ${_money(booking.amountVnd)} · ${_time(booking.createdAt)}',
+                  style: _mono(9.5, color: BrandPalette.inkMuted),
+                ),
+                if (booking.accepted &&
+                    (booking.handledByEmail?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    '${t('ПРИНЯТО', 'ACCEPTED')} · ${booking.handledByEmail}',
+                    style: _mono(9, color: BrandPalette.inkMuted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (booking.accepted)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: BrandPalette.ink,
+                border: Border.all(color: BrandPalette.ink),
+              ),
+              child: Text(
+                t('ПРИНЯТО', 'ACCEPTED'),
+                style: _mono(9, color: BrandPalette.paperLift),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              alignment: WrapAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _declineBooking(booking),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(0, 42),
+                    side: const BorderSide(color: BrandPalette.ink),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: Text(t('ОТКЛОНИТЬ', 'DECLINE'), style: _mono(9)),
+                ),
+                FilledButton(
+                  onPressed: _busy ? null : () => _acceptBooking(booking),
+                  style: _darkButton(minHeight: 42),
+                  child: Text(
+                    '${t('ПРИНЯТЬ', 'ACCEPT')} · ${_money(booking.amountVnd)}',
+                    style: _mono(9.5, color: BrandPalette.paperLift),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -759,19 +735,20 @@ else
       isUtc: true,
     ).add(const Duration(hours: 7));
     final now = DateTime.now().toUtc().add(const Duration(hours: 7));
-    final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    final tomorrow = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1));
     return local.year == tomorrow.year &&
         local.month == tomorrow.month &&
         local.day == tomorrow.day;
   }
 
   String _bookingDayLabel(BookingRequestRecord booking) =>
-      _isTomorrowBooking(booking) ? t('ЗАВТРА', 'TOMORROW') : t('СЕГОДНЯ', 'TODAY');
-
-  int _currentDayPassAmount() {
-    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
-    return now.hour >= 16 ? 100000 : 200000;
-  }
+      _isTomorrowBooking(booking)
+      ? t('ЗАВТРА', 'TOMORROW')
+      : t('СЕГОДНЯ', 'TODAY');
 
   Widget _month(OperationsSnapshot snapshot) {
     return _page([
@@ -802,24 +779,24 @@ else
 
   Widget _customers(OperationsSnapshot snapshot) {
     final query = _customerQuery.trim().toLowerCase();
-    final customers = snapshot.customers.where((customer) {
-      if (query.isEmpty) return true;
-      return [
-        customer.name,
-        customer.phone,
-        customer.email,
-        customer.telegram,
-        customer.contactOther,
-        customer.notes,
-      ].any((value) => value.toLowerCase().contains(query));
-    }).toList(growable: false);
+    final customers = snapshot.customers
+        .where((customer) {
+          if (query.isEmpty) return true;
+          return [
+            customer.name,
+            customer.phone,
+            customer.email,
+            customer.telegram,
+            customer.contactOther,
+            customer.notes,
+          ].any((value) => value.toLowerCase().contains(query));
+        })
+        .toList(growable: false);
 
     return _page([
       TextField(
         controller: _customerSearchController,
-        decoration: _inputDecoration(
-          t('ПОИСК КЛИЕНТА', 'SEARCH CUSTOMER'),
-        ),
+        decoration: _inputDecoration(t('ПОИСК КЛИЕНТА', 'SEARCH CUSTOMER')),
         onChanged: (value) => setState(() => _customerQuery = value),
       ),
       const SizedBox(height: 20),
@@ -863,10 +840,7 @@ else
                 children: [
                   Text(customer.name, style: _serif(18)),
                   const SizedBox(height: 5),
-                  Text(
-                    meta,
-                    style: _mono(9, color: BrandPalette.inkMuted),
-                  ),
+                  Text(meta, style: _mono(9, color: BrandPalette.inkMuted)),
                   if (customer.notes.isNotEmpty) ...[
                     const SizedBox(height: 5),
                     Text(
@@ -913,10 +887,7 @@ else
               ? BrandPalette.paperLift
               : BrandPalette.ink;
           return ChoiceChip(
-            label: Text(
-              labels[index],
-              style: _mono(10, color: foreground),
-            ),
+            label: Text(labels[index], style: _mono(10, color: foreground)),
             selected: selected,
             onSelected: (_) => setState(() => _incomePeriod = index),
             selectedColor: BrandPalette.ink,
@@ -935,16 +906,224 @@ else
       Text(labels[_incomePeriod], style: _mono(11)),
       const SizedBox(height: 30),
       _sectionTitle(t('ТАРИФЫ', 'PRICES')),
-      _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', '200K VND'),
-      _row(t('ПОЛДНЯ · ПОСЛЕ 16:00', 'HALF DAY · AFTER 16:00'), '', '100K VND'),
-      _row(t('МЕСЯЧНЫЙ ПРОПУСК', 'MONTH PASS'), '', '2.5 MLN VND'),
+      _row(
+        t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'),
+        '',
+        _money(snapshot.pricing.dayPassVnd),
+      ),
+      _row(
+        t('МЕСЯЧНЫЙ ПРОПУСК', 'MONTH PASS'),
+        '',
+        _money(snapshot.pricing.monthPassVnd),
+      ),
+      _row(
+        t('ЛИЧНЫЙ ШКАФЧИК', 'PERSONAL LOCKER'),
+        '',
+        _money(snapshot.pricing.lockerMonthVnd),
+      ),
     ]);
   }
 
+  Future<void> _editPricing(OperationsSnapshot snapshot) async {
+    if (_busy) return;
+    final result = await showDialog<_PricingEditResult>(
+      context: context,
+      builder: (_) =>
+          _PricingEditorDialog(russian: _russian, pricing: snapshot.pricing),
+    );
+    if (!mounted || result == null) return;
+    await _apply(
+      () => widget.api.updatePricing(
+        dayPassVnd: result.dayPassVnd,
+        monthPassVnd: result.monthPassVnd,
+        lockerMonthVnd: result.lockerMonthVnd,
+      ),
+      success: t('Цены обновлены', 'Prices updated'),
+    );
+  }
+
+  Future<void> _addPromotion() async {
+    if (_busy) return;
+    final result = await showDialog<_PromotionDraft>(
+      context: context,
+      builder: (_) => _PromotionEditorDialog(russian: _russian),
+    );
+    if (!mounted || result == null) return;
+    await _apply(
+      () => widget.api.createPromotion(
+        description: result.description,
+        startDate: result.startDate,
+        endDate: result.endDate,
+        startTime: result.startTime,
+        endTime: result.endTime,
+        dayPassVnd: result.dayPassVnd,
+        monthPassVnd: result.monthPassVnd,
+        lockerMonthVnd: result.lockerMonthVnd,
+      ),
+      success: t('Акция запущена', 'Promotion created'),
+    );
+  }
+
+  Future<void> _deletePromotion(PromotionRecord promotion) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: BrandPalette.paper,
+        shape: const RoundedRectangleBorder(),
+        title: Text(
+          t('Удалить акцию?', 'Delete promotion?'),
+          style: _serif(26),
+        ),
+        content: Text(promotion.description, style: _serif(17)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(t('ОТМЕНА', 'CANCEL'), style: _mono(10)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: _darkButton(),
+            child: Text(
+              t('УДАЛИТЬ', 'DELETE'),
+              style: _mono(10, color: BrandPalette.paperLift),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _apply(
+      () => widget.api.deletePromotion(promotion.id),
+      success: t('Акция удалена', 'Promotion deleted'),
+    );
+  }
+
+  Widget _pricing(OperationsSnapshot snapshot) {
+    final pricing = snapshot.pricing;
+    return _page([
+      _sectionTitle(t('ОСНОВНЫЕ ЦЕНЫ', 'BASE PRICES')),
+      _row(t('ДНЕВНОЙ ПРОПУСК', 'DAY PASS'), '', _money(pricing.dayPassVnd)),
+      _row(
+        t('МЕСЯЧНЫЙ ПРОПУСК', 'MONTH PASS'),
+        '',
+        _money(pricing.monthPassVnd),
+      ),
+      _row(
+        t('ЛИЧНЫЙ ШКАФЧИК', 'PERSONAL LOCKER'),
+        '',
+        _money(pricing.lockerMonthVnd),
+      ),
+      const SizedBox(height: 14),
+      OutlinedButton.icon(
+        onPressed: _busy ? null : () => _editPricing(snapshot),
+        icon: const Icon(Icons.edit_outlined, size: 18),
+        label: Text(t('ИЗМЕНИТЬ ЦЕНЫ', 'EDIT PRICES'), style: _mono(10)),
+        style: _outlineButton(minHeight: 50),
+      ),
+      const SizedBox(height: 32),
+      Row(
+        children: [
+          Expanded(child: _sectionTitle(t('АКЦИИ', 'PROMOTIONS'))),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: _busy ? null : _addPromotion,
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(
+              t('ДОБАВИТЬ АКЦИЮ', 'ADD PROMO'),
+              style: _mono(9.5, color: BrandPalette.paperLift),
+            ),
+            style: _darkButton(minHeight: 46),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      if (snapshot.promotions.isEmpty)
+        _empty(t('Акций пока нет.', 'No promotions yet.'))
+      else
+        ...snapshot.promotions.map(_promotionRow),
+    ]);
+  }
+
+  Widget _promotionRow(PromotionRecord promotion) {
+    final dateRange = promotion.startDay == promotion.endDay
+        ? _date(promotion.startDay)
+        : '${_date(promotion.startDay)} – ${_date(promotion.endDay)}';
+    final timeRange = promotion.hasTimeWindow
+        ? ' · ${_minuteLabel(promotion.startMinute!)}–${_minuteLabel(promotion.endMinute!)}'
+        : '';
+    final prices = <String>[
+      if (promotion.dayPassVnd != null)
+        '${t('ДЕНЬ', 'DAY')} ${_money(promotion.dayPassVnd!)}',
+      if (promotion.monthPassVnd != null)
+        '${t('МЕСЯЦ', 'MONTH')} ${_money(promotion.monthPassVnd!)}',
+      if (promotion.lockerMonthVnd != null)
+        '${t('ШКАФ', 'LOCKER')} ${_money(promotion.lockerMonthVnd!)}',
+    ].join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(promotion.description, style: _serif(19)),
+                    const SizedBox(height: 5),
+                    Text(
+                      '$dateRange$timeRange',
+                      style: _mono(9.5, color: BrandPalette.inkMuted),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(prices, style: _mono(9.5)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Switch(
+                value: promotion.enabled,
+                onChanged: _busy
+                    ? null
+                    : (enabled) => _apply(
+                        () => widget.api.setPromotionEnabled(
+                          promotion.id,
+                          enabled,
+                        ),
+                        success: enabled
+                            ? t('Акция запущена', 'Promotion running')
+                            : t('Акция приостановлена', 'Promotion paused'),
+                      ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _busy ? null : () => _deletePromotion(promotion),
+              icon: const Icon(Icons.delete_outline, size: 17),
+              label: Text(t('УДАЛИТЬ', 'DELETE'), style: _mono(9)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _minuteLabel(int minute) {
+    final hour = minute ~/ 60;
+    final rest = minute % 60;
+    return '${hour.toString().padLeft(2, '0')}:${rest.toString().padLeft(2, '0')}';
+  }
+
   Widget _buy(OperationsSnapshot snapshot) {
-    final list = _purchaseTab == 0
-        ? snapshot.toBuy
-        : snapshot.purchaseHistory;
+    final list = _purchaseTab == 0 ? snapshot.toBuy : snapshot.purchaseHistory;
 
     return _page([
       Row(
@@ -1027,10 +1206,7 @@ else
                   ? null
                   : () => _apply(
                       () => widget.api.markPurchaseBought(purchase.id),
-                      success: t(
-                        'Перенесено в историю',
-                        'Moved to history',
-                      ),
+                      success: t('Перенесено в историю', 'Moved to history'),
                     ),
               style: _darkButton(minHeight: 42),
               child: Text(
@@ -1051,8 +1227,7 @@ else
         final count = constraints.maxWidth >= 700 ? cards.length : 1;
         final width = count == 1
             ? constraints.maxWidth
-            : (constraints.maxWidth - (10 * (cards.length - 1))) /
-                  cards.length;
+            : (constraints.maxWidth - (10 * (cards.length - 1))) / cards.length;
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -1119,10 +1294,7 @@ else
                 Text(title, style: _serif(18)),
                 if (meta.isNotEmpty) ...[
                   const SizedBox(height: 5),
-                  Text(
-                    meta,
-                    style: _mono(9, color: BrandPalette.inkMuted),
-                  ),
+                  Text(meta, style: _mono(9, color: BrandPalette.inkMuted)),
                 ],
               ],
             ),
@@ -1135,9 +1307,7 @@ else
   }
 
   Widget _tabButton(String label, bool selected, VoidCallback onPressed) {
-    final foreground = selected
-        ? BrandPalette.paperLift
-        : BrandPalette.ink;
+    final foreground = selected ? BrandPalette.paperLift : BrandPalette.ink;
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
@@ -1152,9 +1322,7 @@ else
   }
 
   Widget _smallToggle(String label, bool selected, VoidCallback onPressed) {
-    final foreground = selected
-        ? BrandPalette.paperLift
-        : BrandPalette.ink;
+    final foreground = selected ? BrandPalette.paperLift : BrandPalette.ink;
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
@@ -1180,16 +1348,12 @@ else
   }
 
   String _time(int seconds) {
-    final value = DateTime.fromMillisecondsSinceEpoch(
-      seconds * 1000,
-    ).toLocal();
+    final value = DateTime.fromMillisecondsSinceEpoch(seconds * 1000).toLocal();
     return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
   }
 
   String _date(int seconds) {
-    final value = DateTime.fromMillisecondsSinceEpoch(
-      seconds * 1000,
-    ).toLocal();
+    final value = DateTime.fromMillisecondsSinceEpoch(seconds * 1000).toLocal();
     return '${value.day.toString().padLeft(2, '0')}.${value.month.toString().padLeft(2, '0')}.${value.year}';
   }
 
@@ -1197,9 +1361,8 @@ else
 
   int _daysLeft(int expiresAt) {
     final now = DateTime.now();
-    final expires = DateTime.fromMillisecondsSinceEpoch(
-      expiresAt * 1000,
-    ).toLocal();
+    final expires = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)
+        .toLocal();
     final hours = expires.difference(now).inHours;
     if (hours <= 0) return 0;
     return (hours / 24).ceil();
@@ -1253,10 +1416,7 @@ class _ChoiceDialog extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             choice.subtitle,
-                            style: _serif(
-                              15,
-                              color: BrandPalette.inkMuted,
-                            ),
+                            style: _serif(15, color: BrandPalette.inkMuted),
                           ),
                         ],
                       ),
@@ -1279,10 +1439,7 @@ class _ChoiceDialog extends StatelessWidget {
 }
 
 class _MembershipDialog extends StatefulWidget {
-  const _MembershipDialog({
-    required this.russian,
-    required this.memberships,
-  });
+  const _MembershipDialog({required this.russian, required this.memberships});
 
   final bool russian;
   final List<MembershipRecord> memberships;
@@ -1349,10 +1506,7 @@ class _MembershipDialogState extends State<_MembershipDialog> {
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 4,
                           ),
-                          title: Text(
-                            membership.name,
-                            style: _serif(18),
-                          ),
+                          title: Text(membership.name, style: _serif(18)),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).pop(membership),
                         );
@@ -1387,10 +1541,7 @@ class _CustomerEditResult {
 }
 
 class _CustomerEditorDialog extends StatefulWidget {
-  const _CustomerEditorDialog({
-    required this.russian,
-    required this.customer,
-  });
+  const _CustomerEditorDialog({required this.russian, required this.customer});
 
   final bool russian;
   final CustomerRecord customer;
@@ -1529,6 +1680,429 @@ class _CustomerEditorDialogState extends State<_CustomerEditorDialog> {
   }
 }
 
+class _PricingEditResult {
+  const _PricingEditResult(
+    this.dayPassVnd,
+    this.monthPassVnd,
+    this.lockerMonthVnd,
+  );
+  final int dayPassVnd;
+  final int monthPassVnd;
+  final int lockerMonthVnd;
+}
+
+class _PricingEditorDialog extends StatefulWidget {
+  const _PricingEditorDialog({required this.russian, required this.pricing});
+  final bool russian;
+  final PricingConfig pricing;
+
+  @override
+  State<_PricingEditorDialog> createState() => _PricingEditorDialogState();
+}
+
+class _PricingEditorDialogState extends State<_PricingEditorDialog> {
+  late final TextEditingController _day;
+  late final TextEditingController _month;
+  late final TextEditingController _locker;
+  String? _error;
+
+  String t(String ru, String en) => widget.russian ? ru : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _day = TextEditingController(text: '${widget.pricing.dayPassVnd}');
+    _month = TextEditingController(text: '${widget.pricing.monthPassVnd}');
+    _locker = TextEditingController(text: '${widget.pricing.lockerMonthVnd}');
+  }
+
+  @override
+  void dispose() {
+    _day.dispose();
+    _month.dispose();
+    _locker.dispose();
+    super.dispose();
+  }
+
+  int? _price(TextEditingController controller) {
+    final value = int.tryParse(
+      controller.text.trim().replaceAll(RegExp(r'[^0-9]'), ''),
+    );
+    return value != null && value > 0 ? value : null;
+  }
+
+  void _save() {
+    final day = _price(_day);
+    final month = _price(_month);
+    final locker = _price(_locker);
+    if (day == null || month == null || locker == null) {
+      setState(
+        () => _error = t('Введите все цены в VND.', 'Enter all prices in VND.'),
+      );
+      return;
+    }
+    Navigator.of(context).pop(_PricingEditResult(day, month, locker));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      title: Text(t('Основные цены', 'Base prices'), style: _serif(28)),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _day,
+              keyboardType: TextInputType.number,
+              decoration: _inputDecoration(t('ДЕНЬ · VND', 'DAY PASS · VND')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _month,
+              keyboardType: TextInputType.number,
+              decoration: _inputDecoration(
+                t('МЕСЯЦ · VND', 'MONTH PASS · VND'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _locker,
+              keyboardType: TextInputType.number,
+              decoration: _inputDecoration(
+                t('ШКАФ · VND', 'LOCKER / MONTH · VND'),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: _mono(9.5)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t('ОТМЕНА', 'CANCEL'), style: _mono(10)),
+        ),
+        FilledButton(
+          onPressed: _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: BrandPalette.ink,
+            foregroundColor: BrandPalette.paperLift,
+            shape: const RoundedRectangleBorder(),
+          ),
+          child: Text(
+            t('СОХРАНИТЬ', 'SAVE'),
+            style: _mono(10, color: BrandPalette.paperLift),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PromotionDraft {
+  const _PromotionDraft({
+    required this.description,
+    required this.startDate,
+    required this.endDate,
+    this.startTime,
+    this.endTime,
+    this.dayPassVnd,
+    this.monthPassVnd,
+    this.lockerMonthVnd,
+  });
+  final String description;
+  final String startDate;
+  final String endDate;
+  final String? startTime;
+  final String? endTime;
+  final int? dayPassVnd;
+  final int? monthPassVnd;
+  final int? lockerMonthVnd;
+}
+
+class _PromotionEditorDialog extends StatefulWidget {
+  const _PromotionEditorDialog({required this.russian});
+  final bool russian;
+
+  @override
+  State<_PromotionEditorDialog> createState() => _PromotionEditorDialogState();
+}
+
+class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
+  final _description = TextEditingController();
+  final _dayPrice = TextEditingController();
+  final _monthPrice = TextEditingController();
+  final _lockerPrice = TextEditingController();
+  late DateTime _startDate;
+  late DateTime _endDate;
+  bool _limitTime = false;
+  TimeOfDay _startTime = const TimeOfDay(hour: 20, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 23, minute: 0);
+  String? _error;
+
+  String t(String ru, String en) => widget.russian ? ru : en;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
+    _endDate = _startDate;
+  }
+
+  @override
+  void dispose() {
+    _description.dispose();
+    _dayPrice.dispose();
+    _monthPrice.dispose();
+    _lockerPrice.dispose();
+    super.dispose();
+  }
+
+  String _dateValue(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  String _timeValue(TimeOfDay value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+  int? _optionalPrice(TextEditingController controller) {
+    final raw = controller.text.trim();
+    if (raw.isEmpty) return null;
+    final value = int.tryParse(raw.replaceAll(RegExp(r'[^0-9]'), ''));
+    return value != null && value > 0 ? value : -1;
+  }
+
+  Future<void> _pickDate(bool start) async {
+    final current = start ? _startDate : _endDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (start) {
+        _startDate = picked;
+        if (_endDate.isBefore(picked)) _endDate = picked;
+      } else {
+        _endDate = picked;
+      }
+    });
+  }
+
+  Future<void> _pickTime(bool start) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: start ? _startTime : _endTime,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (start) {
+        _startTime = picked;
+      } else {
+        _endTime = picked;
+      }
+    });
+  }
+
+  void _save() {
+    final description = _description.text.trim();
+    final day = _optionalPrice(_dayPrice);
+    final month = _optionalPrice(_monthPrice);
+    final locker = _optionalPrice(_lockerPrice);
+    final startMinutes = _startTime.hour * 60 + _startTime.minute;
+    final endMinutes = _endTime.hour * 60 + _endTime.minute;
+    if (description.isEmpty) {
+      setState(
+        () => _error = t(
+          'Добавьте описание акции.',
+          'Add a promotion description.',
+        ),
+      );
+      return;
+    }
+    if ([day, month, locker].contains(-1)) {
+      setState(
+        () => _error = t(
+          'Цена должна быть больше 0.',
+          'Price must be greater than 0.',
+        ),
+      );
+      return;
+    }
+    if (day == null && month == null && locker == null) {
+      setState(
+        () => _error = t(
+          'Укажите хотя бы одну акционную цену.',
+          'Set at least one promotional price.',
+        ),
+      );
+      return;
+    }
+    if (_limitTime && endMinutes <= startMinutes) {
+      setState(
+        () => _error = t(
+          'Время окончания должно быть позже начала.',
+          'End time must be after start time.',
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pop(
+      _PromotionDraft(
+        description: description,
+        startDate: _dateValue(_startDate),
+        endDate: _dateValue(_endDate),
+        startTime: _limitTime ? _timeValue(_startTime) : null,
+        endTime: _limitTime ? _timeValue(_endTime) : null,
+        dayPassVnd: day,
+        monthPassVnd: month,
+        lockerMonthVnd: locker,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      title: Text(t('Новая акция', 'New promotion'), style: _serif(28)),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _description,
+                maxLength: 240,
+                decoration: _inputDecoration(t('ОПИСАНИЕ', 'DESCRIPTION')),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pickDate(true),
+                      child: Text(
+                        '${t('С', 'FROM')} ${_dateValue(_startDate)}',
+                        style: _mono(9.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pickDate(false),
+                      child: Text(
+                        '${t('ДО', 'TO')} ${_dateValue(_endDate)}',
+                        style: _mono(9.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _limitTime,
+                onChanged: (value) => setState(() => _limitTime = value),
+                title: Text(
+                  t('Ограничить по времени дня', 'Limit by time of day'),
+                  style: _serif(16),
+                ),
+              ),
+              if (_limitTime)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _pickTime(true),
+                        child: Text(
+                          '${t('С', 'FROM')} ${_timeValue(_startTime)}',
+                          style: _mono(9.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _pickTime(false),
+                        child: Text(
+                          '${t('ДО', 'TO')} ${_timeValue(_endTime)}',
+                          style: _mono(9.5),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 16),
+              Text(
+                t(
+                  'Акционные цены · оставьте ненужные поля пустыми',
+                  'Promo prices · leave unused fields empty',
+                ),
+                style: _mono(9.5, color: BrandPalette.inkMuted),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _dayPrice,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration(t('ДЕНЬ · VND', 'DAY PASS · VND')),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _monthPrice,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration(
+                  t('МЕСЯЦ · VND', 'MONTH PASS · VND'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _lockerPrice,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration(
+                  t('ШКАФ · VND', 'LOCKER / MONTH · VND'),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: _mono(9.5)),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t('ОТМЕНА', 'CANCEL'), style: _mono(10)),
+        ),
+        FilledButton(
+          onPressed: _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: BrandPalette.ink,
+            foregroundColor: BrandPalette.paperLift,
+            shape: const RoundedRectangleBorder(),
+          ),
+          child: Text(
+            t('ЗАПУСТИТЬ', 'RUN PROMO'),
+            style: _mono(10, color: BrandPalette.paperLift),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MetricCard {
   const _MetricCard(this.label, this.value);
 
@@ -1568,7 +2142,7 @@ ButtonStyle _darkButton({double minHeight = 48}) {
   );
 }
 
-ButtonStyle _outlineButton() {
+ButtonStyle _outlineButton({double minHeight = 48}) {
   return OutlinedButton.styleFrom(
     foregroundColor: BrandPalette.ink,
     minimumSize: const Size(0, 46),

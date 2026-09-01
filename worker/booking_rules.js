@@ -1,7 +1,3 @@
-export const DAY_PASS_VND = 200000;
-export const HALF_DAY_VND = 100000;
-export const MONTH_PASS_VND = 2500000;
-export const HALF_DAY_START_HOUR = 16;
 export const NHA_TRANG_OFFSET_SECONDS = 7 * 3600;
 
 export function nhaTrangDayBounds(now) {
@@ -50,17 +46,6 @@ export function isBookableServiceDay(serviceDay, now) {
 export function nhaTrangSecondsIntoDay(now) {
   const { start } = nhaTrangDayBounds(now);
   return Number(now) - start;
-}
-
-export function dayPassAmount(serviceDay, now) {
-  const today = serviceDayForOffset(0, now);
-  if (
-    serviceDay === today &&
-    nhaTrangSecondsIntoDay(now) >= HALF_DAY_START_HOUR * 3600
-  ) {
-    return HALF_DAY_VND;
-  }
-  return DAY_PASS_VND;
 }
 
 export function visitTimestampForServiceDay(serviceDay, now) {
