@@ -1,0 +1,67 @@
+name: Implement admin pricing and promotions
+
+on:
+  push:
+    branches:
+      - feature/kindle-admin-foundation
+    paths:
+      - .github/workflows/implement-pricing-promotions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/kindle-admin-foundation
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Implement dynamic pricing and promotions
+        run: python3 .github/implement_pricing_promotions.py
+
+      - name: Format Dart
+        run: dart format lib test tool
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check Worker syntax
+        run: |
+          node --check worker/index.js
+          node --check worker/entry.js
+          node --check worker/telegram.js
+          node --check worker/booking_rules.js
+          node --check worker/pricing.js
+
+      - name: Test Worker helpers
+        run: node --test worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Test Flutter
+        run: flutter test --no-pub
+
+      - name: Build optimized Wasm web
+        run: flutter build web --release --wasm --no-pub --dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
+
+      - name: Verify release
+        run: |
+          node --check build/web/flutter_bootstrap.js
+          dart run tool/verify_release.dart build/web
+
+      - name: Commit verified feature
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add admin pricing and scheduled promotions"
+          git push origin HEAD:feature/kindle-admin-foundation
