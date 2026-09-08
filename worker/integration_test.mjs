@@ -40,6 +40,7 @@ try {
     );
   }
 
+  console.log('Integration: applying clean local D1 migrations');
   runWrangler([
     'd1',
     'migrations',
@@ -50,9 +51,12 @@ try {
     persistDir,
   ]);
 
+  console.log('Integration: seeding admin fixtures');
   seedAdmins();
+  console.log('Integration: starting local Worker');
   dev = startDev();
   await waitForServer();
+  console.log('Integration: running API flow');
   await runFlow();
   console.log('Worker integration flow passed.');
 } finally {
@@ -69,12 +73,19 @@ function runWrangler(args) {
   const result = spawnSync(npx, wranglerArgs(args), {
     cwd: repoRoot,
     encoding: 'utf8',
+    input: 'y\n',
+    timeout: 120000,
     env: {
       ...process.env,
       CI: 'true',
       WRANGLER_SEND_METRICS: 'false',
     },
   });
+  if (result.error) {
+    throw new Error(
+      `Wrangler process failed: ${args.join(' ')}\n${result.error.message}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
+    );
+  }
   if (result.status !== 0) {
     throw new Error(
       `Wrangler failed: ${args.join(' ')}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
@@ -175,7 +186,9 @@ async function waitForServer() {
       throw new Error(`Wrangler dev exited early.\n${devOutput}`);
     }
     try {
-      const response = await fetch(`${baseUrl}/api/health`);
+      const response = await fetch(`${baseUrl}/api/health`, {
+        signal: AbortSignal.timeout(1000),
+      });
       if (response.status === 200) return;
     } catch {}
     await delay(200);
@@ -184,10 +197,10 @@ async function waitForServer() {
 }
 
 async function runFlow() {
-  let response = await fetch(`${baseUrl}/api/public/not-a-route`);
+  let response = await http('/api/public/not-a-route');
   assert.equal(response.status, 404);
 
-  response = await fetch(`${baseUrl}/api/admin/operations`);
+  response = await http('/api/admin/operations');
   assert.equal(response.status, 401);
 
   response = await jsonRequest('/api/admin/login', {
@@ -199,7 +212,7 @@ async function runFlow() {
   assert.ok(setCookie?.includes('__Host-evil_admin_session='));
   const cookie = setCookie.split(';', 1)[0];
 
-  response = await fetch(`${baseUrl}/api/admin/session`, {
+  response = await http('/api/admin/session', {
     headers: { Cookie: cookie },
   });
   assert.equal(response.status, 200);
@@ -207,7 +220,7 @@ async function runFlow() {
   assert.equal(payload.authenticated, true);
   assert.equal(payload.email, 'ci-admin@evils.space');
 
-  response = await fetch(`${baseUrl}/api/public/status`);
+  response = await http('/api/public/status');
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.equal(payload.ok, true);
@@ -227,14 +240,14 @@ async function runFlow() {
   assert.equal(booking.status, 'pending');
   assert.ok(typeof booking.token === 'string' && booking.token.length >= 32);
 
-  response = await fetch(
-    `${baseUrl}/api/public/booking?token=${encodeURIComponent(booking.token)}`,
+  response = await http(
+    `/api/public/booking?token=${encodeURIComponent(booking.token)}`,
   );
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.equal(payload.status, 'pending');
 
-  response = await fetch(`${baseUrl}/api/admin/operations`, {
+  response = await http('/api/admin/operations', {
     headers: { Cookie: cookie },
   });
   assert.equal(response.status, 200);
@@ -251,28 +264,28 @@ async function runFlow() {
   );
   assert.equal(response.status, 200);
 
-  response = await fetch(
-    `${baseUrl}/api/public/booking?token=${encodeURIComponent(booking.token)}`,
+  response = await http(
+    `/api/public/booking?token=${encodeURIComponent(booking.token)}`,
   );
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.equal(payload.status, 'accepted');
 
-  response = await fetch(`${baseUrl}/api/public/status`);
+  response = await http('/api/public/status');
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.ok(Number(payload.status.occupied) >= 1);
 
   const reviewToken = reviewApprovalToken();
-  response = await fetch(
-    `${baseUrl}/api/admin/review?token=${encodeURIComponent(reviewToken)}`,
+  response = await http(
+    `/api/admin/review?token=${encodeURIComponent(reviewToken)}`,
   );
   assert.equal(response.status, 200);
   let html = await response.text();
   assert.match(html, /APPROVE ADMIN/);
   assert.match(html, /REJECT ADMIN/);
 
-  response = await fetch(`${baseUrl}/api/admin/decision`, {
+  response = await http('/api/admin/decision', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -284,15 +297,15 @@ async function runFlow() {
   html = await response.text();
   assert.match(html, /Admin rejected/);
 
-  response = await fetch(
-    `${baseUrl}/api/admin/review?token=${encodeURIComponent(reviewToken)}`,
+  response = await http(
+    `/api/admin/review?token=${encodeURIComponent(reviewToken)}`,
   );
   assert.equal(response.status, 404);
 
   response = await jsonRequest('/api/admin/logout', {}, { Cookie: cookie });
   assert.equal(response.status, 200);
 
-  response = await fetch(`${baseUrl}/api/admin/session`, {
+  response = await http('/api/admin/session', {
     headers: { Cookie: cookie },
   });
   assert.equal(response.status, 200);
@@ -300,8 +313,15 @@ async function runFlow() {
   assert.equal(payload.authenticated, false);
 }
 
-async function jsonRequest(pathname, body, headers = {}) {
+async function http(pathname, options = {}) {
   return fetch(`${baseUrl}${pathname}`, {
+    ...options,
+    signal: AbortSignal.timeout(10000),
+  });
+}
+
+async function jsonRequest(pathname, body, headers = {}) {
+  return http(pathname, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -327,6 +347,7 @@ async function stopDev() {
   if (process.platform === 'win32') {
     spawnSync('taskkill', ['/pid', String(dev.pid), '/T', '/F'], {
       stdio: 'ignore',
+      timeout: 10000,
     });
     return;
   }
