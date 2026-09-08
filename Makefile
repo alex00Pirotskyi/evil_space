@@ -14,8 +14,10 @@ verify:
 test:
 	flutter pub get
 	flutter test --no-pub
+	node --check worker/secure_entry.js
+	node --check worker/security.js
 	node --check worker/telegram.js
-	node --test worker/telegram_test.mjs
+	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs
 
 telegram-setup:
 	dart run tool/telegram_setup.dart

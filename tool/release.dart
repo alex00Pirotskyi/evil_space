@@ -24,9 +24,12 @@ Future<void> main(List<String> args) async {
   await _run('flutter', ['test', '--no-pub']);
   await _run('node', ['--check', 'worker/index.js']);
   await _run('node', ['--check', 'worker/entry.js']);
+  await _run('node', ['--check', 'worker/secure_entry.js']);
+  await _run('node', ['--check', 'worker/security.js']);
   await _run('node', ['--check', 'worker/telegram.js']);
   await _run('node', [
     '--test',
+    'worker/security_test.mjs',
     'worker/telegram_test.mjs',
     'worker/booking_rules_test.mjs',
     'worker/pricing_test.mjs',
