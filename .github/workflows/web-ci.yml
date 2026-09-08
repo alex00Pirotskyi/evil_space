@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'agent/**'
+      - 'feature/**'
   pull_request:
     branches:
       - main
@@ -45,14 +46,21 @@ jobs:
         run: |
           node --check worker/index.js
           node --check worker/entry.js
+          node --check worker/app.js
+          node --check worker/admin_worker.js
+          node --check worker/admin_review.js
           node --check worker/secure_entry.js
           node --check worker/security.js
           node --check worker/telegram.js
           node --check worker/booking_rules.js
           node --check worker/pricing.js
+          node --check worker/integration_test.mjs
 
       - name: Test Worker helpers
         run: node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs
+
+      - name: Test Worker against local D1
+        run: node worker/integration_test.mjs
 
       - name: Analyze
         run: flutter analyze --no-pub

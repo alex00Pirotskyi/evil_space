@@ -1,4 +1,4 @@
-import app from './entry.js';
+import app from './app.js';
 import { securityGate } from './security.js';
 
 export default {

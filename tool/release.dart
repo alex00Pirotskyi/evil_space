@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 const _minimumFlutter = _Version(3, 47, 2);
+const _wranglerVersionPath = 'tool/wrangler_version.txt';
+const _productionHealthUrl = 'https://evils.space/api/health';
 
 Future<void> main(List<String> args) async {
   final verifyOnly = args.contains('--verify-only');
@@ -24,9 +27,15 @@ Future<void> main(List<String> args) async {
   await _run('flutter', ['test', '--no-pub']);
   await _run('node', ['--check', 'worker/index.js']);
   await _run('node', ['--check', 'worker/entry.js']);
+  await _run('node', ['--check', 'worker/app.js']);
+  await _run('node', ['--check', 'worker/admin_worker.js']);
+  await _run('node', ['--check', 'worker/admin_review.js']);
   await _run('node', ['--check', 'worker/secure_entry.js']);
   await _run('node', ['--check', 'worker/security.js']);
   await _run('node', ['--check', 'worker/telegram.js']);
+  await _run('node', ['--check', 'worker/booking_rules.js']);
+  await _run('node', ['--check', 'worker/pricing.js']);
+  await _run('node', ['--check', 'worker/integration_test.mjs']);
   await _run('node', [
     '--test',
     'worker/security_test.mjs',
@@ -34,6 +43,7 @@ Future<void> main(List<String> args) async {
     'worker/booking_rules_test.mjs',
     'worker/pricing_test.mjs',
   ]);
+  await _run('node', ['worker/integration_test.mjs']);
 
   if (verifyOnly) {
     stdout.writeln('Verification complete. No build or deployment performed.');
@@ -61,12 +71,26 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  final deployCheck = Directory('.wrangler/deploy-check');
+  if (deployCheck.existsSync()) deployCheck.deleteSync(recursive: true);
   await _run(
     'npx',
-    ['--yes', 'wrangler', 'd1', 'migrations', 'apply', 'evil-space', '--remote'],
+    _wranglerArgs(['deploy', '--dry-run', '--outdir', deployCheck.path]),
+  );
+
+  await _run(
+    'npx',
+    _wranglerArgs([
+      'd1',
+      'migrations',
+      'apply',
+      'evil-space',
+      '--remote',
+    ]),
     confirm: true,
   );
-  await _run('npx', ['--yes', 'wrangler', 'deploy']);
+  await _run('npx', _wranglerArgs(['deploy']));
+  await _verifyProductionHealth();
 
   stdout.writeln('');
   stdout.writeln('EVIL SPACE DEPLOYED SUCCESSFULLY.');
@@ -107,7 +131,7 @@ Future<void> _verifyCloudflareAccess() async {
 
   final whoami = await Process.run(
     'npx',
-    ['--yes', 'wrangler', 'whoami'],
+    _wranglerArgs(['whoami']),
     runInShell: Platform.isWindows,
   );
   if (whoami.exitCode != 0) {
@@ -118,15 +142,13 @@ Future<void> _verifyCloudflareAccess() async {
 
   final d1 = await Process.run(
     'npx',
-    [
-      '--yes',
-      'wrangler',
+    _wranglerArgs([
       'd1',
       'migrations',
       'list',
       'evil-space',
       '--remote',
-    ],
+    ]),
     runInShell: Platform.isWindows,
   );
   if (d1.exitCode != 0) {
@@ -143,13 +165,59 @@ Future<void> _verifyCloudflareAccess() async {
   stdout.writeln('Cloudflare D1 access: OK');
 }
 
+List<String> _wranglerArgs(List<String> arguments) {
+  return ['--yes', _wranglerPackage(), ...arguments];
+}
+
+String _wranglerPackage() {
+  final file = File(_wranglerVersionPath);
+  if (!file.existsSync()) {
+    _die('Missing $_wranglerVersionPath.');
+  }
+  final version = file.readAsStringSync().trim();
+  if (!RegExp(r'^4\.\d+\.\d+$').hasMatch(version)) {
+    _die('Invalid Wrangler version in $_wranglerVersionPath: $version');
+  }
+  return 'wrangler@$version';
+}
+
+Future<void> _verifyProductionHealth() async {
+  Object? lastError;
+  for (var attempt = 0; attempt < 3; attempt += 1) {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final request = await client.getUrl(Uri.parse(_productionHealthUrl));
+      request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+      final response = await request.close();
+      final body = await utf8.decoder.bind(response).join();
+      if (response.statusCode == HttpStatus.ok) {
+        final decoded = jsonDecode(body);
+        if (decoded is Map<String, dynamic> &&
+            decoded['ok'] == true &&
+            decoded['service'] == 'evil-space') {
+          stdout.writeln('Production health check: OK');
+          return;
+        }
+      }
+      lastError = 'HTTP ${response.statusCode}: $body';
+    } catch (error) {
+      lastError = error;
+    } finally {
+      client.close(force: true);
+    }
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  _die('Deployment completed but production health check failed: $lastError');
+}
+
 Never _cloudflareAuthDie() {
+  final wrangler = _wranglerPackage();
   _die(
     'Wrangler is not authorized for the Evil Space Cloudflare account.\n'
     'Run these commands once:\n'
-    '  npx --yes wrangler logout\n'
-    '  npx --yes wrangler login\n'
-    '  npx --yes wrangler whoami\n'
+    '  npx --yes $wrangler logout\n'
+    '  npx --yes $wrangler login\n'
+    '  npx --yes $wrangler whoami\n'
     'Then run make again.',
   );
 }
