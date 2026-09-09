@@ -1,6 +1,7 @@
 import adminReview from './admin_review.js';
 import adminWorker from './admin_worker.js';
 import featureWorker from './entry.js';
+import menuWorker from './menu.js';
 
 const FEATURE_ROUTES = new Set([
   'POST /api/telegram/webhook',
@@ -28,6 +29,12 @@ export default {
     }
     if (route === 'POST /api/admin/decision') {
       return adminReview.decision(request, env);
+    }
+    if (
+      url.pathname.startsWith('/api/public/menu') ||
+      url.pathname.startsWith('/api/admin/menu')
+    ) {
+      return menuWorker.fetch(request, env, ctx);
     }
     if (FEATURE_ROUTES.has(route)) {
       return featureWorker.fetch(request, env, ctx);
