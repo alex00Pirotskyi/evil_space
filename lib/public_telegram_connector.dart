@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/public_account_bar.dart';
 import 'package:evil_space/public_desk.dart';
 
 class PublicTelegramConnector extends StatefulWidget {
@@ -89,69 +90,76 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        Positioned.fill(child: widget.child),
-        if (_telegramUrl != null)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 14,
-            child: SafeArea(
-              top: false,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Material(
-                    color: BrandPalette.paperLift,
-                    elevation: 8,
-                    shape: const RoundedRectangleBorder(
-                      side: BorderSide(color: BrandPalette.ink),
-                    ),
-                    child: InkWell(
-                      onTap: _opening ? null : _openTelegram,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 13,
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.send_outlined, size: 19),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                widget.localization.t(
-                                  'booking_connect_telegram',
-                                ),
-                                style: const TextStyle(
-                                  color: BrandPalette.ink,
-                                  fontFamily: 'Courier New',
-                                  fontFamilyFallback: ['monospace'],
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.4,
-                                ),
+        PublicAccountBar(localization: widget.localization),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(child: widget.child),
+              if (_telegramUrl != null)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 14,
+                  child: SafeArea(
+                    top: false,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Material(
+                          color: BrandPalette.paperLift,
+                          elevation: 8,
+                          shape: const RoundedRectangleBorder(
+                            side: BorderSide(color: BrandPalette.ink),
+                          ),
+                          child: InkWell(
+                            onTap: _opening ? null : _openTelegram,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 13,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.send_outlined, size: 19),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      widget.localization.t(
+                                        'booking_connect_telegram',
+                                      ),
+                                      style: const TextStyle(
+                                        color: BrandPalette.ink,
+                                        fontFamily: 'Courier New',
+                                        fontFamilyFallback: ['monospace'],
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    _opening ? '…' : '→',
+                                    style: const TextStyle(
+                                      color: BrandPalette.ink,
+                                      fontFamily: 'Georgia',
+                                      fontSize: 20,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Text(
-                              _opening ? '…' : '→',
-                              style: const TextStyle(
-                                color: BrandPalette.ink,
-                                fontFamily: 'Georgia',
-                                fontSize: 20,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
+            ],
           ),
+        ),
       ],
     );
   }
