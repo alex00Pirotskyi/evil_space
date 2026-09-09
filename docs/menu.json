@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "coworking",
+      "name": {
+        "en": "Coworking",
+        "ru": "Коворкинг",
+        "vi": "Coworking"
+      },
+      "items": [
+        {
+          "id": "coworking-day",
+          "name": "Coworking Table — Day",
+          "priceVnd": 200000,
+          "description": "Full day coworking access"
+        }
+      ]
+    },
+    {
+      "id": "drinks",
+      "name": {
+        "en": "Drinks",
+        "ru": "Напитки",
+        "vi": "Đồ uống"
+      },
+      "items": [
+        {
+          "id": "cola",
+          "name": "Coca-Cola",
+          "priceVnd": 25000,
+          "description": null
+        },
+        {
+          "id": "fanta",
+          "name": "Fanta",
+          "priceVnd": 25000,
+          "description": null
+        },
+        {
+          "id": "sprite",
+          "name": "Sprite",
+          "priceVnd": 25000,
+          "description": null
+        },
+        {
+          "id": "water",
+          "name": "Water",
+          "priceVnd": 25000,
+          "description": null
+        },
+        {
+          "id": "schweppes",
+          "name": "Schweppes",
+          "priceVnd": 25000,
+          "description": null
+        },
+        {
+          "id": "7up",
+          "name": "7Up",
+          "priceVnd": 25000,
+          "description": null
+        },
+        {
+          "id": "red-bull",
+          "name": "Red Bull",
+          "priceVnd": 50000,
+          "description": null
+        },
+        {
+          "id": "coconut",
+          "name": "Coconut",
+          "priceVnd": 50000,
+          "description": null
+        }
+      ]
+    },
+    {
+      "id": "snacks",
+      "name": {
+        "en": "Snacks",
+        "ru": "Снэки",
+        "vi": "Đồ ăn nhẹ"
+      },
+      "items": [
+        {
+          "id": "snickers",
+          "name": "Snickers",
+          "priceVnd": 50000,
+          "description": null
+        },
+        {
+          "id": "kitkat",
+          "name": "KitKat",
+          "priceVnd": 50000,
+          "description": null
+        }
+      ]
+    }
+  ]
+}
