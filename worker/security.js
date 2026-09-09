@@ -37,6 +37,13 @@ export async function securityGate(request, env) {
     limiter = env.PUBLIC_BOOKING_RATE_LIMITER;
     scope = 'public-book';
     identity = `${contactType}:${contactValue.toLowerCase()}`;
+  } else if (url.pathname === '/api/public/menu/order') {
+    const body = await readJsonClone(request);
+    const itemId = cleanText(body?.itemId, 64);
+    if (!itemId) return null;
+    limiter = env.PUBLIC_BOOKING_RATE_LIMITER;
+    scope = 'public-menu-order';
+    identity = itemId.toLowerCase();
   } else {
     return null;
   }
