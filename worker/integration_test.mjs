@@ -204,6 +204,8 @@ async function seedAdmins() {
       ('review-admin@evils.space', ${sqlString(passwordHash)}, ${sqlString(saltBase64)},
        'pending', ${sqlString(reviewHash)}, ${now + 3600}, ${now}, NULL);
   `;
+  const seedFile = path.join(persistDir, 'admin-seed.sql');
+  writeFileSync(seedFile, sql, 'utf8');
 
   await runWrangler([
     'd1',
@@ -212,8 +214,8 @@ async function seedAdmins() {
     '--local',
     '--persist-to',
     persistDir,
-    '--command',
-    sql,
+    '--file',
+    seedFile,
   ]);
 }
 
