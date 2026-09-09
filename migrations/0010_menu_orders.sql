@@ -30,16 +30,6 @@ CREATE TABLE IF NOT EXISTS menu_items (
 CREATE INDEX IF NOT EXISTS idx_menu_items_catalog_order
   ON menu_items(catalog_id, group_order, item_order, id);
 
-CREATE TABLE IF NOT EXISTS menu_group_translations (
-  catalog_id INTEGER NOT NULL,
-  group_key TEXT NOT NULL,
-  name_en TEXT NOT NULL,
-  name_ru TEXT NOT NULL,
-  name_vi TEXT NOT NULL,
-  PRIMARY KEY (catalog_id, group_key),
-  FOREIGN KEY (catalog_id) REFERENCES menu_catalogs(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS menu_orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   public_token_hash TEXT NOT NULL UNIQUE,
