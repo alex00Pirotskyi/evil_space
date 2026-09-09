@@ -204,6 +204,10 @@ function startDev() {
       '127.0.0.1',
       '--port',
       String(port),
+      '--var',
+      'VIETQR_ACCOUNT_NUMBER:0123456789',
+      '--var',
+      'VIETQR_BANK_BIN:970436',
       '--log-level',
       'warn',
     ]),
@@ -268,6 +272,81 @@ async function runFlow() {
   let payload = await response.json();
   assert.equal(payload.authenticated, true);
   assert.equal(payload.email, 'ci-admin@evils.space');
+
+  response = await jsonRequest(
+    '/api/admin/menu/upload',
+    {
+      version: 1,
+      groups: [
+        {
+          id: 'beverages',
+          name: 'Beverages',
+          items: [
+            {
+              id: 'cola',
+              name: 'Cola',
+              priceVnd: 30000,
+              description: null,
+            },
+          ],
+        },
+      ],
+    },
+    { Cookie: cookie },
+  );
+  assert.equal(response.status, 201);
+  payload = await response.json();
+  assert.equal(payload.snapshot.catalog.version, 1);
+  assert.equal(payload.snapshot.catalog.groups[0].items[0].priceVnd, 30000);
+  assert.equal(payload.snapshot.paymentConfigured, true);
+
+  response = await http('/api/public/menu');
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  assert.equal(payload.menu.groups[0].items[0].id, 'cola');
+  assert.equal(payload.menu.groups[0].items[0].priceVnd, 30000);
+
+  response = await jsonRequest('/api/public/menu/order', {
+    itemId: 'cola',
+    priceVnd: 1,
+  });
+  assert.equal(response.status, 201);
+  const menuOrder = (await response.json()).order;
+  assert.equal(menuOrder.itemName, 'Cola');
+  assert.equal(menuOrder.amountVnd, 30000);
+  assert.match(menuOrder.paymentMessage, /^EVIL [A-Z2-9]{6}$/);
+  assert.match(menuOrder.qrPayload, /5303704540530000/);
+  assert.ok(typeof menuOrder.token === 'string' && menuOrder.token.length >= 32);
+
+  response = await http(
+    `/api/public/menu/order?token=${encodeURIComponent(menuOrder.token)}`,
+  );
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  assert.equal(payload.order.status, 'pending');
+  assert.equal(payload.order.amountVnd, 30000);
+
+  response = await http('/api/admin/menu', { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  const adminMenuOrder = payload.snapshot.orders.find(
+    (row) => row.orderCode === menuOrder.orderCode,
+  );
+  assert.ok(adminMenuOrder?.id);
+
+  response = await jsonRequest(
+    '/api/admin/menu/order/paid',
+    { id: adminMenuOrder.id },
+    { Cookie: cookie },
+  );
+  assert.equal(response.status, 200);
+
+  response = await http(
+    `/api/public/menu/order?token=${encodeURIComponent(menuOrder.token)}`,
+  );
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  assert.equal(payload.order.status, 'paid');
 
   response = await http('/api/public/status');
   assert.equal(response.status, 200);
