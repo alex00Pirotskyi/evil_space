@@ -2,7 +2,7 @@ name: evil_space
 description: "Evil Space Daily — a small electronic-paper coworking status page for Nha Trang."
 publish_to: 'none'
 
-version: 3.0.0+6
+version: 3.1.0+7
 
 environment:
   sdk: ^3.10.4

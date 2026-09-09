@@ -7,32 +7,64 @@ class SiteStatus {
     required this.total,
     required this.occupied,
     required this.updated,
+    this.todayDate = '',
+    this.tomorrowDate = '',
+    this.todayPrice = 200000,
+    this.tomorrowPrice = 200000,
+    this.baseDayPassPrice = 200000,
+    this.baseMonthPassPrice = 2500000,
+    this.baseLockerMonthPrice = 1000000,
+    this.todayPromoDescription = '',
+    this.tomorrowPromoDescription = '',
+    this.tomorrowOccupied = 0,
   });
 
   final int total;
   final int occupied;
   final String updated;
+  final String todayDate;
+  final String tomorrowDate;
+  final int todayPrice;
+  final int tomorrowPrice;
+  final int baseDayPassPrice;
+  final int baseMonthPassPrice;
+  final int baseLockerMonthPrice;
+  final String todayPromoDescription;
+  final String tomorrowPromoDescription;
+  final int tomorrowOccupied;
 
   int get free => (total - occupied).clamp(0, total).toInt();
+  int get tomorrowFree => (total - tomorrowOccupied).clamp(0, total).toInt();
 
   factory SiteStatus.fromJson(Map<String, dynamic> json) {
     final rawTotal = (json['total'] as num?)?.toInt() ?? 10;
     final normalizedTotal = rawTotal.clamp(1, 999).toInt();
-    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 3;
+    final rawOccupied = (json['occupied'] as num?)?.toInt() ?? 0;
+    final rawTomorrow = (json['tomorrowOccupied'] as num?)?.toInt() ?? 0;
 
     return SiteStatus(
       total: normalizedTotal,
       occupied: rawOccupied.clamp(0, normalizedTotal).toInt(),
       updated: json['updated'] as String? ?? 'LOCAL',
+      todayDate: json['todayDate']?.toString() ?? '',
+      tomorrowDate: json['tomorrowDate']?.toString() ?? '',
+      todayPrice: (json['todayPrice'] as num?)?.toInt() ?? 200000,
+      tomorrowPrice: (json['tomorrowPrice'] as num?)?.toInt() ?? 200000,
+      baseDayPassPrice: (json['baseDayPassPrice'] as num?)?.toInt() ?? 200000,
+      baseMonthPassPrice:
+          (json['baseMonthPassPrice'] as num?)?.toInt() ?? 2500000,
+      baseLockerMonthPrice:
+          (json['baseLockerMonthPrice'] as num?)?.toInt() ?? 1000000,
+      todayPromoDescription: json['todayPromoDescription']?.toString() ?? '',
+      tomorrowPromoDescription:
+          json['tomorrowPromoDescription']?.toString() ?? '',
+      tomorrowOccupied: rawTomorrow.clamp(0, normalizedTotal).toInt(),
     );
   }
 }
 
 class SitePrice {
-  const SitePrice({
-    required this.labelKey,
-    required this.price,
-  });
+  const SitePrice({required this.labelKey, required this.price});
 
   final String labelKey;
   final String price;
@@ -46,10 +78,7 @@ class SitePrice {
 }
 
 class SiteAnnouncement {
-  const SiteAnnouncement({
-    required this.date,
-    required this.textByLanguage,
-  });
+  const SiteAnnouncement({required this.date, required this.textByLanguage});
 
   final String date;
   final Map<String, String> textByLanguage;
@@ -77,35 +106,64 @@ class SiteAnnouncement {
   }
 }
 
+class SiteOpening {
+  const SiteOpening({
+    required this.labelKey,
+    required this.openingDate,
+    required this.isOpen,
+  });
+
+  final String labelKey;
+  final String openingDate;
+  final bool isOpen;
+
+  factory SiteOpening.fromJson(Map<String, dynamic> json) {
+    return SiteOpening(
+      labelKey: json['label_key'] as String? ?? 'opening_space',
+      openingDate: json['opening_date'] as String? ?? '2026-10-20',
+      isOpen: json['is_open'] as bool? ?? false,
+    );
+  }
+}
+
 class SiteContent {
   const SiteContent({
     required this.status,
     required this.prices,
     required this.announcements,
+    required this.openings,
   });
 
   final SiteStatus status;
   final List<SitePrice> prices;
   final List<SiteAnnouncement> announcements;
+  final List<SiteOpening> openings;
 
   factory SiteContent.fromJson(Map<String, dynamic> json) {
     final statusJson = json['status'];
     final rawPrices = json['prices'];
     final rawAnnouncements = json['announcements'];
+    final rawOpenings = json['openings'];
 
     final prices = rawPrices is List
         ? rawPrices
-            .whereType<Map<String, dynamic>>()
-            .map(SitePrice.fromJson)
-            .toList(growable: false)
+              .whereType<Map<String, dynamic>>()
+              .map(SitePrice.fromJson)
+              .toList(growable: false)
         : const <SitePrice>[];
     final announcements = rawAnnouncements is List
         ? rawAnnouncements
-            .whereType<Map<String, dynamic>>()
-            .map(SiteAnnouncement.fromJson)
-            .where((item) => item.textByLanguage.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map<String, dynamic>>()
+              .map(SiteAnnouncement.fromJson)
+              .where((item) => item.textByLanguage.isNotEmpty)
+              .toList(growable: false)
         : const <SiteAnnouncement>[];
+    final openings = rawOpenings is List
+        ? rawOpenings
+              .whereType<Map<String, dynamic>>()
+              .map(SiteOpening.fromJson)
+              .toList(growable: false)
+        : const <SiteOpening>[];
 
     return SiteContent(
       status: statusJson is Map<String, dynamic>
@@ -113,16 +171,16 @@ class SiteContent {
           : demo.status,
       prices: prices.isEmpty ? demo.prices : prices,
       announcements: announcements.isEmpty ? demo.announcements : announcements,
+      openings: openings.isEmpty ? demo.openings : openings,
     );
   }
 
   static const SiteContent demo = SiteContent(
-    status: SiteStatus(total: 10, occupied: 3, updated: 'DEMO'),
+    status: SiteStatus(total: 10, occupied: 0, updated: 'DEMO'),
     prices: [
-      SitePrice(labelKey: 'price_day_pass', price: '250K'),
-      SitePrice(labelKey: 'price_week', price: '1.0M'),
-      SitePrice(labelKey: 'price_hot_desk', price: '3.2M'),
-      SitePrice(labelKey: 'price_private_desk', price: '3.5M'),
+      SitePrice(labelKey: 'price_day_pass', price: '200K VND'),
+      SitePrice(labelKey: 'price_month', price: '2.5 MLN VND'),
+      SitePrice(labelKey: 'price_locker', price: '1 MLN VND / MONTH'),
     ],
     announcements: [
       SiteAnnouncement(
@@ -132,6 +190,18 @@ class SiteContent {
           'ru': 'ДОБРО ПОЖАЛОВАТЬ В EVIL SPACE',
           'vi': 'CHÀO MỪNG ĐẾN EVIL SPACE',
         },
+      ),
+    ],
+    openings: [
+      SiteOpening(
+        labelKey: 'opening_studio',
+        openingDate: '2026-10-20',
+        isOpen: false,
+      ),
+      SiteOpening(
+        labelKey: 'opening_lecture',
+        openingDate: '2026-10-20',
+        isOpen: false,
       ),
     ],
   );

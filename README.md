@@ -1,100 +1,172 @@
-# Evil Space Daily
+# Evil Space
 
-A deliberately small web-first Flutter site for Evil Space coworking in Nha Trang.
+Production Flutter + Cloudflare application for Evil Space coworking in Nha Trang.
 
-The product behaves like a one-page electronic-paper bulletin, not a conventional coworking website. It should answer the useful questions immediately:
+The public site keeps the quiet paper / e-reader visual language, while the backend now runs the real coworking operations: live desk availability, today/tomorrow booking, pricing, customers, memberships, purchases, admin access, and Telegram workflows.
 
-1. How many desks are free?
-2. What matters about working here?
-3. What does it cost?
-4. What is new today?
-5. How do I visit or contact Evil Space?
+## Production stack
 
-## Product direction
+- Flutter 3.47.2 web application
+- Cloudflare Worker for `/api/*`
+- Cloudflare D1 database
+- Cloudflare Email Service for admin approval
+- Telegram Bot API for customer/admin workflows
+- Cloudflare native Worker rate limiting on sensitive public/admin endpoints
+- `evils.space` as the production custom domain
 
-The visual identity is Kindle / printed e-paper: warm paper, black ink, serif editorial typography, monospace metadata, thin rules, and almost no chrome.
+There is no Supabase or Firebase dependency in the production stack.
 
-The page is intentionally still. There is one short e-ink refresh on initial load and when language changes; there are no carousels, looping animations, parallax effects, or runtime image processing.
+## Public experience
 
-Real photos are kept out of the core website. Visitors can open Instagram to see the space and Google Maps for directions. Those platforms own the image hosting and gallery problem.
+The public site provides:
 
-## Page structure
+- live desk availability from D1
+- booking for today or tomorrow
+- booking status and cancellation through an opaque client token
+- base pricing of `200K VND` day pass, `2.5M VND` month pass, and `1M VND / month` locker unless an active promotion overrides it
+- English, Russian, and Vietnamese
+- October room-opening information
+- Instagram, Google Maps, Zalo, and phone contact actions
 
-- publication header: `EVIL SPACE / DAILY`, date, issue number, language
-- live desk availability and day-pass CTA
-- four work essentials: big desks, good chairs, fast Wi-Fi, cold AC
-- price list
-- today's short bulletin
-- visit/contact links
-- `PAGE 1 OF 1` footer
+`/qr` opens the public experience at the visit/contact section.
 
-`/qr` opens the same page and scrolls directly to the visit/contact section. Legacy URLs resolve to the main page.
+## Admin
 
-## Content
+`/admin` uses server-side authentication. The browser receives only an `HttpOnly; Secure; SameSite=Strict` session cookie; passwords and session tokens are not stored in localStorage.
 
-Normal daily maintenance lives in:
+New administrators:
 
-```text
-assets/content/status.json
+1. register with email/password
+2. trigger a one-time owner approval email
+3. can be explicitly approved or rejected
+4. can sign in only after approval
+
+Short passwords are intentionally supported for this small private admin surface. Brute-force protection is handled independently by Cloudflare Worker rate limiting.
+
+The current compile-time switch is still named `EVIL_SPACE_ADMIN_PREVIEW` for compatibility. Despite the legacy name, it only enables rendering of the authenticated production admin dashboard; it does not bypass authentication.
+
+Production builds use:
+
+```bash
+--dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
 ```
 
-It contains:
+## Worker architecture
 
-- total desks
-- occupied desks
-- last update date
-- prices
-- multilingual announcements (EN/RU/VI)
-
-The UI remains usable with safe fallback data if that file is missing or malformed.
-
-## Localization
-
-The public page supports:
-
-- English
-- Russian
-- Vietnamese
-
-Browser locale selects the initial language. EN / RU / VI controls remain visible in the publication header.
-
-## Repository shape
-
-The active application is intentionally compact:
+The production request path is deliberately explicit:
 
 ```text
-lib/
-  app_route.dart
-  app_router.dart
-  app_shell.dart
-  coworking_model.dart
-  localization.dart
-  main.dart
+worker/secure_entry.js
+  -> worker/security.js
+  -> worker/app.js
+       -> worker/entry.js          public booking + Telegram-aware routes
+       -> worker/admin_review.js   owner approve/reject flow
+       -> worker/admin_worker.js   admin-only boundary
+            -> worker/index.js     existing admin operations core
 ```
 
-Historical pixel-wall, LED-wall, slideshow, image dithering, and image-processing experiments are not part of the production tree.
+`admin_worker.js` only permits `/api/admin/*` and `/api/health`. This prevents the older public handlers still present inside `index.js` from being reachable in production while the remaining admin core is extracted incrementally.
+
+## Database
+
+D1 schema changes live in `migrations/` and are applied in order:
+
+```text
+0001_initial.sql
+...
+0009_pricing_promotions.sql
+```
+
+The release process also runs the entire migration chain against a clean local D1 instance before any production migration is attempted.
+
+## Testing
+
+Fast application/unit tests:
+
+```bash
+flutter pub get
+flutter test --no-pub
+```
+
+Full project verification:
+
+```bash
+make test
+```
+
+`make test` includes:
+
+- Flutter tests
+- Worker syntax checks
+- Worker helper tests
+- a real local Cloudflare Worker + D1 integration flow covering migrations, admin login/session/logout, unauthorized access, public booking, booking acceptance, live status, and owner rejection
+
+The old source-string Worker contract tests were removed once the runtime integration flow covered those paths.
 
 ## Local development
 
 ```bash
 flutter pub get
-flutter analyze
-flutter test
-flutter run -d chrome
+flutter run -d chrome --dart-define=EVIL_SPACE_ADMIN_PREVIEW=true
 ```
 
-Production build:
+For Worker/D1 integration testing:
 
 ```bash
-flutter build web --release
+node worker/integration_test.mjs
 ```
 
-Cloudflare serves `build/web` using `wrangler.toml`.
+Wrangler is pinned in:
+
+```text
+tool/wrangler_version.txt
+```
+
+Do not replace the pinned version with an unversioned `wrangler@latest` in release tooling.
+
+## Release
+
+```bash
+make
+```
+
+The release script performs, in order:
+
+1. Flutter version verification
+2. Cloudflare account and remote D1 access preflight
+3. Flutter analyze/tests
+4. Worker syntax/helper tests
+5. full local D1 migration + Worker integration test
+6. optimized Flutter Wasm build
+7. release bundle verification
+8. pinned-Wrangler deployment dry run
+9. remote D1 migrations
+10. Worker/assets deployment
+11. production `/api/health` verification
+
+The dry run and clean local migration rehearsal happen before remote D1 changes, reducing the chance of discovering a packaging or schema problem only after production migration.
+
+Other useful commands:
+
+```bash
+make build      # verified local release build, no deployment
+make verify     # tests only, no build/deployment
+make test       # full local test suite
+```
+
+## Runtime configuration
+
+D1 and rate-limit bindings are declared in `wrangler.toml`.
+
+Production secrets/configuration used by the Worker include:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `WIFI_PASSWORD`
+- `SUPER_ADMIN_PASSWORD` when admin deletion is enabled
+
+The admin approval email destination is `evilssspace79@gmail.com`, configured through the Cloudflare Email Service binding.
 
 ## CI
 
-`.github/workflows/web-ci.yml` runs on `main` and `agent/**` branches and requires:
-
-- `flutter analyze`
-- `flutter test`
-- `flutter build web --release`
+`.github/workflows/web-ci.yml` runs for `main`, `feature/**`, `agent/**`, and pull requests targeting `main`. It verifies Worker runtime integration, Flutter analysis/tests, the optimized Wasm build, generated bootstrap syntax, and the release contract/bundle budget.
