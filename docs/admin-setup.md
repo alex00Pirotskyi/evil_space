@@ -21,7 +21,7 @@ The Worker sends from `admin@evils.space`.
 
 In Cloudflare, verify the destination address and configure `evils.space` as an approved Email Service sending domain.
 
-## 2. Secrets
+## 2. Secrets and payment configuration
 
 Configure the Worker secrets used by the enabled features:
 
@@ -30,9 +30,20 @@ TELEGRAM_BOT_TOKEN
 TELEGRAM_WEBHOOK_SECRET
 WIFI_PASSWORD
 SUPER_ADMIN_PASSWORD
+VIETQR_ACCOUNT_NUMBER
 ```
 
 `SUPER_ADMIN_PASSWORD` is only required for the admin-deletion operation.
+
+`VIETQR_ACCOUNT_NUMBER` must be the real Vietcombank account number that should receive `/menu` payments. Never use a `QRGD...` dynamic QR reference as the account number.
+
+The menu payment generator defaults to Vietcombank/NAPAS BIN `970436`. Override it only if the receiving bank changes:
+
+```text
+VIETQR_BANK_BIN
+```
+
+The public site never supplies a trusted price. A menu order is created from the currently active D1 menu item, snapshots its server-side price, generates a unique `EVIL XXXXXX` transfer reference, and builds the VietQR payload in the Worker.
 
 ## 3. D1
 
@@ -86,9 +97,41 @@ Approval links expire after 24 hours. Admin sessions expire after 14 days.
 
 Short passwords are intentionally allowed for this private admin surface. Cloudflare rate limiting is applied separately to reduce brute-force abuse.
 
+## Menu administration
+
+After signing in, use the **MENU** button in `/admin` or open `/admin/menu` directly.
+
+Upload one JSON document. Publishing a valid document creates a new catalog version and atomically makes it active; existing orders keep their original item name and price snapshot.
+
+Example:
+
+```json
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "beverages",
+      "name": "Beverages",
+      "items": [
+        {
+          "id": "cola",
+          "name": "Cola",
+          "priceVnd": 30000,
+          "description": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+The public menu is `/menu`. A customer presses **BUY**, scans the generated QR, and the page polls the order status. Linked Telegram admins receive the order with an **ITEM PAID** action. Only a linked approved admin can confirm it. The admin menu page also provides a manual **MARK PAID** fallback.
+
 ## Telegram admin
 
 After signing in, an approved admin can connect Telegram from the admin UI. The generated link is temporary and stores only a token hash in D1. Telegram webhook requests must include the configured webhook secret.
+
+Menu-order notifications use the existing purchase-notification preference. Pressing **ITEM PAID** performs an idempotent server-side state transition; the public page changes to **PAYMENT CONFIRMED** on its next poll.
 
 ## Production domain
 
