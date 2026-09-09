@@ -10,7 +10,7 @@ const wranglerVersion = readFileSync(
   path.join(repoRoot, 'tool', 'wrangler_version.txt'),
   'utf8',
 ).trim();
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const npxInvocation = resolveNpxInvocation();
 const persistDir = path.join(repoRoot, '.wrangler', 'integration-test');
 const buildDir = path.join(repoRoot, 'build');
 const buildWebDir = path.join(buildDir, 'web');
@@ -60,16 +60,49 @@ try {
   if (!hadBuildWeb) rmSync(buildDir, { recursive: true, force: true });
 }
 
+function resolveNpxInvocation() {
+  if (process.platform !== 'win32') {
+    return { executable: 'npx', prefixArgs: [] };
+  }
+
+  const searchDirs = new Set([
+    path.dirname(process.execPath),
+    ...(process.env.PATH ?? '')
+      .split(path.delimiter)
+      .map((entry) => entry.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean),
+  ]);
+  for (const directory of searchDirs) {
+    const cli = path.join(directory, 'node_modules', 'npm', 'bin', 'npx-cli.js');
+    if (existsSync(cli)) {
+      return { executable: process.execPath, prefixArgs: [cli] };
+    }
+  }
+
+  throw new Error(
+    'Could not locate npm npx-cli.js on Windows. Reinstall Node.js with npm or add the Node.js directory to PATH.',
+  );
+}
+
 function wranglerArgs(args) {
-  return ['--yes', `wrangler@${wranglerVersion}`, ...args];
+  return [
+    ...npxInvocation.prefixArgs,
+    '--yes',
+    `wrangler@${wranglerVersion}`,
+    ...args,
+  ];
 }
 
 async function runWrangler(args, { timeoutMs = 120000 } = {}) {
-  const result = await runProcess(npx, wranglerArgs(args), {
-    timeoutMs,
-    input: 'y\n',
-    echo: true,
-  });
+  const result = await runProcess(
+    npxInvocation.executable,
+    wranglerArgs(args),
+    {
+      timeoutMs,
+      input: 'y\n',
+      echo: true,
+    },
+  );
   if (result.code !== 0) {
     throw new Error(
       `Wrangler failed (${result.code}): ${args.join(' ')}\n${result.output}`,
@@ -194,7 +227,7 @@ function reviewApprovalToken() {
 
 function startDev() {
   const child = spawn(
-    npx,
+    npxInvocation.executable,
     wranglerArgs([
       'dev',
       '--local',
