@@ -22,10 +22,14 @@ test:
 	node --check worker/secure_entry.js
 	node --check worker/security.js
 	node --check worker/telegram.js
+	node --check worker/menu.js
+	node --check worker/menu_telegram.js
+	node --check worker/vietqr.js
 	node --check worker/booking_rules.js
 	node --check worker/pricing.js
 	node --check worker/integration_test.mjs
-	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs
+	node --check worker/vietqr_test.mjs
+	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/vietqr_test.mjs
 	node worker/integration_test.mjs
 
 telegram-setup:
