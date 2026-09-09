@@ -22,7 +22,7 @@ let devOutput = '';
 
 try {
   assert.match(wranglerVersion, /^4\.\d+\.\d+$/);
-  rmSync(persistDir, { recursive: true, force: true });
+  await removePathWithRetry(persistDir, { required: true });
   mkdirSync(persistDir, { recursive: true });
 
   if (!hadBuildWeb) {
@@ -56,8 +56,8 @@ try {
   console.log('Worker integration flow passed.');
 } finally {
   await stopDev();
-  rmSync(persistDir, { recursive: true, force: true });
-  if (!hadBuildWeb) rmSync(buildDir, { recursive: true, force: true });
+  await removePathWithRetry(persistDir);
+  if (!hadBuildWeb) await removePathWithRetry(buildDir);
 }
 
 function resolveNpxInvocation() {
@@ -497,6 +497,35 @@ async function jsonRequest(pathname, body, headers = {}) {
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function removePathWithRetry(target, { required = false } = {}) {
+  let lastError = null;
+  const attempts = process.platform === 'win32' ? 30 : 5;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      rmSync(target, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = String(error?.code ?? '');
+      if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(code)) break;
+      await delay(100 + attempt * 50);
+    }
+  }
+
+  if (required && lastError) throw lastError;
+  if (lastError) {
+    console.warn(
+      `Integration cleanup warning: could not remove ${target}: ${lastError.message ?? lastError}`,
+    );
+  }
 }
 
 function nhaTrangDateKey() {
