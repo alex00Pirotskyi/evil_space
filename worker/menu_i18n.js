@@ -46,9 +46,11 @@ async function handleLocalizedUpload(request, env, ctx) {
       ? { ...parsedBody, menu: normalized.workerMenu }
       : normalized.workerMenu;
 
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
   const forwarded = new Request(request.url, {
     method: request.method,
-    headers: request.headers,
+    headers,
     body: JSON.stringify(transformedBody),
   });
 
@@ -75,7 +77,10 @@ async function handleLocalizedUpload(request, env, ctx) {
     );
   }
 
-  const localizedSource = localizedSourceJson(catalog.sourceJson, normalized.namesByGroup);
+  const localizedSource = localizedSourceJson(
+    catalog.sourceJson,
+    normalized.namesByGroup,
+  );
   statements.push(
     env.evil_space
       .prepare('UPDATE menu_catalogs SET source_json = ? WHERE id = ?')
