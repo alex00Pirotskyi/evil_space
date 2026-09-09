@@ -12,11 +12,24 @@ class MenuApi {
     return MenuCatalog.fromJson(_map(data['menu']));
   }
 
-  Future<MenuOrderPayment> createOrder(String itemId) async {
+  Future<MenuOrderPayment> createOrder(String itemId) {
+    return createCartOrder({itemId: 1});
+  }
+
+  Future<MenuOrderPayment> createCartOrder(Map<String, int> cart) async {
+    final items = cart.entries
+        .where((entry) => entry.value > 0)
+        .map(
+          (entry) => <String, dynamic>{
+            'itemId': entry.key,
+            'quantity': entry.value,
+          },
+        )
+        .toList(growable: false);
     final data = await _request(
       'POST',
       '/api/public/menu/order',
-      body: {'itemId': itemId},
+      body: {'items': items},
     );
     return MenuOrderPayment.fromJson(_map(data['order']));
   }
@@ -118,8 +131,8 @@ class MenuApi {
     final data = decoded is Map<String, dynamic>
         ? decoded
         : decoded is Map
-        ? Map<String, dynamic>.from(decoded)
-        : <String, dynamic>{};
+            ? Map<String, dynamic>.from(decoded)
+            : <String, dynamic>{};
 
     if (!response.ok) {
       throw MenuApiException(
