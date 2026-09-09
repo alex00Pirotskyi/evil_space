@@ -22,6 +22,10 @@ class CustomerAccountApi {
 
   Future<CustomerAccountSnapshot?> telegramStatus(String token) async => null;
 
+  Future<void> beginGoogleSignIn(String clientId) {
+    throw const CustomerAccountException('Google registration is available on web.');
+  }
+
   Future<CustomerAccountSnapshot> signInGoogle(String idToken) {
     throw const CustomerAccountException('Google registration is available on web.');
   }
