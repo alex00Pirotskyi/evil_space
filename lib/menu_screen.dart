@@ -5,11 +5,17 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:evil_space/brand_logo.dart';
 import 'package:evil_space/brand_surface.dart';
+import 'package:evil_space/localization.dart';
 import 'package:evil_space/menu_api.dart';
 
 class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key, required this.onBack});
+  const MenuScreen({
+    super.key,
+    required this.localization,
+    required this.onBack,
+  });
 
+  final LocalizationController localization;
   final VoidCallback onBack;
 
   @override
@@ -26,7 +32,32 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   void initState() {
     super.initState();
+    widget.localization.addListener(_handleLanguageChanged);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant MenuScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localization != widget.localization) {
+      oldWidget.localization.removeListener(_handleLanguageChanged);
+      widget.localization.addListener(_handleLanguageChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localization.removeListener(_handleLanguageChanged);
+    super.dispose();
+  }
+
+  void _handleLanguageChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _copy(String key) {
+    final language = widget.localization.language.code;
+    return _menuCopy[language]?[key] ?? _menuCopy['en']![key]!;
   }
 
   Future<void> _load() async {
@@ -47,7 +78,7 @@ class _MenuScreenState extends State<MenuScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load the menu.';
+        _error = _copy('load_error');
       });
     }
   }
@@ -79,7 +110,7 @@ class _MenuScreenState extends State<MenuScreen> {
       if (!mounted) return;
       setState(() {
         _buyingId = null;
-        _error = 'Could not create the payment.';
+        _error = _copy('payment_error');
       });
     }
   }
@@ -102,11 +133,15 @@ class _MenuScreenState extends State<MenuScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(18, 22, 18, 56),
                     children: [
-                      Text('MENU', style: _serif(44)),
+                      Text(_copy('title'), style: _serif(44)),
                       const SizedBox(height: 6),
                       Text(
-                        'Choose an item, scan the payment QR, and wait for staff confirmation.',
-                        style: _serif(16, color: BrandPalette.inkMuted, height: 1.35),
+                        _copy('subtitle'),
+                        style: _serif(
+                          16,
+                          color: BrandPalette.inkMuted,
+                          height: 1.35,
+                        ),
                       ),
                       const SizedBox(height: 22),
                       if (_error != null) _errorBox(_error!),
@@ -114,7 +149,9 @@ class _MenuScreenState extends State<MenuScreen> {
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 48),
                           child: Center(
-                            child: CircularProgressIndicator(color: BrandPalette.ink),
+                            child: CircularProgressIndicator(
+                              color: BrandPalette.ink,
+                            ),
                           ),
                         )
                       else if (menu == null || menu.groups.isEmpty)
@@ -146,19 +183,46 @@ class _MenuScreenState extends State<MenuScreen> {
         children: [
           const EvilCoworkingLogo(width: 108),
           const Spacer(),
+          _languagePicker(),
+          const SizedBox(width: 8),
           TextButton.icon(
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back, size: 18),
-            label: Text('BACK', style: _mono(10)),
+            label: Text(_copy('back'), style: _mono(10)),
           ),
         ],
       ),
     );
   }
 
+  Widget _languagePicker() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: AppLanguage.values.map((language) {
+        final selected = widget.localization.language == language;
+        return TextButton(
+          onPressed: () => widget.localization.setLanguage(language),
+          style: TextButton.styleFrom(
+            foregroundColor: BrandPalette.ink,
+            minimumSize: const Size(40, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            shape: const RoundedRectangleBorder(),
+            side: selected
+                ? const BorderSide(color: BrandPalette.ink)
+                : BorderSide.none,
+          ),
+          child: Text(language.code.toUpperCase(), style: _mono(9)),
+        );
+      }).toList(growable: false),
+    );
+  }
+
   Widget _group(MenuGroup group) {
-    final items = group.items.where((item) => item.enabled).toList(growable: false);
+    final items = group.items
+        .where((item) => item.enabled)
+        .toList(growable: false);
     if (items.isEmpty) return const SizedBox.shrink();
+    final name = group.name.resolve(widget.localization.language.code);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -167,7 +231,7 @@ class _MenuScreenState extends State<MenuScreen> {
           decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: BrandPalette.ink)),
           ),
-          child: Text(group.name.toUpperCase(), style: _mono(12)),
+          child: Text(name.toUpperCase(), style: _mono(12)),
         ),
         for (final item in items) _item(item),
       ],
@@ -192,7 +256,11 @@ class _MenuScreenState extends State<MenuScreen> {
                   const SizedBox(height: 5),
                   Text(
                     item.description!,
-                    style: _serif(15, color: BrandPalette.inkMuted, height: 1.3),
+                    style: _serif(
+                      15,
+                      color: BrandPalette.inkMuted,
+                      height: 1.3,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -210,7 +278,7 @@ class _MenuScreenState extends State<MenuScreen> {
               shape: const RoundedRectangleBorder(),
             ),
             child: Text(
-              _buyingId == item.id ? '…' : 'BUY',
+              _buyingId == item.id ? '…' : _copy('buy'),
               style: _mono(11, color: BrandPalette.paperLift),
             ),
           ),
@@ -223,7 +291,7 @@ class _MenuScreenState extends State<MenuScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-      child: Text('The menu is being prepared.', style: _serif(20)),
+      child: Text(_copy('empty'), style: _serif(20)),
     );
   }
 
@@ -369,7 +437,10 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                   minimumSize: const Size.fromHeight(48),
                   shape: const RoundedRectangleBorder(),
                 ),
-                child: Text(paid || expired ? 'CLOSE' : 'CANCEL VIEW', style: _mono(10)),
+                child: Text(
+                  paid || expired ? 'CLOSE' : 'CANCEL VIEW',
+                  style: _mono(10),
+                ),
               ),
             ],
           ),
@@ -378,6 +449,36 @@ class _PaymentDialogState extends State<_PaymentDialog> {
     );
   }
 }
+
+const _menuCopy = <String, Map<String, String>>{
+  'en': {
+    'title': 'MENU',
+    'subtitle': 'Choose an item, scan the payment QR, and wait for staff confirmation.',
+    'back': 'BACK',
+    'buy': 'BUY',
+    'empty': 'The menu is being prepared.',
+    'load_error': 'Could not load the menu.',
+    'payment_error': 'Could not create the payment.',
+  },
+  'ru': {
+    'title': 'МЕНЮ',
+    'subtitle': 'Выберите товар, отсканируйте QR для оплаты и дождитесь подтверждения сотрудника.',
+    'back': 'НАЗАД',
+    'buy': 'КУПИТЬ',
+    'empty': 'Меню готовится.',
+    'load_error': 'Не удалось загрузить меню.',
+    'payment_error': 'Не удалось создать платёж.',
+  },
+  'vi': {
+    'title': 'THỰC ĐƠN',
+    'subtitle': 'Chọn món, quét mã QR thanh toán và chờ nhân viên xác nhận.',
+    'back': 'QUAY LẠI',
+    'buy': 'MUA',
+    'empty': 'Thực đơn đang được chuẩn bị.',
+    'load_error': 'Không thể tải thực đơn.',
+    'payment_error': 'Không thể tạo thanh toán.',
+  },
+};
 
 String _money(int value) {
   final digits = value.abs().toString();
