@@ -70,7 +70,10 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
       activePage = MaterialPage<void>(
         key: const ValueKey('public-menu'),
         name: AppRoute.menu.path,
-        child: MenuScreen(onBack: () => navigate(AppRoute.home)),
+        child: MenuScreen(
+          localization: localization,
+          onBack: () => navigate(AppRoute.home),
+        ),
       );
     } else {
       final publicRoute =
@@ -78,12 +81,16 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
       activePage = MaterialPage<void>(
         key: ValueKey('public-${publicRoute.path}'),
         name: publicRoute.path,
-        child: PublicTelegramConnector(
+        child: _PublicWithMenuButton(
           localization: localization,
-          child: DailyScreen(
-            currentRoute: publicRoute,
+          onOpenMenu: () => navigate(AppRoute.menu),
+          child: PublicTelegramConnector(
             localization: localization,
-            onNavigate: navigate,
+            child: DailyScreen(
+              currentRoute: publicRoute,
+              localization: localization,
+              onNavigate: navigate,
+            ),
           ),
         ),
       );
@@ -112,6 +119,90 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
     }
     navigate(AppRoute.home);
     return SynchronousFuture(true);
+  }
+}
+
+class _PublicWithMenuButton extends StatefulWidget {
+  const _PublicWithMenuButton({
+    required this.localization,
+    required this.onOpenMenu,
+    required this.child,
+  });
+
+  final LocalizationController localization;
+  final VoidCallback onOpenMenu;
+  final Widget child;
+
+  @override
+  State<_PublicWithMenuButton> createState() => _PublicWithMenuButtonState();
+}
+
+class _PublicWithMenuButtonState extends State<_PublicWithMenuButton> {
+  @override
+  void initState() {
+    super.initState();
+    widget.localization.addListener(_refresh);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PublicWithMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localization != widget.localization) {
+      oldWidget.localization.removeListener(_refresh);
+      widget.localization.addListener(_refresh);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localization.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  String get _label {
+    switch (widget.localization.language) {
+      case AppLanguage.ru:
+        return 'МЕНЮ';
+      case AppLanguage.vi:
+        return 'THỰC ĐƠN';
+      case AppLanguage.en:
+        return 'MENU';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(child: widget.child),
+        Positioned(
+          right: 14,
+          bottom: 14,
+          child: SafeArea(
+            child: FloatingActionButton.extended(
+              heroTag: 'public-menu',
+              onPressed: widget.onOpenMenu,
+              backgroundColor: const Color(0xFF1C1C1A),
+              foregroundColor: const Color(0xFFF8F6EE),
+              shape: const RoundedRectangleBorder(),
+              icon: const Icon(Icons.restaurant_menu, size: 18),
+              label: Text(
+                _label,
+                style: const TextStyle(
+                  fontFamily: 'Courier New',
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
