@@ -37,13 +37,24 @@ void main() {
     final workflow = File('.github/workflows/web-ci.yml').readAsStringSync();
     final makefile = File('Makefile').readAsStringSync();
     final release = File('tool/release.dart').readAsStringSync();
+    final wranglerVersion = File('tool/wrangler_version.txt')
+        .readAsStringSync()
+        .trim();
 
     expect(workflow, contains("flutter-version: '3.47.2'"));
     expect(workflow, contains('flutter build web --release --wasm'));
     expect(makefile, contains('.DEFAULT_GOAL := deploy'));
     expect(makefile, contains('dart run tool/release.dart'));
     expect(release, contains("'--wasm'"));
-    expect(release, contains("'migrations', 'apply'"));
-    expect(release, contains("'wrangler', 'deploy'"));
+    expect(release, contains('_wranglerArgs(['));
+    expect(release, contains("'d1'"));
+    expect(release, contains("'migrations'"));
+    expect(release, contains("'apply'"));
+    expect(release, contains("'--remote'"));
+    expect(release, contains("'deploy'"));
+    expect(release, contains("'--dry-run'"));
+    expect(release, contains('_verifyProductionHealth()'));
+    expect(release, contains("'tool/wrangler_version.txt'"));
+    expect(wranglerVersion, matches(RegExp(r'^4\.\d+\.\d+$')));
   });
 }
