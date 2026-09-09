@@ -1,7 +1,7 @@
 import adminReview from './admin_review.js';
 import adminWorker from './admin_worker.js';
 import featureWorker from './entry.js';
-import menuWorker from './menu.js';
+import menuWorker from './menu_i18n.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
 
 const FEATURE_ROUTES = new Set([
