@@ -20,17 +20,74 @@ class MenuCatalog {
   }
 }
 
+class MenuLocalizedText {
+  const MenuLocalizedText({
+    required this.en,
+    required this.ru,
+    required this.vi,
+  });
+
+  final String en;
+  final String ru;
+  final String vi;
+
+  factory MenuLocalizedText.fromJson(Object? value) {
+    if (value is String) {
+      final text = value.trim();
+      return MenuLocalizedText(en: text, ru: text, vi: text);
+    }
+
+    final map = _mapOrNull(value);
+    if (map == null) {
+      return const MenuLocalizedText(en: '', ru: '', vi: '');
+    }
+
+    final en = map['en']?.toString().trim() ?? '';
+    final ru = map['ru']?.toString().trim() ?? '';
+    final vi = map['vi']?.toString().trim() ?? '';
+    final fallback = en.isNotEmpty
+        ? en
+        : ru.isNotEmpty
+        ? ru
+        : vi;
+    return MenuLocalizedText(
+      en: en.isEmpty ? fallback : en,
+      ru: ru.isEmpty ? fallback : ru,
+      vi: vi.isEmpty ? fallback : vi,
+    );
+  }
+
+  String resolve(String languageCode) {
+    switch (languageCode.toLowerCase()) {
+      case 'ru':
+        return ru;
+      case 'vi':
+        return vi;
+      default:
+        return en;
+    }
+  }
+
+  String toUpperCase() {
+    if (en == ru && en == vi) return en.toUpperCase();
+    return 'EN · ${en.toUpperCase()}\nRU · ${ru.toUpperCase()}\nVI · ${vi.toUpperCase()}';
+  }
+
+  @override
+  String toString() => en;
+}
+
 class MenuGroup {
   const MenuGroup({required this.id, required this.name, required this.items});
 
   final String id;
-  final String name;
+  final MenuLocalizedText name;
   final List<MenuItem> items;
 
   factory MenuGroup.fromJson(Map<String, dynamic> json) {
     return MenuGroup(
       id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
+      name: MenuLocalizedText.fromJson(json['name']),
       items: _listOf(json['items'], MenuItem.fromJson),
     );
   }
