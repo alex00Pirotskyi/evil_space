@@ -2,6 +2,7 @@ import adminReview from './admin_review.js';
 import adminWorker from './admin_worker.js';
 import featureWorker from './entry.js';
 import menuWorker from './menu.js';
+import { handleMenuTelegramShortcut } from './menu_telegram.js';
 
 const FEATURE_ROUTES = new Set([
   'POST /api/telegram/webhook',
@@ -35,6 +36,10 @@ export default {
       url.pathname.startsWith('/api/admin/menu')
     ) {
       return menuWorker.fetch(request, env, ctx);
+    }
+    if (route === 'POST /api/telegram/webhook') {
+      const menuShortcut = await handleMenuTelegramShortcut(request, env);
+      if (menuShortcut) return menuShortcut;
     }
     if (FEATURE_ROUTES.has(route)) {
       return featureWorker.fetch(request, env, ctx);
