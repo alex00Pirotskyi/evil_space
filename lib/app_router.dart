@@ -58,9 +58,12 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
       activePage = MaterialPage<void>(
         key: const ValueKey('admin'),
         name: AppRoute.admin.path,
-        child: _DeferredAdminPortal(
-          onExit: () => navigate(AppRoute.home),
-          languageCode: localization.language.code,
+        child: _AdminWithMenuButton(
+          onOpenMenu: () => navigate(AppRoute.adminMenu),
+          child: _DeferredAdminPortal(
+            onExit: () => navigate(AppRoute.home),
+            languageCode: localization.language.code,
+          ),
         ),
       );
     } else if (_currentRoute == AppRoute.menu) {
@@ -109,6 +112,44 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
     }
     navigate(AppRoute.home);
     return SynchronousFuture(true);
+  }
+}
+
+class _AdminWithMenuButton extends StatelessWidget {
+  const _AdminWithMenuButton({required this.onOpenMenu, required this.child});
+
+  final VoidCallback onOpenMenu;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(child: child),
+        Positioned(
+          left: 14,
+          bottom: 14,
+          child: SafeArea(
+            child: FloatingActionButton.extended(
+              heroTag: 'admin-menu',
+              onPressed: onOpenMenu,
+              backgroundColor: const Color(0xFF1C1C1A),
+              foregroundColor: const Color(0xFFF8F6EE),
+              shape: const RoundedRectangleBorder(),
+              icon: const Icon(Icons.restaurant_menu, size: 18),
+              label: const Text(
+                'MENU',
+                style: TextStyle(
+                  fontFamily: 'Courier New',
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
