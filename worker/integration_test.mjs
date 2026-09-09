@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
-import { pbkdf2Sync, createHash } from 'node:crypto';
-import { once } from 'node:events';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { createHash, pbkdf2Sync } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +34,7 @@ try {
   }
 
   console.log('Integration: applying clean local D1 migrations');
-  runWrangler([
+  await runWrangler([
     'd1',
     'migrations',
     'apply',
@@ -52,10 +45,12 @@ try {
   ]);
 
   console.log('Integration: seeding admin fixtures');
-  seedAdmins();
+  await seedAdmins();
+
   console.log('Integration: starting local Worker');
   dev = startDev();
   await waitForServer();
+
   console.log('Integration: running API flow');
   await runFlow();
   console.log('Worker integration flow passed.');
@@ -69,32 +64,83 @@ function wranglerArgs(args) {
   return ['--yes', `wrangler@${wranglerVersion}`, ...args];
 }
 
-function runWrangler(args) {
-  const result = spawnSync(npx, wranglerArgs(args), {
-    cwd: repoRoot,
-    encoding: 'utf8',
+async function runWrangler(args, { timeoutMs = 120000 } = {}) {
+  const result = await runProcess(npx, wranglerArgs(args), {
+    timeoutMs,
     input: 'y\n',
-    timeout: 120000,
-    env: {
-      ...process.env,
-      CI: 'true',
-      WRANGLER_SEND_METRICS: 'false',
-    },
+    echo: true,
   });
-  if (result.error) {
+  if (result.code !== 0) {
     throw new Error(
-      `Wrangler process failed: ${args.join(' ')}\n${result.error.message}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
+      `Wrangler failed (${result.code}): ${args.join(' ')}\n${result.output}`,
     );
   }
-  if (result.status !== 0) {
-    throw new Error(
-      `Wrangler failed: ${args.join(' ')}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
-    );
-  }
-  return result.stdout ?? '';
+  return result.output;
 }
 
-function seedAdmins() {
+function runProcess(
+  executable,
+  args,
+  { timeoutMs, input = '', echo = false } = {},
+) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, {
+      cwd: repoRoot,
+      detached: process.platform !== 'win32',
+      env: {
+        ...process.env,
+        CI: 'true',
+        WRANGLER_SEND_METRICS: 'false',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let output = '';
+    let settled = false;
+    let timer = null;
+
+    const collect = (chunk) => {
+      const text = chunk.toString();
+      output += text;
+      if (echo) process.stdout.write(text);
+    };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect);
+
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      callback();
+    };
+
+    child.on('error', (error) => {
+      finish(() => reject(error));
+    });
+    child.on('exit', (code, signal) => {
+      finish(() => resolve({ code: code ?? (signal ? 1 : 0), output }));
+    });
+
+    if (input) child.stdin.end(input);
+    else child.stdin.end();
+
+    if (timeoutMs != null) {
+      timer = setTimeout(() => {
+        if (settled) return;
+        killProcessTree(child);
+        finish(() =>
+          reject(
+            new Error(
+              `${executable} ${args.join(' ')} timed out after ${timeoutMs} ms.\n${output}`,
+            ),
+          ),
+        );
+      }, timeoutMs);
+    }
+  });
+}
+
+async function seedAdmins() {
   const now = Math.floor(Date.now() / 1000);
   const salt = Buffer.alloc(16, 7);
   const saltBase64 = salt.toString('base64');
@@ -126,7 +172,7 @@ function seedAdmins() {
        'pending', ${sqlString(reviewHash)}, ${now + 3600}, ${now}, NULL);
   `;
 
-  runWrangler([
+  await runWrangler([
     'd1',
     'execute',
     'evil-space',
@@ -163,6 +209,7 @@ function startDev() {
     ]),
     {
       cwd: repoRoot,
+      detached: process.platform !== 'win32',
       env: {
         ...process.env,
         CI: 'true',
@@ -171,12 +218,14 @@ function startDev() {
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
-  child.stdout.on('data', (chunk) => {
-    devOutput += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    devOutput += chunk.toString();
-  });
+
+  const collect = (chunk) => {
+    const text = chunk.toString();
+    devOutput += text;
+    process.stdout.write(text);
+  };
+  child.stdout.on('data', collect);
+  child.stderr.on('data', collect);
   return child;
 }
 
@@ -332,26 +381,38 @@ async function jsonRequest(pathname, body, headers = {}) {
   });
 }
 
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 function nhaTrangDateKey() {
   return new Date(Date.now() + 7 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
 }
 
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 async function stopDev() {
   if (!dev || dev.exitCode !== null) return;
+  killProcessTree(dev);
+  for (let attempt = 0; attempt < 30 && dev.exitCode === null; attempt += 1) {
+    await delay(100);
+  }
+}
+
+function killProcessTree(child) {
+  if (!child || child.exitCode !== null) return;
   if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(dev.pid), '/T', '/F'], {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
       stdio: 'ignore',
       timeout: 10000,
     });
     return;
   }
-  dev.kill('SIGTERM');
-  await Promise.race([once(dev, 'exit'), delay(3000)]);
-  if (dev.exitCode === null) dev.kill('SIGKILL');
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    try {
+      child.kill('SIGKILL');
+    } catch {}
+  }
 }
