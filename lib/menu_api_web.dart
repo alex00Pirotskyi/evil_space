@@ -49,8 +49,7 @@ class MenuApi {
       ..accept = '.json,application/json';
     final completer = Completer<Map<String, dynamic>?>();
 
-    late final JSFunction listener;
-    listener = ((web.Event _) async {
+    Future<void> readSelectedFile() async {
       try {
         final file = input.files?.item(0);
         if (file == null) {
@@ -71,6 +70,11 @@ class MenuApi {
       } catch (error, stackTrace) {
         if (!completer.isCompleted) completer.completeError(error, stackTrace);
       }
+    }
+
+    late final JSFunction listener;
+    listener = ((web.Event _) {
+      unawaited(readSelectedFile());
     }).toJS;
 
     input.addEventListener('change', listener);
