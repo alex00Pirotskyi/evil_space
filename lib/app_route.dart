@@ -1,6 +1,8 @@
 enum AppRoute {
   home('/'),
+  menu('/menu'),
   qr('/qr'),
+  adminMenu('/admin/menu'),
   admin('/admin');
 
   const AppRoute(this.path);
@@ -11,8 +13,16 @@ enum AppRoute {
     final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
     final normalized = path.isEmpty ? '/' : path;
 
+    if (normalized == '/menu') {
+      return AppRoute.menu;
+    }
+
     if (normalized == '/qr') {
       return AppRoute.qr;
+    }
+
+    if (normalized == '/admin/menu' || normalized.startsWith('/admin/menu/')) {
+      return AppRoute.adminMenu;
     }
 
     if (normalized == '/admin' || normalized.startsWith('/admin/')) {
