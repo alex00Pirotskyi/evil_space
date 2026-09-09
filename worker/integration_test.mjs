@@ -10,7 +10,7 @@ const wranglerVersion = readFileSync(
   path.join(repoRoot, 'tool', 'wrangler_version.txt'),
   'utf8',
 ).trim();
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const npxInvocation = resolveNpxInvocation();
 const persistDir = path.join(repoRoot, '.wrangler', 'integration-test');
 const buildDir = path.join(repoRoot, 'build');
 const buildWebDir = path.join(buildDir, 'web');
@@ -60,16 +60,49 @@ try {
   if (!hadBuildWeb) rmSync(buildDir, { recursive: true, force: true });
 }
 
+function resolveNpxInvocation() {
+  if (process.platform !== 'win32') {
+    return { executable: 'npx', prefixArgs: [] };
+  }
+
+  const searchDirs = new Set([
+    path.dirname(process.execPath),
+    ...(process.env.PATH ?? '')
+      .split(path.delimiter)
+      .map((entry) => entry.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean),
+  ]);
+  for (const directory of searchDirs) {
+    const cli = path.join(directory, 'node_modules', 'npm', 'bin', 'npx-cli.js');
+    if (existsSync(cli)) {
+      return { executable: process.execPath, prefixArgs: [cli] };
+    }
+  }
+
+  throw new Error(
+    'Could not locate npm npx-cli.js on Windows. Reinstall Node.js with npm or add the Node.js directory to PATH.',
+  );
+}
+
 function wranglerArgs(args) {
-  return ['--yes', `wrangler@${wranglerVersion}`, ...args];
+  return [
+    ...npxInvocation.prefixArgs,
+    '--yes',
+    `wrangler@${wranglerVersion}`,
+    ...args,
+  ];
 }
 
 async function runWrangler(args, { timeoutMs = 120000 } = {}) {
-  const result = await runProcess(npx, wranglerArgs(args), {
-    timeoutMs,
-    input: 'y\n',
-    echo: true,
-  });
+  const result = await runProcess(
+    npxInvocation.executable,
+    wranglerArgs(args),
+    {
+      timeoutMs,
+      input: 'y\n',
+      echo: true,
+    },
+  );
   if (result.code !== 0) {
     throw new Error(
       `Wrangler failed (${result.code}): ${args.join(' ')}\n${result.output}`,
@@ -171,6 +204,8 @@ async function seedAdmins() {
       ('review-admin@evils.space', ${sqlString(passwordHash)}, ${sqlString(saltBase64)},
        'pending', ${sqlString(reviewHash)}, ${now + 3600}, ${now}, NULL);
   `;
+  const seedFile = path.join(persistDir, 'admin-seed.sql');
+  writeFileSync(seedFile, sql, 'utf8');
 
   await runWrangler([
     'd1',
@@ -179,8 +214,8 @@ async function seedAdmins() {
     '--local',
     '--persist-to',
     persistDir,
-    '--command',
-    sql,
+    '--file',
+    seedFile,
   ]);
 }
 
@@ -194,7 +229,7 @@ function reviewApprovalToken() {
 
 function startDev() {
   const child = spawn(
-    npx,
+    npxInvocation.executable,
     wranglerArgs([
       'dev',
       '--local',
@@ -204,6 +239,10 @@ function startDev() {
       '127.0.0.1',
       '--port',
       String(port),
+      '--var',
+      'VIETQR_ACCOUNT_NUMBER:0123456789',
+      '--var',
+      'VIETQR_BANK_BIN:970436',
       '--log-level',
       'warn',
     ]),
@@ -268,6 +307,81 @@ async function runFlow() {
   let payload = await response.json();
   assert.equal(payload.authenticated, true);
   assert.equal(payload.email, 'ci-admin@evils.space');
+
+  response = await jsonRequest(
+    '/api/admin/menu/upload',
+    {
+      version: 1,
+      groups: [
+        {
+          id: 'beverages',
+          name: 'Beverages',
+          items: [
+            {
+              id: 'cola',
+              name: 'Cola',
+              priceVnd: 30000,
+              description: null,
+            },
+          ],
+        },
+      ],
+    },
+    { Cookie: cookie },
+  );
+  assert.equal(response.status, 201);
+  payload = await response.json();
+  assert.equal(payload.snapshot.catalog.version, 1);
+  assert.equal(payload.snapshot.catalog.groups[0].items[0].priceVnd, 30000);
+  assert.equal(payload.snapshot.paymentConfigured, true);
+
+  response = await http('/api/public/menu');
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  assert.equal(payload.menu.groups[0].items[0].id, 'cola');
+  assert.equal(payload.menu.groups[0].items[0].priceVnd, 30000);
+
+  response = await jsonRequest('/api/public/menu/order', {
+    itemId: 'cola',
+    priceVnd: 1,
+  });
+  assert.equal(response.status, 201);
+  const menuOrder = (await response.json()).order;
+  assert.equal(menuOrder.itemName, 'Cola');
+  assert.equal(menuOrder.amountVnd, 30000);
+  assert.match(menuOrder.paymentMessage, /^EVIL [A-Z2-9]{6}$/);
+  assert.match(menuOrder.qrPayload, /5303704540530000/);
+  assert.ok(typeof menuOrder.token === 'string' && menuOrder.token.length >= 32);
+
+  response = await http(
+    `/api/public/menu/order?token=${encodeURIComponent(menuOrder.token)}`,
+  );
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  assert.equal(payload.order.status, 'pending');
+  assert.equal(payload.order.amountVnd, 30000);
+
+  response = await http('/api/admin/menu', { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  const adminMenuOrder = payload.snapshot.orders.find(
+    (row) => row.orderCode === menuOrder.orderCode,
+  );
+  assert.ok(adminMenuOrder?.id);
+
+  response = await jsonRequest(
+    '/api/admin/menu/order/paid',
+    { id: adminMenuOrder.id },
+    { Cookie: cookie },
+  );
+  assert.equal(response.status, 200);
+
+  response = await http(
+    `/api/public/menu/order?token=${encodeURIComponent(menuOrder.token)}`,
+  );
+  assert.equal(response.status, 200);
+  payload = await response.json();
+  assert.equal(payload.order.status, 'paid');
 
   response = await http('/api/public/status');
   assert.equal(response.status, 200);

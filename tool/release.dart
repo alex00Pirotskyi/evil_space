@@ -33,15 +33,23 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/secure_entry.js']);
   await _run('node', ['--check', 'worker/security.js']);
   await _run('node', ['--check', 'worker/telegram.js']);
+  await _run('node', ['--check', 'worker/menu.js']);
+  await _run('node', ['--check', 'worker/menu_i18n.js']);
+  await _run('node', ['--check', 'worker/menu_telegram.js']);
+  await _run('node', ['--check', 'worker/vietqr.js']);
   await _run('node', ['--check', 'worker/booking_rules.js']);
   await _run('node', ['--check', 'worker/pricing.js']);
   await _run('node', ['--check', 'worker/integration_test.mjs']);
+  await _run('node', ['--check', 'worker/menu_i18n_test.mjs']);
+  await _run('node', ['--check', 'worker/vietqr_test.mjs']);
   await _run('node', [
     '--test',
     'worker/security_test.mjs',
     'worker/telegram_test.mjs',
     'worker/booking_rules_test.mjs',
     'worker/pricing_test.mjs',
+    'worker/menu_i18n_test.mjs',
+    'worker/vietqr_test.mjs',
   ]);
   await _run('node', ['worker/integration_test.mjs']);
 
