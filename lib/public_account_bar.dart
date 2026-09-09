@@ -273,112 +273,157 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
   }
 
+  String _memberStatus(CustomerAccountView customer) {
+    final connected = <String>[];
+    if (customer.hasProvider('phone')) connected.add(_copy('phone_short'));
+    if (customer.hasProvider('telegram')) connected.add('TELEGRAM ✓');
+    if (customer.hasProvider('google')) connected.add('GOOGLE ✓');
+    connected.add(_copy('member_offer'));
+    return connected.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
     final customer = snapshot?.customer;
-    return Material(
-      color: BrandPalette.paperLift,
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 64),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: BrandPalette.ink)),
-          ),
+    final ready = snapshot != null && !_busy;
+    final secondary = _error ??
+        (customer == null ? _copy('register_short') : _memberStatus(customer));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 620;
+        final gutter = compact ? 20.0 : 40.0;
+        return Material(
+          type: MaterialType.transparency,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (customer != null) ...[
-                        const Icon(Icons.verified_outlined, size: 18),
-                        Text(customer.name.toUpperCase(), style: _mono(10.5)),
-                        if (customer.hasProvider('phone')) _tag('PHONE ✓'),
-                        if (customer.hasProvider('telegram')) _tag('TELEGRAM ✓'),
-                        if (customer.hasProvider('google')) _tag('GOOGLE ✓'),
-                        TextButton(
-                          onPressed: _busy ? null : _logout,
-                          child: Text(_copy('sign_out'), style: _mono(9)),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: gutter),
+                child: SizedBox(
+                  height: 44,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: BrandPalette.ink),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                customer == null
+                                    ? _copy('member_access')
+                                    : '✓ ${_copy('member')} · ${customer.name.toUpperCase()}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _mono(9.2, color: BrandPalette.inkMuted),
+                              ),
+                            ),
+                            if (snapshot?.adminAuthenticated == true)
+                              _smallAction(
+                                'ADMIN →',
+                                _openAdmin,
+                                enabled: !_busy,
+                              ),
+                          ],
                         ),
-                      ] else ...[
-                        Text(_copy('account'), style: _mono(10.5)),
-                        Text(
-                          _copy('register_pitch'),
-                          style: _serif(14, color: BrandPalette.inkMuted),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy ? null : _phone,
-                          icon: const Icon(Icons.phone_outlined, size: 16),
-                          label: Text(_copy('phone'), style: _mono(9)),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy ? null : _telegram,
-                          icon: const Icon(Icons.send_outlined, size: 16),
-                          label: Text('TELEGRAM', style: _mono(9)),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _busy ? null : _google,
-                          icon: const Icon(Icons.account_circle_outlined, size: 16),
-                          label: Text('GOOGLE', style: _mono(9)),
+                        const SizedBox(height: 1),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                secondary,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _mono(
+                                  compact ? 8.2 : 8.7,
+                                  color: _error == null
+                                      ? BrandPalette.ink
+                                      : BrandPalette.inkMuted,
+                                ),
+                              ),
+                            ),
+                            if (_busy) ...[
+                              const SizedBox(width: 5),
+                              const SizedBox.square(
+                                dimension: 11,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: BrandPalette.ink,
+                                ),
+                              ),
+                            ],
+                            if (customer == null) ...[
+                              _smallAction(
+                                _copy('phone_short'),
+                                _phone,
+                                enabled: ready,
+                              ),
+                              _smallAction('TELEGRAM', _telegram, enabled: ready),
+                              _smallAction('GOOGLE', _google, enabled: ready),
+                            ] else ...[
+                              if (!customer.hasProvider('phone'))
+                                _smallAction(
+                                  _copy('phone_short'),
+                                  _phone,
+                                  enabled: ready,
+                                ),
+                              if (!customer.hasProvider('telegram'))
+                                _smallAction('TELEGRAM', _telegram, enabled: ready),
+                              if (!customer.hasProvider('google'))
+                                _smallAction('GOOGLE', _google, enabled: ready),
+                              _smallAction(
+                                _copy('sign_out'),
+                                _logout,
+                                enabled: !_busy,
+                              ),
+                            ],
+                          ],
                         ),
                       ],
-                      if (_busy)
-                        const SizedBox.square(
-                          dimension: 15,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: BrandPalette.ink,
-                          ),
-                        ),
-                      if (snapshot?.adminAuthenticated == true) ...[
-                        const SizedBox(width: 6),
-                        FilledButton.icon(
-                          onPressed: _openAdmin,
-                          icon: const Icon(Icons.admin_panel_settings_outlined, size: 16),
-                          label: Text('ADMIN →', style: _mono(9, color: BrandPalette.paperLift)),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: BrandPalette.ink,
-                            foregroundColor: BrandPalette.paperLift,
-                            shape: const RoundedRectangleBorder(),
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 6),
-                    Text(_error!, style: _mono(9, color: BrandPalette.inkMuted)),
-                  ],
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _tag(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-      child: Text(text, style: _mono(8.5)),
+  Widget _smallAction(
+    String label,
+    VoidCallback onPressed, {
+    required bool enabled,
+  }) {
+    return TextButton(
+      onPressed: enabled ? onPressed : null,
+      style: TextButton.styleFrom(
+        foregroundColor: BrandPalette.ink,
+        minimumSize: const Size(0, 22),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        shape: const RoundedRectangleBorder(),
+      ),
+      child: Text(label, style: _mono(8.1)),
     );
   }
 }
 
 const _accountCopy = <String, Map<String, String>>{
   'en': {
-    'account': 'EVIL SPACE ACCOUNT',
-    'register_pitch': 'Register now — your member profile will unlock the 50% desk offer.',
+    'member_access': 'MEMBER ACCESS',
+    'member': 'MEMBER',
+    'member_offer': '50% MEMBER OFFER',
+    'register_short': 'REGISTER ONCE · GET 50% OFF COWORKING',
+    'phone_short': 'PHONE',
     'phone': 'PHONE',
     'phone_title': 'Register by phone',
     'phone_setup': 'Phone SMS verification still needs an SMS provider configured.',
@@ -397,8 +442,11 @@ const _accountCopy = <String, Map<String, String>>{
     'telegram_timeout': 'Telegram registration timed out. Try again.',
   },
   'ru': {
-    'account': 'АККАУНТ EVIL SPACE',
-    'register_pitch': 'Зарегистрируйтесь — профиль участника откроет скидку 50% на стол.',
+    'member_access': 'ДОСТУП УЧАСТНИКА',
+    'member': 'УЧАСТНИК',
+    'member_offer': 'СКИДКА УЧАСТНИКА 50%',
+    'register_short': 'РЕГИСТРАЦИЯ · СКИДКА 50% НА КОВОРКИНГ',
+    'phone_short': 'ТЕЛЕФОН',
     'phone': 'ТЕЛЕФОН',
     'phone_title': 'Регистрация по телефону',
     'phone_setup': 'Для SMS-подтверждения нужно настроить SMS-провайдера.',
@@ -417,8 +465,11 @@ const _accountCopy = <String, Map<String, String>>{
     'telegram_timeout': 'Время регистрации Telegram истекло. Попробуйте снова.',
   },
   'vi': {
-    'account': 'TÀI KHOẢN EVIL SPACE',
-    'register_pitch': 'Đăng ký ngay — hồ sơ thành viên sẽ mở ưu đãi giảm 50% bàn làm việc.',
+    'member_access': 'THÀNH VIÊN',
+    'member': 'THÀNH VIÊN',
+    'member_offer': 'ƯU ĐÃI THÀNH VIÊN 50%',
+    'register_short': 'ĐĂNG KÝ · GIẢM 50% COWORKING',
+    'phone_short': 'ĐIỆN THOẠI',
     'phone': 'ĐIỆN THOẠI',
     'phone_title': 'Đăng ký bằng điện thoại',
     'phone_setup': 'Cần cấu hình nhà cung cấp SMS để xác minh số điện thoại.',
