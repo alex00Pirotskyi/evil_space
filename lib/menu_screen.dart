@@ -24,10 +24,11 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   final _api = MenuApi();
+  final Map<String, int> _cart = {};
   MenuCatalog? _menu;
   String? _error;
   bool _loading = true;
-  String? _buyingId;
+  bool _checkingOut = false;
 
   @override
   void initState() {
@@ -70,6 +71,11 @@ class _MenuScreenState extends State<MenuScreen> {
     try {
       final menu = await _api.menu().timeout(const Duration(seconds: 10));
       if (!mounted) return;
+      final available = {
+        for (final group in menu.groups)
+          for (final item in group.items.where((item) => item.enabled)) item.id,
+      };
+      _cart.removeWhere((id, _) => !available.contains(id));
       setState(() {
         _menu = menu;
         _loading = false;
@@ -83,33 +89,82 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
-  Future<void> _buy(MenuItem item) async {
-    if (_buyingId != null) return;
+  void _changeQuantity(MenuItem item, int delta) {
+    if (_checkingOut) return;
+    final current = _cart[item.id] ?? 0;
+    final next = (current + delta).clamp(0, 20);
     setState(() {
-      _buyingId = item.id;
+      if (next == 0) {
+        _cart.remove(item.id);
+      } else {
+        _cart[item.id] = next;
+      }
+    });
+  }
+
+  List<_CartLine> get _cartLines {
+    final menu = _menu;
+    if (menu == null) return const [];
+    final byId = <String, MenuItem>{
+      for (final group in menu.groups)
+        for (final item in group.items) item.id: item,
+    };
+    return _cart.entries
+        .map((entry) {
+          final item = byId[entry.key];
+          return item == null ? null : _CartLine(item: item, quantity: entry.value);
+        })
+        .whereType<_CartLine>()
+        .toList(growable: false);
+  }
+
+  int get _cartCount => _cart.values.fold(0, (sum, quantity) => sum + quantity);
+  int get _cartTotal => _cartLines.fold(0, (sum, line) => sum + line.total);
+
+  Future<void> _checkout() async {
+    if (_checkingOut || _cart.isEmpty) return;
+    final lines = _cartLines;
+    if (lines.isEmpty) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (_) => _CartReviewDialog(
+        title: _copy('cart'),
+        lines: lines,
+        totalLabel: _copy('total'),
+        payLabel: _copy('pay'),
+        cancelLabel: _copy('cancel'),
+      ),
+    );
+    if (approved != true || !mounted) return;
+
+    setState(() {
+      _checkingOut = true;
       _error = null;
     });
     try {
-      final order = await _api.createOrder(item.id).timeout(
-        const Duration(seconds: 10),
+      final order = await _api.createCartOrder(Map<String, int>.from(_cart)).timeout(
+        const Duration(seconds: 12),
       );
       if (!mounted) return;
-      setState(() => _buyingId = null);
+      setState(() {
+        _checkingOut = false;
+        _cart.clear();
+      });
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _PaymentDialog(api: _api, order: order),
+        builder: (_) => _PaymentDialog(api: _api, order: order, lines: lines),
       );
     } on MenuApiException catch (error) {
       if (!mounted) return;
       setState(() {
-        _buyingId = null;
+        _checkingOut = false;
         _error = error.message;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _buyingId = null;
+        _checkingOut = false;
         _error = _copy('payment_error');
       });
     }
@@ -120,6 +175,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final menu = _menu;
     return Scaffold(
       backgroundColor: BrandPalette.paper,
+      bottomNavigationBar: _cart.isEmpty ? null : _cartBar(),
       body: BrandPaper(
         child: SafeArea(
           child: Column(
@@ -218,9 +274,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _group(MenuGroup group) {
-    final items = group.items
-        .where((item) => item.enabled)
-        .toList(growable: false);
+    final items = group.items.where((item) => item.enabled).toList(growable: false);
     if (items.isEmpty) return const SizedBox.shrink();
     final name = group.name.resolve(widget.localization.language.code);
     return Column(
@@ -239,6 +293,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _item(MenuItem item) {
+    final quantity = _cart[item.id] ?? 0;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: const BoxDecoration(
@@ -256,11 +311,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   const SizedBox(height: 5),
                   Text(
                     item.description!,
-                    style: _serif(
-                      15,
-                      color: BrandPalette.inkMuted,
-                      height: 1.3,
-                    ),
+                    style: _serif(15, color: BrandPalette.inkMuted, height: 1.3),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -269,23 +320,96 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          FilledButton(
-            onPressed: _buyingId == null ? () => _buy(item) : null,
-            style: FilledButton.styleFrom(
-              foregroundColor: BrandPalette.paperLift,
-              backgroundColor: BrandPalette.ink,
-              minimumSize: const Size(92, 48),
-              shape: const RoundedRectangleBorder(),
+          if (quantity == 0)
+            FilledButton(
+              onPressed: _checkingOut ? null : () => _changeQuantity(item, 1),
+              style: _filledButtonStyle(),
+              child: Text(_copy('add'), style: _mono(10, color: BrandPalette.paperLift)),
+            )
+          else
+            Container(
+              decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: _copy('remove'),
+                    onPressed: _checkingOut ? null : () => _changeQuantity(item, -1),
+                    icon: const Icon(Icons.remove, size: 18),
+                  ),
+                  SizedBox(
+                    width: 34,
+                    child: Text('$quantity', textAlign: TextAlign.center, style: _mono(12)),
+                  ),
+                  IconButton(
+                    tooltip: _copy('add_one'),
+                    onPressed: _checkingOut || quantity >= 20
+                        ? null
+                        : () => _changeQuantity(item, 1),
+                    icon: const Icon(Icons.add, size: 18),
+                  ),
+                ],
+              ),
             ),
-            child: Text(
-              _buyingId == item.id ? '…' : _copy('buy'),
-              style: _mono(11, color: BrandPalette.paperLift),
-            ),
-          ),
         ],
       ),
     );
   }
+
+  Widget _cartBar() {
+    return Material(
+      color: BrandPalette.paperLift,
+      elevation: 12,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: BrandPalette.ink)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${_copy('cart')} · $_cartCount', style: _mono(10)),
+                    const SizedBox(height: 3),
+                    Text(_money(_cartTotal), style: _serif(21)),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: _checkingOut ? null : _checkout,
+                style: _filledButtonStyle(minWidth: 150),
+                icon: _checkingOut
+                    ? const SizedBox.square(
+                        dimension: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BrandPalette.paperLift,
+                        ),
+                      )
+                    : const Icon(Icons.shopping_cart_checkout, size: 18),
+                label: Text(
+                  _checkingOut ? '…' : _copy('checkout'),
+                  style: _mono(10, color: BrandPalette.paperLift),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  ButtonStyle _filledButtonStyle({double minWidth = 96}) => FilledButton.styleFrom(
+        foregroundColor: BrandPalette.paperLift,
+        backgroundColor: BrandPalette.ink,
+        minimumSize: Size(minWidth, 48),
+        shape: const RoundedRectangleBorder(),
+      );
 
   Widget _empty() {
     return Container(
@@ -305,11 +429,101 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 }
 
+class _CartLine {
+  const _CartLine({required this.item, required this.quantity});
+  final MenuItem item;
+  final int quantity;
+  int get total => item.priceVnd * quantity;
+}
+
+class _CartReviewDialog extends StatelessWidget {
+  const _CartReviewDialog({
+    required this.title,
+    required this.lines,
+    required this.totalLabel,
+    required this.payLabel,
+    required this.cancelLabel,
+  });
+
+  final String title;
+  final List<_CartLine> lines;
+  final String totalLabel;
+  final String payLabel;
+  final String cancelLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = lines.fold(0, (sum, line) => sum + line.total);
+    return Dialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title.toUpperCase(), style: _mono(12)),
+              const SizedBox(height: 16),
+              for (final line in lines)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Row(
+                    children: [
+                      Text('${line.quantity} ×', style: _mono(10)),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(line.item.name, style: _serif(18))),
+                      Text(_money(line.total), style: _mono(10)),
+                    ],
+                  ),
+                ),
+              const Divider(color: BrandPalette.ink),
+              Row(
+                children: [
+                  Expanded(child: Text(totalLabel.toUpperCase(), style: _mono(11))),
+                  Text(_money(total), style: _serif(24)),
+                ],
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: Text(cancelLabel.toUpperCase(), style: _mono(9)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BrandPalette.ink,
+                        foregroundColor: BrandPalette.paperLift,
+                        shape: const RoundedRectangleBorder(),
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      child: Text(payLabel.toUpperCase(), style: _mono(9, color: BrandPalette.paperLift)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({required this.api, required this.order});
+  const _PaymentDialog({required this.api, required this.order, required this.lines});
 
   final MenuApi api;
   final MenuOrderPayment order;
+  final List<_CartLine> lines;
 
   @override
   State<_PaymentDialog> createState() => _PaymentDialogState();
@@ -340,9 +554,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
         const Duration(seconds: 6),
       );
       if (!mounted) return;
-      if (status.status != _status) {
-        setState(() => _status = status.status);
-      }
+      if (status.status != _status) setState(() => _status = status.status);
       if (_status != 'pending') _timer?.cancel();
     } catch (_) {
     } finally {
@@ -358,7 +570,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
       backgroundColor: BrandPalette.paper,
       shape: const RoundedRectangleBorder(),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
+        constraints: const BoxConstraints(maxWidth: 500),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -369,14 +581,21 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                 paid
                     ? '✓ PAYMENT CONFIRMED'
                     : expired
-                    ? 'PAYMENT EXPIRED'
-                    : 'PAY HERE',
+                        ? 'PAYMENT EXPIRED'
+                        : 'PAY HERE',
                 style: _mono(12),
               ),
               const SizedBox(height: 14),
-              Text(widget.order.itemName, style: _serif(31)),
+              for (final line in widget.lines)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: Text(
+                    '${line.quantity} × ${line.item.name} · ${_money(line.total)}',
+                    style: _serif(17),
+                  ),
+                ),
               const SizedBox(height: 6),
-              Text(_money(widget.order.amountVnd), style: _mono(14)),
+              Text('TOTAL · ${_money(widget.order.amountVnd)}', style: _mono(14)),
               const SizedBox(height: 22),
               if (!paid && !expired) ...[
                 Center(
@@ -389,9 +608,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                       size: 270,
                       backgroundColor: Colors.white,
                       eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
-                      dataModuleStyle: const QrDataModuleStyle(
-                        color: BrandPalette.ink,
-                      ),
+                      dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink),
                     ),
                   ),
                 ),
@@ -420,7 +637,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                 ),
               ] else if (paid)
                 Text(
-                  'Thank you. Your payment was confirmed by Evil Space staff.',
+                  'Thank you. Your whole order is confirmed.',
                   style: _serif(18, height: 1.35),
                 )
               else
@@ -437,10 +654,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                   minimumSize: const Size.fromHeight(48),
                   shape: const RoundedRectangleBorder(),
                 ),
-                child: Text(
-                  paid || expired ? 'CLOSE' : 'CANCEL VIEW',
-                  style: _mono(10),
-                ),
+                child: Text(paid || expired ? 'CLOSE' : 'CANCEL VIEW', style: _mono(10)),
               ),
             ],
           ),
@@ -453,27 +667,48 @@ class _PaymentDialogState extends State<_PaymentDialog> {
 const _menuCopy = <String, Map<String, String>>{
   'en': {
     'title': 'MENU',
-    'subtitle': 'Choose an item, scan the payment QR, and wait for staff confirmation.',
+    'subtitle': 'Add anything you want, choose quantities, then pay for the whole cart with one QR.',
     'back': 'BACK',
-    'buy': 'BUY',
+    'add': 'ADD',
+    'add_one': 'Add one',
+    'remove': 'Remove one',
+    'cart': 'CART',
+    'checkout': 'CHECKOUT',
+    'total': 'Total',
+    'pay': 'Create payment',
+    'cancel': 'Cancel',
     'empty': 'The menu is being prepared.',
     'load_error': 'Could not load the menu.',
     'payment_error': 'Could not create the payment.',
   },
   'ru': {
     'title': 'МЕНЮ',
-    'subtitle': 'Выберите товар, отсканируйте QR для оплаты и дождитесь подтверждения сотрудника.',
+    'subtitle': 'Добавьте нужные товары, выберите количество и оплатите всю корзину одним QR.',
     'back': 'НАЗАД',
-    'buy': 'КУПИТЬ',
+    'add': 'ДОБАВИТЬ',
+    'add_one': 'Добавить',
+    'remove': 'Убрать',
+    'cart': 'КОРЗИНА',
+    'checkout': 'ОФОРМИТЬ',
+    'total': 'Итого',
+    'pay': 'Создать оплату',
+    'cancel': 'Отмена',
     'empty': 'Меню готовится.',
     'load_error': 'Не удалось загрузить меню.',
     'payment_error': 'Не удалось создать платёж.',
   },
   'vi': {
     'title': 'THỰC ĐƠN',
-    'subtitle': 'Chọn món, quét mã QR thanh toán và chờ nhân viên xác nhận.',
+    'subtitle': 'Thêm món, chọn số lượng rồi thanh toán toàn bộ giỏ hàng bằng một mã QR.',
     'back': 'QUAY LẠI',
-    'buy': 'MUA',
+    'add': 'THÊM',
+    'add_one': 'Thêm một',
+    'remove': 'Bớt một',
+    'cart': 'GIỎ HÀNG',
+    'checkout': 'THANH TOÁN',
+    'total': 'Tổng',
+    'pay': 'Tạo thanh toán',
+    'cancel': 'Hủy',
     'empty': 'Thực đơn đang được chuẩn bị.',
     'load_error': 'Không thể tải thực đơn.',
     'payment_error': 'Không thể tạo thanh toán.',
@@ -510,9 +745,10 @@ TextStyle _mono(
 }) {
   return TextStyle(
     fontFamily: 'Courier New',
+    fontFamilyFallback: const ['monospace'],
     fontSize: size,
     fontWeight: FontWeight.w700,
-    letterSpacing: 1.1,
+    letterSpacing: 0.7,
     color: color,
     height: height,
   );

@@ -1,7 +1,8 @@
 import adminReview from './admin_review.js';
 import adminWorker from './admin_worker.js';
 import featureWorker from './entry.js';
-import menuWorker from './menu_i18n.js';
+import menuWorker from './menu_cart.js';
+import customerAccountWorker, { handleCustomerTelegramShortcut } from './customer_account.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
 
 const FEATURE_ROUTES = new Set([
@@ -31,6 +32,9 @@ export default {
     if (route === 'POST /api/admin/decision') {
       return adminReview.decision(request, env);
     }
+    if (url.pathname.startsWith('/api/public/account')) {
+      return customerAccountWorker.fetch(request, env, ctx);
+    }
     if (
       url.pathname.startsWith('/api/public/menu') ||
       url.pathname.startsWith('/api/admin/menu')
@@ -38,6 +42,8 @@ export default {
       return menuWorker.fetch(request, env, ctx);
     }
     if (route === 'POST /api/telegram/webhook') {
+      const accountShortcut = await handleCustomerTelegramShortcut(request, env);
+      if (accountShortcut) return accountShortcut;
       const menuShortcut = await handleMenuTelegramShortcut(request, env);
       if (menuShortcut) return menuShortcut;
     }

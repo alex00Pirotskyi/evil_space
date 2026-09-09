@@ -7,6 +7,10 @@ class MenuApi {
     throw const MenuApiException('Menu ordering is available on web.');
   }
 
+  Future<MenuOrderPayment> createCartOrder(Map<String, int> cart) {
+    throw const MenuApiException('Menu ordering is available on web.');
+  }
+
   Future<MenuOrderStatus> orderStatus(String token) {
     throw const MenuApiException('Menu ordering is available on web.');
   }
