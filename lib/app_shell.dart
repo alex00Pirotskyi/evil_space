@@ -10,6 +10,7 @@ import 'package:evil_space/brand_logo.dart';
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/public_account_bar.dart';
 import 'package:evil_space/public_desk.dart';
 
 typedef AppRouteCallback = void Function(AppRoute route);
@@ -408,7 +409,11 @@ class _DailyScreenState extends State<DailyScreen>
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     _header(compact),
-                                    const SizedBox(height: 44),
+                                    const SizedBox(height: 24),
+                                    PublicAccountBar(
+                                      localization: widget.localization,
+                                    ),
+                                    const SizedBox(height: 32),
                                     _availability(compact),
                                     const SizedBox(height: 50),
                                     _prices(compact),
