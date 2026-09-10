@@ -72,6 +72,23 @@ test('Google customer sign-in is rate limited per client IP', async () => {
   assert.equal(auth.calls[0].key.includes('credential'), false);
 });
 
+test('Google iOS redirect initialization is rate limited per client IP', async () => {
+  const auth = limiter(false);
+  const response = await securityGate(
+    request('/api/public/account/google/redirect/start', {
+      device: { deviceId: 'dev_12345678901234567890' },
+    }),
+    { AUTH_RATE_LIMITER: auth },
+  );
+
+  assert.equal(response?.status, 429);
+  assert.equal(auth.calls.length, 1);
+  assert.match(
+    auth.calls[0].key,
+    /^public-google-redirect-start:[a-f0-9]{64}$/,
+  );
+});
+
 test('public booking is rate limited by contact plus client identity', async () => {
   const bookings = limiter(false);
   const response = await securityGate(
