@@ -59,6 +59,19 @@ test('successful auth rate limit check lets the request continue', async () => {
   assert.match(auth.calls[0].key, /^admin-register:[a-f0-9]{64}$/);
 });
 
+test('Google customer sign-in is rate limited per client IP', async () => {
+  const auth = limiter(false);
+  const response = await securityGate(
+    request('/api/public/account/google', { idToken: 'credential' }),
+    { AUTH_RATE_LIMITER: auth },
+  );
+
+  assert.equal(response?.status, 429);
+  assert.equal(auth.calls.length, 1);
+  assert.match(auth.calls[0].key, /^public-google:[a-f0-9]{64}$/);
+  assert.equal(auth.calls[0].key.includes('credential'), false);
+});
+
 test('public booking is rate limited by contact plus client identity', async () => {
   const bookings = limiter(false);
   const response = await securityGate(
