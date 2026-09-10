@@ -26,6 +26,10 @@ export async function securityGate(request, env) {
     limiter = env.AUTH_RATE_LIMITER;
     scope = 'admin-delete';
     identity = session;
+  } else if (url.pathname === '/api/public/account/google') {
+    limiter = env.AUTH_RATE_LIMITER;
+    scope = 'public-google';
+    identity = 'google';
   } else if (url.pathname === '/api/public/book') {
     const body = await readJsonClone(request);
     const contactType =
