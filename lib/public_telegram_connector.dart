@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/localization.dart';
-import 'package:evil_space/public_account_bar.dart';
 import 'package:evil_space/public_desk.dart';
 
 class PublicTelegramConnector extends StatefulWidget {
@@ -25,7 +24,6 @@ class PublicTelegramConnector extends StatefulWidget {
 
 class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   final PublicDeskApi _deskApi = PublicDeskApi();
-  final ValueNotifier<double> _scrollOffset = ValueNotifier<double>(0);
   Timer? _timer;
   String? _telegramUrl;
   bool _opening = false;
@@ -51,7 +49,6 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   void dispose() {
     widget.localization.removeListener(_handleLocalizationChanged);
     _timer?.cancel();
-    _scrollOffset.dispose();
     super.dispose();
   }
 
@@ -69,13 +66,6 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
     }
     if (!mounted || next == _telegramUrl) return;
     setState(() => _telegramUrl = next);
-  }
-
-  bool _handleScroll(ScrollNotification notification) {
-    if (notification.metrics.axis == Axis.vertical) {
-      _scrollOffset.value = notification.metrics.pixels;
-    }
-    return false;
   }
 
   Future<void> _openTelegram() async {
@@ -97,111 +87,72 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
     }
   }
 
-  double _memberAnchorTop(BuildContext context, BoxConstraints constraints) {
-    final width = constraints.maxWidth;
-    final safeTop = MediaQuery.paddingOf(context).top;
-    if (width >= 620) return safeTop + 264;
-    if (width < 440) return safeTop + 218;
-    return safeTop + 224;
-  }
-
-  double _memberHeight(BoxConstraints constraints) {
-    return constraints.maxWidth < 620 ? 94 : 52;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final anchorTop = _memberAnchorTop(context, constraints);
-        final memberHeight = _memberHeight(constraints);
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: [
-            Positioned.fill(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _handleScroll,
-                child: widget.child,
-              ),
-            ),
-            ValueListenableBuilder<double>(
-              valueListenable: _scrollOffset,
-              builder: (context, scrollOffset, _) {
-                final top = anchorTop - scrollOffset;
-                if (top <= -memberHeight || top >= constraints.maxHeight) {
-                  return const SizedBox.shrink();
-                }
-                return Positioned(
-                  left: 0,
-                  right: 0,
-                  top: top,
-                  child: PublicAccountBar(localization: widget.localization),
-                );
-              },
-            ),
-            if (_telegramUrl != null)
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 14,
-                child: SafeArea(
-                  top: false,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: Material(
-                        color: BrandPalette.paperLift,
-                        elevation: 8,
-                        shape: const RoundedRectangleBorder(
-                          side: BorderSide(color: BrandPalette.ink),
+    return Stack(
+      children: [
+        Positioned.fill(child: widget.child),
+        if (_telegramUrl != null)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 14,
+            child: SafeArea(
+              top: false,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Material(
+                    color: BrandPalette.paperLift,
+                    elevation: 8,
+                    shape: const RoundedRectangleBorder(
+                      side: BorderSide(color: BrandPalette.ink),
+                    ),
+                    child: InkWell(
+                      onTap: _opening ? null : _openTelegram,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 13,
                         ),
-                        child: InkWell(
-                          onTap: _opening ? null : _openTelegram,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 13,
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.send_outlined, size: 19),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    widget.localization.t(
-                                      'booking_connect_telegram',
-                                    ),
-                                    style: const TextStyle(
-                                      color: BrandPalette.ink,
-                                      fontFamily: 'Courier New',
-                                      fontFamilyFallback: ['monospace'],
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.4,
-                                    ),
-                                  ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.send_outlined, size: 19),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                widget.localization.t(
+                                  'booking_connect_telegram',
                                 ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  _opening ? '…' : '→',
-                                  style: const TextStyle(
-                                    color: BrandPalette.ink,
-                                    fontFamily: 'Georgia',
-                                    fontSize: 20,
-                                  ),
+                                style: const TextStyle(
+                                  color: BrandPalette.ink,
+                                  fontFamily: 'Courier New',
+                                  fontFamilyFallback: ['monospace'],
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.4,
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Text(
+                              _opening ? '…' : '→',
+                              style: const TextStyle(
+                                color: BrandPalette.ink,
+                                fontFamily: 'Georgia',
+                                fontSize: 20,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        );
-      },
+            ),
+          ),
+      ],
     );
   }
 }
