@@ -33,7 +33,7 @@ export default {
     if (route === 'POST /api/admin/decision') {
       return adminReview.decision(request, env);
     }
-    if (route === 'POST /api/public/account/google') {
+    if (url.pathname.startsWith('/api/public/account/google')) {
       return googleAccountWorker.fetch(request, env, ctx);
     }
     if (url.pathname.startsWith('/api/public/account')) {
