@@ -11,6 +11,9 @@ import 'customer_account_models.dart';
 @JS('evilGoogleSignIn')
 external JSPromise<JSString> _evilGoogleSignIn(JSString clientId);
 
+@JS('evilGoogleDisableAutoSelect')
+external void _evilGoogleDisableAutoSelect();
+
 class CustomerAccountApi {
   static const _deviceStorageKey = 'evil_space_device_id_v1';
 
@@ -67,21 +70,14 @@ class CustomerAccountApi {
     }
   }
 
-  Future<void> beginGoogleSignIn(String clientId) async {
+  Future<CustomerAccountSnapshot?> beginGoogleSignIn(String clientId) async {
     if (clientId.trim().isEmpty) {
       throw const CustomerAccountException('Google Sign-In is not configured.');
     }
-    try {
-      final credential =
-          (await _evilGoogleSignIn(clientId.trim().toJS).toDart).toDart.trim();
-      if (credential.isEmpty) return;
-      await signInGoogle(credential);
-      web.window.location.reload();
-    } on CustomerAccountException catch (error) {
-      web.window.alert(error.message);
-    } catch (_) {
-      web.window.alert('Google Sign-In could not be completed. Please try again.');
-    }
+    final credential =
+        (await _evilGoogleSignIn(clientId.trim().toJS).toDart).toDart.trim();
+    if (credential.isEmpty) return null;
+    return signInGoogle(credential);
   }
 
   Future<CustomerAccountSnapshot> signInGoogle(String idToken) async {
@@ -95,6 +91,9 @@ class CustomerAccountApi {
 
   Future<void> logout() async {
     await _request('POST', '/api/public/account/logout', body: const {});
+    try {
+      _evilGoogleDisableAutoSelect();
+    } catch (_) {}
   }
 
   Map<String, dynamic> _deviceProfile() {
