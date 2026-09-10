@@ -3,6 +3,7 @@ import adminWorker from './admin_worker.js';
 import featureWorker from './entry.js';
 import menuWorker from './menu_cart.js';
 import customerAccountWorker, { handleCustomerTelegramShortcut } from './customer_account.js';
+import googleAccountWorker from './google_account.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
 
 const FEATURE_ROUTES = new Set([
@@ -31,6 +32,9 @@ export default {
     }
     if (route === 'POST /api/admin/decision') {
       return adminReview.decision(request, env);
+    }
+    if (route === 'POST /api/public/account/google') {
+      return googleAccountWorker.fetch(request, env, ctx);
     }
     if (url.pathname.startsWith('/api/public/account')) {
       return customerAccountWorker.fetch(request, env, ctx);

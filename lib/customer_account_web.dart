@@ -8,14 +8,16 @@ import 'package:web/web.dart' as web;
 
 import 'customer_account_models.dart';
 
+@JS('evilGoogleSignIn')
+external JSPromise<JSString> _evilGoogleSignIn(JSString clientId);
+
+@JS('evilGoogleDisableAutoSelect')
+external void _evilGoogleDisableAutoSelect();
+
 class CustomerAccountApi {
   static const _deviceStorageKey = 'evil_space_device_id_v1';
-  static const _googleStateKey = 'evil_space_google_state_v1';
-  static const _googleNonceKey = 'evil_space_google_nonce_v1';
 
   Future<CustomerAccountSnapshot> snapshot() async {
-    final callback = await _consumeGoogleCallback();
-    if (callback != null) return callback;
     final data = await _request('GET', '/api/public/account');
     return CustomerAccountSnapshot.fromJson(data);
   }
@@ -68,25 +70,24 @@ class CustomerAccountApi {
     }
   }
 
-  Future<void> beginGoogleSignIn(String clientId) async {
+  Future<CustomerAccountSnapshot?> beginGoogleSignIn(String clientId) async {
     if (clientId.trim().isEmpty) {
       throw const CustomerAccountException('Google Sign-In is not configured.');
     }
-    final state = _randomToken(24);
-    final nonce = _randomToken(24);
-    web.window.sessionStorage.setItem(_googleStateKey, state);
-    web.window.sessionStorage.setItem(_googleNonceKey, nonce);
-    final redirectUri = '${web.window.location.origin}/';
-    final uri = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
-      'client_id': clientId,
-      'redirect_uri': redirectUri,
-      'response_type': 'id_token',
-      'scope': 'openid email profile',
-      'nonce': nonce,
-      'state': state,
-      'prompt': 'select_account',
-    });
-    web.window.location.assign(uri.toString());
+    try {
+      final credential =
+          (await _evilGoogleSignIn(clientId.trim().toJS).toDart).toDart.trim();
+      if (credential.isEmpty) return null;
+      final account = await signInGoogle(credential);
+      web.window.location.reload();
+      return account;
+    } on CustomerAccountException catch (error) {
+      web.window.alert(error.message);
+      return null;
+    } catch (_) {
+      web.window.alert('Google Sign-In could not be completed. Please try again.');
+      return null;
+    }
   }
 
   Future<CustomerAccountSnapshot> signInGoogle(String idToken) async {
@@ -100,24 +101,9 @@ class CustomerAccountApi {
 
   Future<void> logout() async {
     await _request('POST', '/api/public/account/logout', body: const {});
-  }
-
-  Future<CustomerAccountSnapshot?> _consumeGoogleCallback() async {
-    final hash = web.window.location.hash;
-    if (!hash.startsWith('#') || !hash.contains('id_token=')) return null;
-    Map<String, String> values;
     try {
-      values = Uri.splitQueryString(hash.substring(1));
-    } catch (_) {
-      return null;
-    }
-    final idToken = values['id_token'] ?? '';
-    final state = values['state'] ?? '';
-    final expectedState = web.window.sessionStorage.getItem(_googleStateKey) ?? '';
-    if (idToken.isEmpty || state.isEmpty || state != expectedState) return null;
-    web.window.sessionStorage.removeItem(_googleStateKey);
-    web.window.sessionStorage.removeItem(_googleNonceKey);
-    return signInGoogle(idToken);
+      _evilGoogleDisableAutoSelect();
+    } catch (_) {}
   }
 
   Map<String, dynamic> _deviceProfile() {
