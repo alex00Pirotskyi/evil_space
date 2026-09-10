@@ -11,6 +11,7 @@ void main(List<String> args) {
   final requiredFiles = [
     'index.html',
     'flutter_bootstrap.js',
+    'google_sign_in.js',
     'manifest.json',
     '_headers',
   ];
@@ -29,6 +30,10 @@ void main(List<String> args) {
 
   if (!index.contains('id="evil-space-boot"')) {
     _fail('The instant startup shell is missing from index.html.');
+  }
+  if (!index.contains('https://accounts.google.com/gsi/client') ||
+      !index.contains('google_sign_in.js')) {
+    _fail('Google Identity Services bootstrap is missing from index.html.');
   }
   if (bootstrap.contains('{{flutter_')) {
     _fail('flutter_bootstrap.js still contains unresolved Flutter tokens.');
