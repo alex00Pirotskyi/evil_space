@@ -26,9 +26,14 @@ export async function securityGate(request, env) {
     limiter = env.AUTH_RATE_LIMITER;
     scope = 'admin-delete';
     identity = session;
-  } else if (url.pathname === '/api/public/account/google') {
+  } else if (
+    url.pathname === '/api/public/account/google' ||
+    url.pathname === '/api/public/account/google/redirect/start'
+  ) {
     limiter = env.AUTH_RATE_LIMITER;
-    scope = 'public-google';
+    scope = url.pathname.endsWith('/redirect/start')
+      ? 'public-google-redirect-start'
+      : 'public-google';
     identity = 'google';
   } else if (url.pathname === '/api/public/book') {
     const body = await readJsonClone(request);
