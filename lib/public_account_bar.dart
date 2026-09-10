@@ -18,6 +18,7 @@ class PublicAccountBar extends StatefulWidget {
 
 class _PublicAccountBarState extends State<PublicAccountBar> {
   final CustomerAccountApi _api = CustomerAccountApi();
+  final TextEditingController _phoneInlineController = TextEditingController();
   CustomerAccountSnapshot? _snapshot;
   Timer? _refreshTimer;
   bool _busy = false;
@@ -47,6 +48,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
   void dispose() {
     widget.localization.removeListener(_languageChanged);
     _refreshTimer?.cancel();
+    _phoneInlineController.dispose();
     super.dispose();
   }
 
@@ -64,6 +66,10 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     try {
       final snapshot = await _api.snapshot().timeout(const Duration(seconds: 8));
       if (!mounted) return;
+      final phone = snapshot.customer?.phone;
+      if (_phoneInlineController.text.trim().isEmpty && phone != null) {
+        _phoneInlineController.text = phone;
+      }
       setState(() {
         _snapshot = snapshot;
         if (!silent) _error = null;
@@ -74,7 +80,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     }
   }
 
-  Future<void> _phone() async {
+  Future<void> _phone({String? initialPhone}) async {
     final snapshot = _snapshot;
     if (snapshot == null || _busy) return;
     if (!snapshot.providers.phone) {
@@ -86,7 +92,9 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
       text: snapshot.customer?.name ?? '',
     );
     final phoneController = TextEditingController(
-      text: snapshot.customer?.phone ?? '',
+      text: initialPhone?.trim().isNotEmpty == true
+          ? initialPhone!.trim()
+          : snapshot.customer?.phone ?? '',
     );
     final submitted = await showDialog<bool>(
       context: context,
@@ -106,7 +114,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
-              decoration: InputDecoration(labelText: _copy('phone')),
+              decoration: InputDecoration(labelText: _copy('phone_number')),
             ),
           ],
         ),
@@ -133,6 +141,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
           .startPhone(nameController.text, phoneController.text)
           .timeout(const Duration(seconds: 12));
       if (!mounted) return;
+      _phoneInlineController.text = challenge.phone;
       setState(() => _busy = false);
       final codeController = TextEditingController();
       final verify = await showDialog<bool>(
@@ -259,6 +268,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     setState(() => _busy = true);
     try {
       await _api.logout().timeout(const Duration(seconds: 8));
+      _phoneInlineController.clear();
       await _load();
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -275,7 +285,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
 
   String _memberStatus(CustomerAccountView customer) {
     final connected = <String>[];
-    if (customer.hasProvider('phone')) connected.add(_copy('phone_short'));
+    if (customer.hasProvider('phone')) connected.add(_copy('phone_verified'));
     if (customer.hasProvider('telegram')) connected.add('TELEGRAM ✓');
     if (customer.hasProvider('google')) connected.add('GOOGLE ✓');
     connected.add(_copy('member_offer'));
@@ -302,91 +312,16 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: gutter),
                 child: SizedBox(
-                  height: 44,
+                  height: compact ? 94 : 52,
                   child: DecoratedBox(
                     decoration: const BoxDecoration(
                       border: Border(
                         bottom: BorderSide(color: BrandPalette.ink),
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                customer == null
-                                    ? _copy('member_access')
-                                    : '✓ ${_copy('member')} · ${customer.name.toUpperCase()}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _mono(9.2, color: BrandPalette.inkMuted),
-                              ),
-                            ),
-                            if (snapshot?.adminAuthenticated == true)
-                              _smallAction(
-                                'ADMIN →',
-                                _openAdmin,
-                                enabled: !_busy,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 1),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                secondary,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _mono(
-                                  compact ? 8.2 : 8.7,
-                                  color: _error == null
-                                      ? BrandPalette.ink
-                                      : BrandPalette.inkMuted,
-                                ),
-                              ),
-                            ),
-                            if (_busy) ...[
-                              const SizedBox(width: 5),
-                              const SizedBox.square(
-                                dimension: 11,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 1.5,
-                                  color: BrandPalette.ink,
-                                ),
-                              ),
-                            ],
-                            if (customer == null) ...[
-                              _smallAction(
-                                _copy('phone_short'),
-                                _phone,
-                                enabled: ready,
-                              ),
-                              _smallAction('TELEGRAM', _telegram, enabled: ready),
-                              _smallAction('GOOGLE', _google, enabled: ready),
-                            ] else ...[
-                              if (!customer.hasProvider('phone'))
-                                _smallAction(
-                                  _copy('phone_short'),
-                                  _phone,
-                                  enabled: ready,
-                                ),
-                              if (!customer.hasProvider('telegram'))
-                                _smallAction('TELEGRAM', _telegram, enabled: ready),
-                              if (!customer.hasProvider('google'))
-                                _smallAction('GOOGLE', _google, enabled: ready),
-                              _smallAction(
-                                _copy('sign_out'),
-                                _logout,
-                                enabled: !_busy,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
+                    child: compact
+                        ? _compactLayout(snapshot, customer, secondary, ready)
+                        : _desktopLayout(snapshot, customer, secondary, ready),
                   ),
                 ),
               ),
@@ -397,7 +332,391 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     );
   }
 
-  Widget _smallAction(
+  Widget _desktopLayout(
+    CustomerAccountSnapshot? snapshot,
+    CustomerAccountView? customer,
+    String secondary,
+    bool ready,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 13,
+          child: _accountLead(customer, secondary),
+        ),
+        const SizedBox(width: 10),
+        if (customer == null || !customer.hasProvider('phone')) ...[
+          Expanded(flex: 16, child: _phoneField(ready)),
+          const SizedBox(width: 8),
+        ] else ...[
+          _verifiedProvider(
+            icon: Icons.phone_outlined,
+            label: _copy('phone_verified'),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          flex: 9,
+          child: _providerButton(
+            icon: Icons.send_outlined,
+            label: customer?.hasProvider('telegram') == true
+                ? 'TELEGRAM ✓'
+                : 'TELEGRAM',
+            onPressed: _telegram,
+            enabled: ready && customer?.hasProvider('telegram') != true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 8,
+          child: _googleButton(
+            connected: customer?.hasProvider('google') == true,
+            enabled: ready && customer?.hasProvider('google') != true,
+          ),
+        ),
+        if (_busy) ...[
+          const SizedBox(width: 8),
+          const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.8,
+              color: BrandPalette.ink,
+            ),
+          ),
+        ],
+        if (customer != null) ...[
+          const SizedBox(width: 6),
+          _plainAction(_copy('sign_out'), _logout, enabled: !_busy),
+        ],
+        if (snapshot?.adminAuthenticated == true) ...[
+          const SizedBox(width: 6),
+          _plainAction('ADMIN →', _openAdmin, enabled: !_busy),
+        ],
+      ],
+    );
+  }
+
+  Widget _compactLayout(
+    CustomerAccountSnapshot? snapshot,
+    CustomerAccountView? customer,
+    String secondary,
+    bool ready,
+  ) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _accountLead(customer, secondary, small: true)),
+            if (customer != null)
+              _plainAction(_copy('sign_out'), _logout, enabled: !_busy),
+            if (snapshot?.adminAuthenticated == true)
+              _plainAction('ADMIN →', _openAdmin, enabled: !_busy),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Expanded(
+              child: customer == null || !customer.hasProvider('phone')
+                  ? _phoneField(ready)
+                  : _verifiedProvider(
+                      icon: Icons.phone_outlined,
+                      label: _copy('phone_verified'),
+                    ),
+            ),
+            const SizedBox(width: 6),
+            _squareProviderButton(
+              icon: Icons.send_outlined,
+              tooltip: customer?.hasProvider('telegram') == true
+                  ? 'Telegram connected'
+                  : 'Telegram',
+              onPressed: _telegram,
+              enabled: ready && customer?.hasProvider('telegram') != true,
+              connected: customer?.hasProvider('telegram') == true,
+            ),
+            const SizedBox(width: 6),
+            _squareGoogleButton(
+              enabled: ready && customer?.hasProvider('google') != true,
+              connected: customer?.hasProvider('google') == true,
+            ),
+            if (_busy) ...[
+              const SizedBox(width: 7),
+              const SizedBox.square(
+                dimension: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.8,
+                  color: BrandPalette.ink,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _accountLead(
+    CustomerAccountView? customer,
+    String secondary, {
+    bool small = false,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: small ? 30 : 36,
+          height: small ? 30 : 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: BrandPalette.ink),
+          ),
+          child: Icon(
+            customer == null ? Icons.person_outline : Icons.person,
+            size: small ? 18 : 21,
+            color: BrandPalette.ink,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                customer == null
+                    ? _copy('member_access')
+                    : '${_copy('member')} · ${customer.name.toUpperCase()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _mono(small ? 9.4 : 10.2),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                secondary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _mono(
+                  small ? 7.8 : 8.2,
+                  color: _error == null
+                      ? BrandPalette.inkMuted
+                      : BrandPalette.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _phoneField(bool ready) {
+    return SizedBox(
+      height: 38,
+      child: TextField(
+        controller: _phoneInlineController,
+        enabled: !_busy,
+        keyboardType: TextInputType.phone,
+        textInputAction: TextInputAction.done,
+        onSubmitted: ready
+            ? (_) => _phone(initialPhone: _phoneInlineController.text)
+            : null,
+        style: _mono(10.5),
+        decoration: InputDecoration(
+          hintText: _copy('phone_hint'),
+          hintStyle: _mono(9.2, color: BrandPalette.inkMuted),
+          prefixIcon: const Icon(Icons.phone_outlined, size: 17),
+          prefixIconConstraints: const BoxConstraints(minWidth: 36),
+          suffixIcon: Tooltip(
+            message: _copy('send_code'),
+            child: InkWell(
+              onTap: ready
+                  ? () => _phone(initialPhone: _phoneInlineController.text)
+                  : null,
+              child: const SizedBox(
+                width: 42,
+                child: Center(
+                  child: Icon(Icons.arrow_forward, size: 18),
+                ),
+              ),
+            ),
+          ),
+          suffixIconConstraints: const BoxConstraints(minWidth: 42),
+          isDense: true,
+          filled: true,
+          fillColor: BrandPalette.paperLift,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 10,
+          ),
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: BrandPalette.ink),
+          ),
+          enabledBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: BrandPalette.ink),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: BrandPalette.ink, width: 1.6),
+          ),
+          disabledBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: BrandPalette.inkMuted),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _providerButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required bool enabled,
+  }) {
+    return SizedBox(
+      height: 38,
+      child: OutlinedButton.icon(
+        onPressed: enabled ? onPressed : null,
+        icon: Icon(icon, size: 17),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label, style: _mono(9.4)),
+        ),
+        style: _outlineButtonStyle(),
+      ),
+    );
+  }
+
+  Widget _googleButton({required bool connected, required bool enabled}) {
+    return SizedBox(
+      height: 38,
+      child: OutlinedButton(
+        onPressed: enabled ? _google : null,
+        style: _outlineButtonStyle(),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'G',
+              style: const TextStyle(
+                fontFamily: 'Georgia',
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: BrandPalette.ink,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(connected ? 'GOOGLE ✓' : 'GOOGLE', style: _mono(9.4)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _verifiedProvider({required IconData icon, required String label}) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: BrandPalette.ink),
+        color: BrandPalette.paperLift,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(label, style: _mono(8.8)),
+        ],
+      ),
+    );
+  }
+
+  Widget _squareProviderButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+    required bool enabled,
+    required bool connected,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox.square(
+        dimension: 38,
+        child: OutlinedButton(
+          onPressed: enabled ? onPressed : null,
+          style: _outlineButtonStyle(padding: EdgeInsets.zero),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, size: 18),
+              if (connected)
+                const Positioned(
+                  right: 3,
+                  top: 3,
+                  child: Icon(Icons.check, size: 10),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _squareGoogleButton({required bool enabled, required bool connected}) {
+    return Tooltip(
+      message: connected ? 'Google connected' : 'Google',
+      child: SizedBox.square(
+        dimension: 38,
+        child: OutlinedButton(
+          onPressed: enabled ? _google : null,
+          style: _outlineButtonStyle(padding: EdgeInsets.zero),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Text(
+                'G',
+                style: TextStyle(
+                  fontFamily: 'Georgia',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: BrandPalette.ink,
+                ),
+              ),
+              if (connected)
+                const Positioned(
+                  right: 3,
+                  top: 3,
+                  child: Icon(Icons.check, size: 10),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  ButtonStyle _outlineButtonStyle({EdgeInsetsGeometry? padding}) {
+    return OutlinedButton.styleFrom(
+      foregroundColor: BrandPalette.ink,
+      backgroundColor: BrandPalette.paperLift,
+      side: const BorderSide(color: BrandPalette.ink),
+      shape: const RoundedRectangleBorder(),
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 10),
+      minimumSize: const Size(0, 38),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
+  Widget _plainAction(
     String label,
     VoidCallback onPressed, {
     required bool enabled,
@@ -406,13 +725,12 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
       onPressed: enabled ? onPressed : null,
       style: TextButton.styleFrom(
         foregroundColor: BrandPalette.ink,
-        minimumSize: const Size(0, 22),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        minimumSize: const Size(0, 38),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
         shape: const RoundedRectangleBorder(),
       ),
-      child: Text(label, style: _mono(8.1)),
+      child: Text(label, style: _mono(8.4)),
     );
   }
 }
@@ -423,8 +741,9 @@ const _accountCopy = <String, Map<String, String>>{
     'member': 'MEMBER',
     'member_offer': '50% MEMBER OFFER',
     'register_short': 'REGISTER ONCE · GET 50% OFF COWORKING',
-    'phone_short': 'PHONE',
-    'phone': 'PHONE',
+    'phone_verified': 'PHONE ✓',
+    'phone_number': 'Phone number',
+    'phone_hint': 'PHONE · +84…',
     'phone_title': 'Register by phone',
     'phone_setup': 'Phone SMS verification still needs an SMS provider configured.',
     'telegram_setup': 'Telegram registration is not configured yet.',
@@ -446,8 +765,9 @@ const _accountCopy = <String, Map<String, String>>{
     'member': 'УЧАСТНИК',
     'member_offer': 'СКИДКА УЧАСТНИКА 50%',
     'register_short': 'РЕГИСТРАЦИЯ · СКИДКА 50% НА КОВОРКИНГ',
-    'phone_short': 'ТЕЛЕФОН',
-    'phone': 'ТЕЛЕФОН',
+    'phone_verified': 'ТЕЛЕФОН ✓',
+    'phone_number': 'Номер телефона',
+    'phone_hint': 'ТЕЛЕФОН · +84…',
     'phone_title': 'Регистрация по телефону',
     'phone_setup': 'Для SMS-подтверждения нужно настроить SMS-провайдера.',
     'telegram_setup': 'Регистрация через Telegram пока не настроена.',
@@ -469,8 +789,9 @@ const _accountCopy = <String, Map<String, String>>{
     'member': 'THÀNH VIÊN',
     'member_offer': 'ƯU ĐÃI THÀNH VIÊN 50%',
     'register_short': 'ĐĂNG KÝ · GIẢM 50% COWORKING',
-    'phone_short': 'ĐIỆN THOẠI',
-    'phone': 'ĐIỆN THOẠI',
+    'phone_verified': 'ĐIỆN THOẠI ✓',
+    'phone_number': 'Số điện thoại',
+    'phone_hint': 'ĐIỆN THOẠI · +84…',
     'phone_title': 'Đăng ký bằng điện thoại',
     'phone_setup': 'Cần cấu hình nhà cung cấp SMS để xác minh số điện thoại.',
     'telegram_setup': 'Đăng ký Telegram chưa được cấu hình.',

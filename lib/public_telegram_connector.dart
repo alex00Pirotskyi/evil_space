@@ -100,9 +100,13 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   double _memberAnchorTop(BuildContext context, BoxConstraints constraints) {
     final width = constraints.maxWidth;
     final safeTop = MediaQuery.paddingOf(context).top;
-    if (width >= 620) return safeTop + 276;
-    if (width < 440) return safeTop + 259;
-    return safeTop + 238;
+    if (width >= 620) return safeTop + 264;
+    if (width < 440) return safeTop + 218;
+    return safeTop + 224;
+  }
+
+  double _memberHeight(BoxConstraints constraints) {
+    return constraints.maxWidth < 620 ? 94 : 52;
   }
 
   @override
@@ -110,6 +114,7 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final anchorTop = _memberAnchorTop(context, constraints);
+        final memberHeight = _memberHeight(constraints);
         return Stack(
           clipBehavior: Clip.hardEdge,
           children: [
@@ -123,7 +128,7 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
               valueListenable: _scrollOffset,
               builder: (context, scrollOffset, _) {
                 final top = anchorTop - scrollOffset;
-                if (top <= -46 || top >= constraints.maxHeight) {
+                if (top <= -memberHeight || top >= constraints.maxHeight) {
                   return const SizedBox.shrink();
                 }
                 return Positioned(
