@@ -462,7 +462,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     bool small = false,
   }) {
     return Row(
-      minAxisSize: MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: small ? 30 : 36,
