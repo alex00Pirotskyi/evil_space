@@ -1,5 +1,6 @@
 (() => {
-  let initializedClientId = '';
+  const deviceStorageKey = 'evil_space_device_id_v1';
+  let initializedKey = '';
   let active = null;
   let overlay = null;
 
@@ -24,6 +25,68 @@
       };
       check();
     });
+  }
+
+  function isIos() {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.userAgentData?.platform || navigator.platform || '';
+    return /iPad|iPhone|iPod/i.test(ua) ||
+      (platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1);
+  }
+
+  function randomToken(byteCount) {
+    const bytes = new Uint8Array(byteCount);
+    crypto.getRandomValues(bytes);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary)
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/g, '');
+  }
+
+  function deviceId() {
+    const existing = window.localStorage.getItem(deviceStorageKey);
+    if (existing && /^[A-Za-z0-9_-]{16,100}$/.test(existing)) return existing;
+    const value = `dev_${randomToken(24)}`;
+    window.localStorage.setItem(deviceStorageKey, value);
+    return value;
+  }
+
+  function deviceProfile() {
+    return {
+      deviceId: deviceId(),
+      platform: navigator.platform || '',
+      userAgent: navigator.userAgent || '',
+      language: navigator.language || '',
+      timezoneOffsetMinutes: -new Date().getTimezoneOffset(),
+      screenWidth: window.screen?.width ?? 0,
+      screenHeight: window.screen?.height ?? 0,
+      viewportWidth: window.innerWidth ?? 0,
+      viewportHeight: window.innerHeight ?? 0,
+      pixelRatio: window.devicePixelRatio ?? 1,
+      touchPoints: navigator.maxTouchPoints ?? 0,
+      hardwareConcurrency: navigator.hardwareConcurrency ?? 0,
+      vendor: navigator.vendor || '',
+      referrer: document.referrer || '',
+    };
+  }
+
+  async function startRedirectState() {
+    const response = await fetch('/api/public/account/google/redirect/start', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ device: deviceProfile() }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.state || !data?.loginUri) {
+      throw new Error(data?.error || 'Could not start Google Sign-In.');
+    }
+    return data;
   }
 
   function removeOverlay() {
@@ -56,21 +119,32 @@
     finish(credential);
   }
 
-  function initialize(api, clientId) {
-    if (initializedClientId === clientId) return;
-    api.initialize({
-      client_id: clientId,
-      callback: handleCredential,
-      auto_select: false,
-      cancel_on_tap_outside: true,
-      ux_mode: 'popup',
-      use_fedcm_for_prompt: true,
-      use_fedcm_for_button: true,
-    });
-    initializedClientId = clientId;
+  function initialize(api, clientId, mode, loginUri) {
+    const key = `${clientId}:${mode}:${loginUri || ''}`;
+    if (initializedKey === key) return;
+
+    if (mode === 'redirect') {
+      api.initialize({
+        client_id: clientId,
+        auto_select: false,
+        ux_mode: 'redirect',
+        login_uri: loginUri,
+      });
+    } else {
+      api.initialize({
+        client_id: clientId,
+        callback: handleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        ux_mode: 'popup',
+        use_fedcm_for_prompt: true,
+        use_fedcm_for_button: true,
+      });
+    }
+    initializedKey = key;
   }
 
-  function createOverlay(api) {
+  function createOverlay(api, state) {
     removeOverlay();
 
     const root = document.createElement('div');
@@ -147,7 +221,7 @@
     document.addEventListener('keydown', onKeyDown, true);
 
     const width = Math.max(220, Math.min(320, window.innerWidth - 96));
-    api.renderButton(buttonSlot, {
+    const options = {
       type: 'standard',
       theme: 'outline',
       size: 'large',
@@ -155,7 +229,9 @@
       shape: 'rectangular',
       logo_alignment: 'left',
       width,
-    });
+    };
+    if (state) options.state = state;
+    api.renderButton(buttonSlot, options);
   }
 
   window.evilGoogleSignIn = async (clientId) => {
@@ -164,11 +240,19 @@
     if (!normalized) throw new Error('Google client ID is missing.');
 
     const api = await waitForGoogle();
-    initialize(api, normalized);
+    let state = '';
+    if (isIos()) {
+      const redirect = await startRedirectState();
+      state = String(redirect.state);
+      initialize(api, normalized, 'redirect', String(redirect.loginUri));
+    } else {
+      initialize(api, normalized, 'popup', '');
+    }
+
     return new Promise((resolve, reject) => {
       active = { resolve, reject };
       try {
-        createOverlay(api);
+        createOverlay(api, state);
       } catch (error) {
         finish('', error instanceof Error ? error : new Error(String(error)));
       }

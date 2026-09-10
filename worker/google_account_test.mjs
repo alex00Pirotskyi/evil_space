@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateGoogleTokenInfo } from './google_account.js';
+import {
+  csrfTokensMatch,
+  validateGoogleTokenInfo,
+} from './google_account.js';
 
 const now = 2_000_000_000;
 const clientId = 'evil-space.apps.googleusercontent.com';
@@ -56,4 +59,12 @@ test('Google token info requires a verified email and subject', () => {
     validateGoogleTokenInfo({ ...valid, sub: '' }, clientId, now),
     false,
   );
+});
+
+test('Google redirect accepts only matching CSRF cookie and form token', () => {
+  const token = 'csrf-token-1234567890';
+  assert.equal(csrfTokensMatch(token, token), true);
+  assert.equal(csrfTokensMatch(token, 'csrf-token-xxxxxxxxxx'), false);
+  assert.equal(csrfTokensMatch('', ''), false);
+  assert.equal(csrfTokensMatch(token, ''), false);
 });

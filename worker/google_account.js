@@ -1,26 +1,39 @@
 const CUSTOMER_SESSION_COOKIE = '__Host-evil_customer_session';
 const CUSTOMER_SESSION_TTL_SECONDS = 60 * 60 * 24 * 90;
+const GOOGLE_REDIRECT_STATE_TTL_SECONDS = 10 * 60;
+const GOOGLE_CSRF_COOKIE = 'g_csrf_token';
 const MAX_DEVICE_JSON_BYTES = 4096;
 const DEFAULT_BOT_USERNAME = 'CoworkingEvilAdminBot';
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method !== 'POST' || url.pathname !== '/api/public/account/google') {
-      return jsonError('Not found.', 404);
-    }
-    if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+    const route = `${request.method} ${url.pathname}`;
 
     try {
-      return await handleGoogle(request, env);
+      if (route === 'POST /api/public/account/google') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return await handleGooglePopup(request, env);
+      }
+      if (route === 'POST /api/public/account/google/redirect/start') {
+        if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+        return await handleGoogleRedirectStart(request, env, url);
+      }
+      if (route === 'POST /api/public/account/google/redirect') {
+        return await handleGoogleRedirect(request, env, url);
+      }
+      return jsonError('Not found.', 404);
     } catch (error) {
       console.error('Google customer account error', safeError(error));
+      if (url.pathname === '/api/public/account/google/redirect') {
+        return redirectHome(url, 'error');
+      }
       return jsonError('Google sign-in failed. Please try again.', 500);
     }
   },
 };
 
-async function handleGoogle(request, env) {
+async function handleGooglePopup(request, env) {
   const clientId = cleanShortText(env.GOOGLE_CLIENT_ID, 512);
   if (!clientId) return jsonError('Google registration is not configured yet.', 503);
 
@@ -30,16 +43,158 @@ async function handleGoogle(request, env) {
     return jsonError('Google credential is required.', 400);
   }
 
+  const info = await verifyGoogleCredential(idToken, clientId);
+  if (!info) return jsonError('Google sign-in could not be verified.', 401);
+
+  const currentCustomerId = await authenticatedCustomerId(request, env);
+  const result = await completeGoogleIdentity(
+    env,
+    info,
+    currentCustomerId,
+    sanitizeDeviceProfile(body?.device),
+  );
+  if (result.error) return jsonError(result.error, result.status);
+
+  const session = await createCustomerSession(env, result.customerId);
+  return json(
+    {
+      ok: true,
+      authenticated: true,
+      customer: await customerSnapshot(env, result.customerId),
+      providers: providerConfig(env),
+      registrationDiscountPercent: 50,
+    },
+    200,
+    { 'Set-Cookie': sessionCookie(session.token, CUSTOMER_SESSION_TTL_SECONDS) },
+  );
+}
+
+async function handleGoogleRedirectStart(request, env, url) {
+  const clientId = cleanShortText(env.GOOGLE_CLIENT_ID, 512);
+  if (!clientId) return jsonError('Google registration is not configured yet.', 503);
+
+  const body = await readJson(request, 16 * 1024);
+  const device = sanitizeDeviceProfile(body?.device);
+  const state = randomToken(32);
+  const stateDigest = await hashToken(state);
+  const now = nowSeconds();
+  const expiresAt = now + GOOGLE_REDIRECT_STATE_TTL_SECONDS;
+  const customerId = await authenticatedCustomerId(request, env);
+
+  await env.evil_space.batch([
+    env.evil_space
+      .prepare('DELETE FROM customer_google_redirect_states WHERE expires_at <= ? OR used_at IS NOT NULL')
+      .bind(now),
+    env.evil_space
+      .prepare(`
+        INSERT INTO customer_google_redirect_states
+          (state_digest, customer_id, device_json, created_at, expires_at, used_at)
+        VALUES (?, ?, ?, ?, ?, NULL)
+      `)
+      .bind(
+        stateDigest,
+        customerId || null,
+        JSON.stringify(device ?? {}),
+        now,
+        expiresAt,
+      ),
+  ]);
+
+  return json(
+    {
+      ok: true,
+      state,
+      loginUri: `${url.origin}/api/public/account/google/redirect`,
+      expiresAt,
+    },
+    201,
+  );
+}
+
+async function handleGoogleRedirect(request, env, url) {
+  const clientId = cleanShortText(env.GOOGLE_CLIENT_ID, 512);
+  if (!clientId) return redirectHome(url, 'not-configured');
+
+  const form = await readForm(request, 32 * 1024);
+  if (!form) return redirectHome(url, 'invalid-response');
+
+  const csrfBody = form.get('g_csrf_token') ?? '';
+  const csrfCookie = cookieValue(request, GOOGLE_CSRF_COOKIE);
+  if (!csrfTokensMatch(csrfCookie, csrfBody)) {
+    return redirectHome(url, 'csrf');
+  }
+
+  const state = form.get('state') ?? '';
+  const idToken = form.get('credential') ?? '';
+  if (!isReasonableToken(state) || !idToken || idToken.length > 8192) {
+    return redirectHome(url, 'invalid-response');
+  }
+
+  const stateDigest = await hashToken(state);
+  const now = nowSeconds();
+  const stored = await env.evil_space
+    .prepare(`
+      SELECT customer_id, device_json, expires_at, used_at
+      FROM customer_google_redirect_states
+      WHERE state_digest = ?
+      LIMIT 1
+    `)
+    .bind(stateDigest)
+    .first();
+  if (!stored || stored.used_at != null || Number(stored.expires_at) <= now) {
+    return redirectHome(url, 'expired');
+  }
+
+  const info = await verifyGoogleCredential(idToken, clientId);
+  if (!info) return redirectHome(url, 'verification');
+
+  const consumed = await env.evil_space
+    .prepare(`
+      UPDATE customer_google_redirect_states
+      SET used_at = ?
+      WHERE state_digest = ? AND used_at IS NULL AND expires_at > ?
+    `)
+    .bind(now, stateDigest, now)
+    .run();
+  if (Number(consumed.meta?.changes ?? 0) !== 1) {
+    return redirectHome(url, 'expired');
+  }
+
+  let device = null;
+  try {
+    device = sanitizeDeviceProfile(JSON.parse(String(stored.device_json ?? '{}')));
+  } catch {}
+
+  const result = await completeGoogleIdentity(
+    env,
+    info,
+    Number(stored.customer_id ?? 0),
+    device,
+  );
+  if (result.error) return redirectHome(url, 'account-conflict');
+
+  const session = await createCustomerSession(env, result.customerId);
+  return redirectHome(
+    url,
+    'success',
+    sessionCookie(session.token, CUSTOMER_SESSION_TTL_SECONDS),
+  );
+}
+
+async function verifyGoogleCredential(idToken, clientId) {
   const response = await fetch(
     `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
     { headers: { Accept: 'application/json' } },
   );
   const info = await response.json().catch(() => null);
-  const now = nowSeconds();
-  if (!response.ok || !validateGoogleTokenInfo(info, clientId, now)) {
-    return jsonError('Google sign-in could not be verified.', 401);
+  if (!response.ok || !validateGoogleTokenInfo(info, clientId, nowSeconds())) {
+    return null;
   }
+  return info;
+}
 
+async function completeGoogleIdentity(env, info, currentCustomerId, device) {
+  const now = nowSeconds();
   const subject = String(info.sub);
   const email = String(info.email).trim().toLowerCase();
   const name =
@@ -48,7 +203,6 @@ async function handleGoogle(request, env) {
     cleanName(email.split('@')[0]) ||
     'Evil Space member';
 
-  const currentCustomerId = await authenticatedCustomerId(request, env);
   const existingIdentity = await env.evil_space
     .prepare(`
       SELECT customer_id
@@ -65,10 +219,10 @@ async function handleGoogle(request, env) {
     identityCustomerId &&
     identityCustomerId !== currentCustomerId
   ) {
-    return jsonError(
-      'This Google account is already linked to another Evil Space account.',
-      409,
-    );
+    return {
+      error: 'This Google account is already linked to another Evil Space account.',
+      status: 409,
+    };
   }
 
   let customerId = currentCustomerId || identityCustomerId;
@@ -123,21 +277,8 @@ async function handleGoogle(request, env) {
     .bind(email, name, now, customerId)
     .run();
 
-  const device = sanitizeDeviceProfile(body?.device);
   if (device) await upsertDevice(env, customerId, device);
-
-  const session = await createCustomerSession(env, customerId);
-  return json(
-    {
-      ok: true,
-      authenticated: true,
-      customer: await customerSnapshot(env, customerId),
-      providers: providerConfig(env),
-      registrationDiscountPercent: 50,
-    },
-    200,
-    { 'Set-Cookie': sessionCookie(session.token, CUSTOMER_SESSION_TTL_SECONDS) },
-  );
+  return { customerId };
 }
 
 export function validateGoogleTokenInfo(info, clientId, now) {
@@ -160,6 +301,16 @@ export function validateGoogleTokenInfo(info, clientId, now) {
     audience === String(clientId) &&
     Number.isFinite(expiresAt) &&
     expiresAt > Number(now)
+  );
+}
+
+export function csrfTokensMatch(cookieToken, bodyToken) {
+  return (
+    typeof cookieToken === 'string' &&
+    typeof bodyToken === 'string' &&
+    cookieToken.length >= 8 &&
+    cookieToken.length <= 512 &&
+    constantTimeEqual(cookieToken, bodyToken)
   );
 }
 
@@ -358,6 +509,17 @@ async function hashToken(token) {
     .replace(/=+$/g, '');
 }
 
+function constantTimeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) {
+    return false;
+  }
+  let diff = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    diff |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  }
+  return diff === 0;
+}
+
 function isReasonableToken(value) {
   return (
     typeof value === 'string' &&
@@ -371,7 +533,12 @@ function cookieValue(request, name) {
   const header = request.headers.get('Cookie') ?? '';
   for (const chunk of header.split(';')) {
     const [key, ...rest] = chunk.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(rest.join('='));
+    } catch {
+      return rest.join('=');
+    }
   }
   return '';
 }
@@ -396,6 +563,34 @@ async function readJson(request, maxBytes) {
   } catch {
     return null;
   }
+}
+
+async function readForm(request, maxBytes) {
+  const type = request.headers.get('content-type') ?? '';
+  if (!type.toLowerCase().startsWith('application/x-www-form-urlencoded')) {
+    return null;
+  }
+  const length = Number(request.headers.get('content-length') ?? 0);
+  if (Number.isFinite(length) && length > maxBytes) return null;
+  try {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).length > maxBytes) return null;
+    return new URLSearchParams(text);
+  } catch {
+    return null;
+  }
+}
+
+function redirectHome(url, result, setCookie = null) {
+  const target = new URL('/', url);
+  target.searchParams.set('google', result);
+  const headers = {
+    Location: target.toString(),
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  };
+  if (setCookie) headers['Set-Cookie'] = setCookie;
+  return new Response(null, { status: 303, headers });
 }
 
 function nowSeconds() {
