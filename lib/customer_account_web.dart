@@ -74,10 +74,20 @@ class CustomerAccountApi {
     if (clientId.trim().isEmpty) {
       throw const CustomerAccountException('Google Sign-In is not configured.');
     }
-    final credential =
-        (await _evilGoogleSignIn(clientId.trim().toJS).toDart).toDart.trim();
-    if (credential.isEmpty) return null;
-    return signInGoogle(credential);
+    try {
+      final credential =
+          (await _evilGoogleSignIn(clientId.trim().toJS).toDart).toDart.trim();
+      if (credential.isEmpty) return null;
+      final account = await signInGoogle(credential);
+      web.window.location.reload();
+      return account;
+    } on CustomerAccountException catch (error) {
+      web.window.alert(error.message);
+      return null;
+    } catch (_) {
+      web.window.alert('Google Sign-In could not be completed. Please try again.');
+      return null;
+    }
   }
 
   Future<CustomerAccountSnapshot> signInGoogle(String idToken) async {
