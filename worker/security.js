@@ -35,6 +35,13 @@ export async function securityGate(request, env) {
       ? 'public-google-redirect-start'
       : 'public-google';
     identity = 'google';
+  } else if (url.pathname === '/api/public/account/promos/claim') {
+    const body = await readJsonClone(request);
+    const code = cleanText(body?.code, 48).toUpperCase();
+    if (!code) return null;
+    limiter = env.AUTH_RATE_LIMITER;
+    scope = 'public-promo-claim';
+    identity = code;
   } else if (url.pathname === '/api/public/book') {
     const body = await readJsonClone(request);
     const contactType =
@@ -48,7 +55,11 @@ export async function securityGate(request, env) {
     identity = `${contactType}:${contactValue.toLowerCase()}`;
   } else if (url.pathname === '/api/public/menu/order') {
     const body = await readJsonClone(request);
-    const itemId = cleanText(body?.itemId, 64);
+    const direct = cleanText(body?.itemId, 64);
+    const firstCartItem = Array.isArray(body?.items)
+      ? cleanText(body.items[0]?.itemId, 64)
+      : '';
+    const itemId = direct || firstCartItem;
     if (!itemId) return null;
     limiter = env.PUBLIC_BOOKING_RATE_LIMITER;
     scope = 'public-menu-order';
