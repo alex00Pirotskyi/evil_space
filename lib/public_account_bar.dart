@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/customer_account.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/public_promo_wallet.dart';
 
 class PublicAccountBar extends StatefulWidget {
   const PublicAccountBar({super.key, required this.localization});
@@ -363,6 +364,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
                 ),
               ],
               if (customer != null) ...[
+                PublicPromoWallet(localization: widget.localization),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
