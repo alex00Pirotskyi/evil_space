@@ -115,13 +115,21 @@ async function handlePublish(request, env, ctx) {
   const checked = validateDraftMenu(raw, { allowEmptyGroups: false });
   if (checked.error) return jsonError(checked.error, 400);
 
+  const versionRow = await env.evil_space
+    .prepare('SELECT COALESCE(MAX(version), 0) AS version FROM menu_catalogs')
+    .first();
+  const publishMenu = {
+    ...checked.menu,
+    version: Number(versionRow?.version ?? 0) + 1,
+  };
+
   const headers = new Headers(request.headers);
   headers.delete('content-length');
   headers.set('Content-Type', 'application/json');
   const forwarded = new Request(new URL('/api/admin/menu/upload', request.url), {
     method: 'POST',
     headers,
-    body: JSON.stringify({ menu: checked.menu }),
+    body: JSON.stringify({ menu: publishMenu }),
   });
   const response = await localizedMenuWorker.fetch(forwarded, env, ctx);
   if (!response.ok) return response;
@@ -138,7 +146,7 @@ async function handlePublish(request, env, ctx) {
         updated_at = excluded.updated_at,
         updated_by_email = excluded.updated_by_email
     `)
-    .bind(JSON.stringify(checked.menu, null, 2), catalogId, now, String(admin.email))
+    .bind(JSON.stringify(publishMenu, null, 2), catalogId, now, String(admin.email))
     .run();
 
   return replaceJson(response, {
@@ -148,7 +156,7 @@ async function handlePublish(request, env, ctx) {
       baseCatalogId: catalogId,
       updatedAt: now,
       updatedByEmail: String(admin.email),
-      menu: checked.menu,
+      menu: publishMenu,
       promoReferences: await promotionReferences(env),
     },
   });
@@ -158,9 +166,8 @@ export function validateDraftMenu(value, { allowEmptyGroups = false } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { error: 'Menu must be a JSON object.' };
   }
-  let localized;
   try {
-    localized = normalizeMenuGroupNames(value);
+    normalizeMenuGroupNames(value);
   } catch (error) {
     if (allowEmptyGroups && Array.isArray(value.groups) && value.groups.length === 0) {
       return { menu: { version: positiveVersion(value.version), groups: [] } };
