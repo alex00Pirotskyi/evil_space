@@ -2,6 +2,8 @@ import adminReview from './admin_review.js';
 import adminWorker from './admin_worker.js';
 import featureWorker from './entry.js';
 import menuWorker from './menu_cart.js';
+import menuBuilderWorker from './menu_builder.js';
+import promoWorker from './promo_engine.js';
 import customerAccountWorker, { handleCustomerTelegramShortcut } from './customer_account.js';
 import googleAccountWorker from './google_account.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
@@ -36,8 +38,23 @@ export default {
     if (url.pathname.startsWith('/api/public/account/google')) {
       return googleAccountWorker.fetch(request, env, ctx);
     }
+    if (url.pathname.startsWith('/api/public/account/promos')) {
+      return promoWorker.fetch(request, env, ctx);
+    }
     if (url.pathname.startsWith('/api/public/account')) {
       return customerAccountWorker.fetch(request, env, ctx);
+    }
+    if (url.pathname === '/api/public/menu/promos') {
+      return promoWorker.fetch(request, env, ctx);
+    }
+    if (
+      url.pathname === '/api/admin/menu/draft' ||
+      url.pathname === '/api/admin/menu/publish'
+    ) {
+      return menuBuilderWorker.fetch(request, env, ctx);
+    }
+    if (url.pathname.startsWith('/api/admin/promos') || url.pathname.startsWith('/api/admin/customers')) {
+      return promoWorker.fetch(request, env, ctx);
     }
     if (
       url.pathname.startsWith('/api/public/menu') ||
