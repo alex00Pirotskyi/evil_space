@@ -163,3 +163,29 @@ FROM customers c
 JOIN marketing_promotions p
   ON p.promo_key = 'WELCOME50' AND p.revision = 1
 WHERE p.active = 1;
+
+CREATE TRIGGER IF NOT EXISTS trg_customer_signup_promos
+AFTER INSERT ON customers
+BEGIN
+  INSERT OR IGNORE INTO customer_promo_grants (
+    customer_id, promotion_id, grant_key, source, granted_uses,
+    used_uses, reserved_uses, status, granted_at, granted_by_email
+  )
+  SELECT
+    NEW.id,
+    p.id,
+    'signup:' || p.promo_key,
+    'signup',
+    p.max_uses_per_customer,
+    0,
+    0,
+    'active',
+    CAST(strftime('%s','now') AS INTEGER),
+    'system'
+  FROM marketing_promotions p
+  WHERE p.active = 1
+    AND p.superseded_at IS NULL
+    AND p.distribution_type = 'signup'
+    AND p.valid_from <= CAST(strftime('%s','now') AS INTEGER)
+    AND (p.expires_at IS NULL OR p.expires_at > CAST(strftime('%s','now') AS INTEGER));
+END;
