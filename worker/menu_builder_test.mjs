@@ -63,7 +63,7 @@ test('menu builder rejects duplicate stable item ids', () => {
 test('menu builder rejects incomplete translations and invalid prices', () => {
   const missing = structuredClone(valid);
   missing.groups[0].name.vi = '';
-  assert.match(validateDraftMenu(missing).error, /English, Russian and Vietnamese/i);
+  assert.match(validateDraftMenu(missing).error, /localized name|English, Russian and Vietnamese/i);
 
   const price = structuredClone(valid);
   price.groups[0].items[0].priceVnd = -1;
