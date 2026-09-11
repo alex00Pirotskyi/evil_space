@@ -1,5 +1,10 @@
 import localizedMenuWorker from './menu_i18n.js';
 import { buildVietQrPayload, VIETCOMBANK_BIN } from './vietqr.js';
+import {
+  releasePromoForMenuOrder,
+  reservePromoForMenuOrder,
+  resolvePromoForCart,
+} from './promo_engine.js';
 
 const CUSTOMER_SESSION_COOKIE = '__Host-evil_customer_session';
 const ORDER_TTL_SECONDS = 30 * 60;
@@ -32,7 +37,7 @@ async function handleCreateCartOrder(request, env, ctx) {
   const placeholders = requestedKeys.map(() => '?').join(', ');
   const rows = await env.evil_space
     .prepare(`
-      SELECT mi.id, mi.catalog_id, mi.item_key, mi.name, mi.price_vnd
+      SELECT mi.id, mi.catalog_id, mi.item_key, mi.group_key, mi.name, mi.price_vnd
       FROM menu_items mi
       JOIN menu_catalogs mc ON mc.id = mi.catalog_id
       WHERE mc.active = 1
@@ -54,6 +59,7 @@ async function handleCreateCartOrder(request, env, ctx) {
       itemId: Number(item.id),
       catalogId: Number(item.catalog_id),
       itemKey: String(item.item_key),
+      groupKey: String(item.group_key),
       itemName: String(item.name),
       unitPriceVnd,
       quantity: requested.quantity,
@@ -66,16 +72,36 @@ async function handleCreateCartOrder(request, env, ctx) {
     return jsonError('Menu changed while checking out. Refresh and try again.', 409);
   }
 
-  const amountVnd = lines.reduce((total, line) => total + line.lineTotalVnd, 0);
-  if (!Number.isSafeInteger(amountVnd) || amountVnd <= 0 || amountVnd > 999999999) {
+  const originalAmountVnd = lines.reduce((total, line) => total + line.lineTotalVnd, 0);
+  if (!Number.isSafeInteger(originalAmountVnd) || originalAmountVnd <= 0 || originalAmountVnd > 999999999) {
     return jsonError('Invalid cart total.', 400);
   }
+
+  const customer = await authenticatedCustomer(request, env);
+  const requestedPromoGrantId = toPositiveInt(body?.promoGrantId);
+  if (body?.promoGrantId != null && !requestedPromoGrantId) {
+    return jsonError('Invalid promo selection.', 400);
+  }
+  if (requestedPromoGrantId && !customer) {
+    return jsonError('Sign in to use this promo.', 401);
+  }
+
+  let promo = null;
+  if (requestedPromoGrantId) {
+    promo = await resolvePromoForCart(
+      env,
+      Number(customer.id),
+      requestedPromoGrantId,
+      lines,
+    );
+    if (promo.error) return jsonError(promo.error, 409);
+  }
+  const amountVnd = promo?.finalAmountVnd ?? originalAmountVnd;
 
   const now = nowSeconds();
   const expiresAt = now + ORDER_TTL_SECONDS;
   const publicToken = randomToken(32);
   const publicTokenHash = await hashToken(publicToken);
-  const customer = await authenticatedCustomer(request, env);
   const deviceId = customer ? await latestDeviceId(env, customer.id) : null;
   const summary = cartSummary(lines);
   const first = lines[0];
@@ -89,9 +115,10 @@ async function handleCreateCartOrder(request, env, ctx) {
         .prepare(`
           INSERT INTO menu_orders
             (public_token_hash, order_code, catalog_id, item_id, item_key,
-             item_name, amount_vnd, payment_message, status, created_at, expires_at,
-             customer_id, device_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+             item_name, amount_vnd, original_amount_vnd, promo_eligible_amount_vnd,
+             promo_discount_vnd, promo_grant_id, payment_message, status,
+             created_at, expires_at, customer_id, device_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
         `)
         .bind(
           publicTokenHash,
@@ -101,6 +128,10 @@ async function handleCreateCartOrder(request, env, ctx) {
           lines.length === 1 ? first.itemKey : 'cart',
           summary,
           amountVnd,
+          originalAmountVnd,
+          promo?.eligibleAmountVnd ?? 0,
+          promo?.discountVnd ?? 0,
+          promo?.grantId ?? null,
           paymentMessage,
           now,
           expiresAt,
@@ -121,6 +152,7 @@ async function handleCreateCartOrder(request, env, ctx) {
 
   if (!order?.id) return jsonError('Could not create payment order.', 503);
 
+  let promoReserved = false;
   try {
     await env.evil_space.batch(
       lines.map((line) =>
@@ -128,8 +160,8 @@ async function handleCreateCartOrder(request, env, ctx) {
           .prepare(`
             INSERT INTO menu_order_items
               (order_id, item_id, item_key, item_name, unit_price_vnd,
-               quantity, line_total_vnd, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               quantity, line_total_vnd, created_at, group_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
           .bind(
             order.id,
@@ -140,11 +172,30 @@ async function handleCreateCartOrder(request, env, ctx) {
             line.quantity,
             line.lineTotalVnd,
             now,
+            line.groupKey,
           ),
       ),
     );
+
+    if (promo) {
+      const reserved = await reservePromoForMenuOrder(
+        env,
+        Number(customer.id),
+        promo.grantId,
+        order.id,
+        promo,
+        expiresAt,
+        now,
+      );
+      if (reserved.error) {
+        await env.evil_space.prepare('DELETE FROM menu_orders WHERE id = ?').bind(order.id).run();
+        return jsonError(reserved.error, 409);
+      }
+      promoReserved = true;
+    }
   } catch (error) {
-    await env.evil_space.prepare('DELETE FROM menu_orders WHERE id = ?').bind(order.id).run();
+    if (promoReserved) await releasePromoForMenuOrder(env, order.id, now).catch(() => null);
+    await env.evil_space.prepare('DELETE FROM menu_orders WHERE id = ?').bind(order.id).run().catch(() => null);
     throw error;
   }
 
@@ -160,6 +211,9 @@ async function handleCreateCartOrder(request, env, ctx) {
     orderCode: order.orderCode,
     paymentMessage: order.paymentMessage,
     amountVnd,
+    originalAmountVnd,
+    promoDiscountVnd: promo?.discountVnd ?? 0,
+    promoName: promo?.name ?? null,
     lines,
   });
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(notification);
@@ -174,6 +228,11 @@ async function handleCreateCartOrder(request, env, ctx) {
         itemId: lines.length === 1 ? first.itemKey : 'cart',
         itemName: summary,
         items: lines.map(publicLine),
+        originalAmountVnd,
+        promoEligibleAmountVnd: promo?.eligibleAmountVnd ?? 0,
+        promoDiscountVnd: promo?.discountVnd ?? 0,
+        promoGrantId: promo?.grantId ?? null,
+        promoName: promo?.name ?? null,
         amountVnd,
         paymentMessage: order.paymentMessage,
         qrPayload,
@@ -228,6 +287,7 @@ export function normalizeCartInput(body) {
 function publicLine(line) {
   return {
     itemId: line.itemKey,
+    groupId: line.groupKey,
     itemName: line.itemName,
     unitPriceVnd: line.unitPriceVnd,
     quantity: line.quantity,
@@ -309,20 +369,23 @@ function cartOrderCopy(language, order) {
   const code = escapeHtml(order.orderCode);
   const reference = escapeHtml(order.paymentMessage);
   const total = formatVnd(order.amountVnd);
+  const promo = order.promoDiscountVnd > 0
+    ? `\n${escapeHtml(order.promoName ?? 'Promo')}: -${formatVnd(order.promoDiscountVnd)}\nOriginal: ${formatVnd(order.originalAmountVnd)}`
+    : '';
   if (language === 'ru') {
     return {
-      text: `🛒 <b>НОВЫЙ ЗАКАЗ</b>\n\nЗаказ: <b>${code}</b>\n${lines}\n\n<b>ИТОГО: ${total}</b>\nПеревод: <code>${reference}</code>\n\nПроверьте оплату в банке.`,
+      text: `🛒 <b>НОВЫЙ ЗАКАЗ</b>\n\nЗаказ: <b>${code}</b>\n${lines}${promo}\n\n<b>ИТОГО: ${total}</b>\nПеревод: <code>${reference}</code>\n\nПроверьте оплату в банке.`,
       button: '✅ ЗАКАЗ ОПЛАЧЕН',
     };
   }
   if (language === 'vi') {
     return {
-      text: `🛒 <b>ĐƠN HÀNG MỚI</b>\n\nĐơn: <b>${code}</b>\n${lines}\n\n<b>TỔNG: ${total}</b>\nNội dung CK: <code>${reference}</code>\n\nHãy kiểm tra thanh toán trong ngân hàng.`,
+      text: `🛒 <b>ĐƠN HÀNG MỚI</b>\n\nĐơn: <b>${code}</b>\n${lines}${promo}\n\n<b>TỔNG: ${total}</b>\nNội dung CK: <code>${reference}</code>\n\nHãy kiểm tra thanh toán trong ngân hàng.`,
       button: '✅ ĐÃ THANH TOÁN',
     };
   }
   return {
-    text: `🛒 <b>NEW ORDER</b>\n\nOrder: <b>${code}</b>\n${lines}\n\n<b>TOTAL: ${total}</b>\nTransfer reference: <code>${reference}</code>\n\nCheck the bank payment, then confirm below.`,
+    text: `🛒 <b>NEW ORDER</b>\n\nOrder: <b>${code}</b>\n${lines}${promo}\n\n<b>TOTAL: ${total}</b>\nTransfer reference: <code>${reference}</code>\n\nCheck the bank payment, then confirm below.`,
     button: '✅ ORDER PAID',
   };
 }
@@ -344,6 +407,11 @@ function cleanId(value) {
   const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!text || text.length > MAX_ID_LENGTH || !/^[a-z0-9][a-z0-9_-]*$/.test(text)) return '';
   return text;
+}
+
+function toPositiveInt(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
 function cleanAccountNumber(value) {
