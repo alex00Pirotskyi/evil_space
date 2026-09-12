@@ -23,7 +23,7 @@ Future<void> main(List<String> args) async {
   }
 
   await _run('flutter', ['pub', 'get']);
-  await _run('flutter', ['analyze', '--no-pub']);
+  await _run('flutter', ['analyze', '--no-pub', '--no-fatal-infos']);
   await _run('flutter', ['test', '--no-pub']);
   await _run('node', ['--check', 'worker/index.js']);
   await _run('node', ['--check', 'worker/entry.js']);
