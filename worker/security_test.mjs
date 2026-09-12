@@ -36,7 +36,6 @@ test('admin login is rate limited without exposing email in the key', async () =
     }),
     { AUTH_RATE_LIMITER: auth },
   );
-
   assert.equal(response?.status, 429);
   assert.equal(response?.headers.get('Retry-After'), '60');
   assert.equal(auth.calls.length, 1);
@@ -47,13 +46,9 @@ test('admin login is rate limited without exposing email in the key', async () =
 test('successful auth rate limit check lets the request continue', async () => {
   const auth = limiter(true);
   const response = await securityGate(
-    request('/api/admin/register', {
-      email: 'new@example.com',
-      password: '1234',
-    }),
+    request('/api/admin/register', { email: 'new@example.com', password: '1234' }),
     { AUTH_RATE_LIMITER: auth },
   );
-
   assert.equal(response, null);
   assert.equal(auth.calls.length, 1);
   assert.match(auth.calls[0].key, /^admin-register:[a-f0-9]{64}$/);
@@ -65,7 +60,6 @@ test('Google customer sign-in is rate limited per client IP', async () => {
     request('/api/public/account/google', { idToken: 'credential' }),
     { AUTH_RATE_LIMITER: auth },
   );
-
   assert.equal(response?.status, 429);
   assert.equal(auth.calls.length, 1);
   assert.match(auth.calls[0].key, /^public-google:[a-f0-9]{64}$/);
@@ -80,13 +74,21 @@ test('Google iOS redirect initialization is rate limited per client IP', async (
     }),
     { AUTH_RATE_LIMITER: auth },
   );
-
   assert.equal(response?.status, 429);
   assert.equal(auth.calls.length, 1);
-  assert.match(
-    auth.calls[0].key,
-    /^public-google-redirect-start:[a-f0-9]{64}$/,
+  assert.match(auth.calls[0].key, /^public-google-redirect-start:[a-f0-9]{64}$/);
+});
+
+test('promo code claims are rate limited without exposing the code', async () => {
+  const auth = limiter(false);
+  const response = await securityGate(
+    request('/api/public/account/promos/claim', { code: ' HOTEL50 ' }),
+    { AUTH_RATE_LIMITER: auth },
   );
+  assert.equal(response?.status, 429);
+  assert.equal(auth.calls.length, 1);
+  assert.match(auth.calls[0].key, /^public-promo-claim:[a-f0-9]{64}$/);
+  assert.equal(auth.calls[0].key.includes('HOTEL50'), false);
 });
 
 test('public booking is rate limited by contact plus client identity', async () => {
@@ -100,11 +102,27 @@ test('public booking is rate limited by contact plus client identity', async () 
     }),
     { PUBLIC_BOOKING_RATE_LIMITER: bookings },
   );
-
   assert.equal(response?.status, 429);
   assert.equal(bookings.calls.length, 1);
   assert.match(bookings.calls[0].key, /^public-book:[a-f0-9]{64}$/);
   assert.equal(bookings.calls[0].key.includes('+84'), false);
+});
+
+test('multi-item menu carts are rate limited too', async () => {
+  const bookings = limiter(false);
+  const response = await securityGate(
+    request('/api/public/menu/order', {
+      items: [
+        { itemId: 'coworking-day', quantity: 1 },
+        { itemId: 'cola', quantity: 2 },
+      ],
+    }),
+    { PUBLIC_BOOKING_RATE_LIMITER: bookings },
+  );
+  assert.equal(response?.status, 429);
+  assert.equal(bookings.calls.length, 1);
+  assert.match(bookings.calls[0].key, /^public-menu-order:[a-f0-9]{64}$/);
+  assert.equal(bookings.calls[0].key.includes('coworking-day'), false);
 });
 
 test('admin delete attempts are rate limited per session', async () => {
@@ -117,7 +135,6 @@ test('admin delete attempts are rate limited per session', async () => {
     ),
     { AUTH_RATE_LIMITER: auth },
   );
-
   assert.equal(response?.status, 429);
   assert.match(auth.calls[0].key, /^admin-delete:[a-f0-9]{64}$/);
   assert.equal(auth.calls[0].key.includes('secret-session-token'), false);
@@ -125,10 +142,7 @@ test('admin delete attempts are rate limited per session', async () => {
 
 test('missing rate limiter binding keeps local development working', async () => {
   const response = await securityGate(
-    request('/api/admin/login', {
-      email: 'admin@example.com',
-      password: '1234',
-    }),
+    request('/api/admin/login', { email: 'admin@example.com', password: '1234' }),
     {},
   );
   assert.equal(response, null);

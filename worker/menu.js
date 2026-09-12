@@ -1,4 +1,8 @@
 import { buildVietQrPayload, VIETCOMBANK_BIN } from './vietqr.js';
+import {
+  consumePromoForMenuOrder,
+  releasePromoForMenuOrder,
+} from './promo_engine.js';
 
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const ORDER_TTL_SECONDS = 30 * 60;
@@ -75,7 +79,7 @@ async function handleCreateOrder(request, env, ctx) {
   const item = await env.evil_space
     .prepare(`
       SELECT
-        mi.id, mi.catalog_id, mi.item_key, mi.name, mi.price_vnd,
+        mi.id, mi.catalog_id, mi.item_key, mi.group_key, mi.name, mi.price_vnd,
         mi.description, mc.version
       FROM menu_items mi
       JOIN menu_catalogs mc ON mc.id = mi.catalog_id
@@ -101,8 +105,9 @@ async function handleCreateOrder(request, env, ctx) {
         .prepare(`
           INSERT INTO menu_orders
             (public_token_hash, order_code, catalog_id, item_id, item_key,
-             item_name, amount_vnd, payment_message, status, created_at, expires_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+             item_name, amount_vnd, original_amount_vnd, payment_message,
+             status, created_at, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
         `)
         .bind(
           tokenHash,
@@ -111,6 +116,7 @@ async function handleCreateOrder(request, env, ctx) {
           item.id,
           item.item_key,
           item.name,
+          item.price_vnd,
           item.price_vnd,
           paymentMessage,
           now,
@@ -155,6 +161,11 @@ async function handleCreateOrder(request, env, ctx) {
         orderCode: order.orderCode,
         itemId: String(item.item_key),
         itemName: String(item.name),
+        originalAmountVnd: Number(item.price_vnd),
+        promoEligibleAmountVnd: 0,
+        promoDiscountVnd: 0,
+        promoGrantId: null,
+        promoName: null,
         amountVnd: Number(item.price_vnd),
         paymentMessage: order.paymentMessage,
         qrPayload,
@@ -173,10 +184,14 @@ async function handleOrderStatus(url, env) {
   const tokenHash = await hashToken(token);
   const order = await env.evil_space
     .prepare(`
-      SELECT id, order_code, item_key, item_name, amount_vnd, payment_message,
-             status, created_at, expires_at, paid_at
-      FROM menu_orders
-      WHERE public_token_hash = ?
+      SELECT o.id, o.order_code, o.item_key, o.item_name, o.amount_vnd,
+             o.original_amount_vnd, o.promo_eligible_amount_vnd,
+             o.promo_discount_vnd, o.promo_grant_id, p.name AS promo_name,
+             o.payment_message, o.status, o.created_at, o.expires_at, o.paid_at
+      FROM menu_orders o
+      LEFT JOIN customer_promo_grants g ON g.id = o.promo_grant_id
+      LEFT JOIN marketing_promotions p ON p.id = g.promotion_id
+      WHERE o.public_token_hash = ?
       LIMIT 1
     `)
     .bind(tokenHash)
@@ -186,11 +201,14 @@ async function handleOrderStatus(url, env) {
   let status = String(order.status);
   const now = nowSeconds();
   if (status === 'pending' && Number(order.expires_at) <= now) {
-    await env.evil_space
+    const expired = await env.evil_space
       .prepare("UPDATE menu_orders SET status = 'expired' WHERE id = ? AND status = 'pending'")
       .bind(order.id)
       .run();
-    status = 'expired';
+    if (Number(expired.meta?.changes ?? 0) > 0) {
+      await releasePromoForMenuOrder(env, Number(order.id), now);
+      status = 'expired';
+    }
   }
 
   return json({ ok: true, order: publicOrder(order, status) });
@@ -309,27 +327,22 @@ export async function markMenuOrderPaidByTelegram(env, orderId, telegramUserId) 
 
 async function markOrderPaid(env, id, actor) {
   const now = nowSeconds();
-  const current = await env.evil_space
-    .prepare(`
-      SELECT id, order_code, item_name, amount_vnd, payment_message, status,
-             created_at, expires_at, paid_at, paid_by_email
-      FROM menu_orders
-      WHERE id = ?
-      LIMIT 1
-    `)
-    .bind(id)
-    .first();
+  const current = await orderForAdmin(env, id);
   if (!current) return { status: 'missing' };
 
   if (current.status === 'paid') {
+    await consumePromoForMenuOrder(env, id, Number(current.paid_at ?? now));
     return { status: 'paid', order: adminOrder(current) };
   }
   if (current.status !== 'pending' || Number(current.expires_at) <= now) {
     if (current.status === 'pending') {
-      await env.evil_space
+      const expired = await env.evil_space
         .prepare("UPDATE menu_orders SET status = 'expired' WHERE id = ? AND status = 'pending'")
         .bind(id)
         .run();
+      if (Number(expired.meta?.changes ?? 0) > 0) await releasePromoForMenuOrder(env, id, now);
+    } else if (current.status === 'expired' || current.status === 'cancelled') {
+      await releasePromoForMenuOrder(env, id, now);
     }
     return { status: 'expired', order: adminOrder({ ...current, status: 'expired' }) };
   }
@@ -343,19 +356,15 @@ async function markOrderPaid(env, id, actor) {
     .bind(now, actor.email, actor.telegramUserId, id)
     .run();
   if (Number(result.meta?.changes ?? 0) < 1) {
-    const raced = await env.evil_space
-      .prepare(`
-        SELECT id, order_code, item_name, amount_vnd, payment_message, status,
-               created_at, expires_at, paid_at, paid_by_email
-        FROM menu_orders WHERE id = ?
-      `)
-      .bind(id)
-      .first();
-    return raced?.status === 'paid'
-      ? { status: 'paid', order: adminOrder(raced) }
-      : { status: 'missing' };
+    const raced = await orderForAdmin(env, id);
+    if (raced?.status === 'paid') {
+      await consumePromoForMenuOrder(env, id, Number(raced.paid_at ?? now));
+      return { status: 'paid', order: adminOrder(raced) };
+    }
+    return { status: 'missing' };
   }
 
+  await consumePromoForMenuOrder(env, id, now);
   return {
     status: 'paid',
     order: adminOrder({
@@ -367,16 +376,39 @@ async function markOrderPaid(env, id, actor) {
   };
 }
 
+async function orderForAdmin(env, id) {
+  return env.evil_space
+    .prepare(`
+      SELECT o.id, o.order_code, o.item_name, o.amount_vnd,
+             o.original_amount_vnd, o.promo_eligible_amount_vnd,
+             o.promo_discount_vnd, o.promo_grant_id, p.name AS promo_name,
+             o.payment_message, o.status, o.created_at, o.expires_at,
+             o.paid_at, o.paid_by_email
+      FROM menu_orders o
+      LEFT JOIN customer_promo_grants g ON g.id = o.promo_grant_id
+      LEFT JOIN marketing_promotions p ON p.id = g.promotion_id
+      WHERE o.id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+}
+
 async function adminSnapshot(env) {
   const catalog = await activeCatalog(env);
   const groups = catalog ? await catalogGroups(env, catalog.id, true) : [];
   const orders = await env.evil_space
     .prepare(`
-      SELECT id, order_code, item_name, amount_vnd, payment_message, status,
-             created_at, expires_at, paid_at, paid_by_email
-      FROM menu_orders
-      ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,
-               created_at DESC, id DESC
+      SELECT o.id, o.order_code, o.item_name, o.amount_vnd,
+             o.original_amount_vnd, o.promo_eligible_amount_vnd,
+             o.promo_discount_vnd, o.promo_grant_id, p.name AS promo_name,
+             o.payment_message, o.status, o.created_at, o.expires_at,
+             o.paid_at, o.paid_by_email
+      FROM menu_orders o
+      LEFT JOIN customer_promo_grants g ON g.id = o.promo_grant_id
+      LEFT JOIN marketing_promotions p ON p.id = g.promotion_id
+      ORDER BY CASE o.status WHEN 'pending' THEN 0 ELSE 1 END,
+               o.created_at DESC, o.id DESC
       LIMIT 100
     `)
     .all();
@@ -590,6 +622,11 @@ function publicOrder(order, status = String(order.status)) {
     orderCode: String(order.order_code),
     itemId: String(order.item_key),
     itemName: String(order.item_name),
+    originalAmountVnd: Number(order.original_amount_vnd ?? order.amount_vnd),
+    promoEligibleAmountVnd: Number(order.promo_eligible_amount_vnd ?? 0),
+    promoDiscountVnd: Number(order.promo_discount_vnd ?? 0),
+    promoGrantId: order.promo_grant_id == null ? null : Number(order.promo_grant_id),
+    promoName: order.promo_name == null ? null : String(order.promo_name),
     amountVnd: Number(order.amount_vnd),
     paymentMessage: String(order.payment_message),
     status,
@@ -604,6 +641,11 @@ function adminOrder(order) {
     id: Number(order.id),
     orderCode: String(order.order_code),
     itemName: String(order.item_name),
+    originalAmountVnd: Number(order.original_amount_vnd ?? order.amount_vnd),
+    promoEligibleAmountVnd: Number(order.promo_eligible_amount_vnd ?? 0),
+    promoDiscountVnd: Number(order.promo_discount_vnd ?? 0),
+    promoGrantId: order.promo_grant_id == null ? null : Number(order.promo_grant_id),
+    promoName: order.promo_name == null ? null : String(order.promo_name),
     amountVnd: Number(order.amount_vnd),
     paymentMessage: String(order.payment_message),
     status: String(order.status),

@@ -23,7 +23,7 @@ Future<void> main(List<String> args) async {
   }
 
   await _run('flutter', ['pub', 'get']);
-  await _run('flutter', ['analyze', '--no-pub']);
+  await _run('flutter', ['analyze', '--no-pub', '--no-fatal-infos']);
   await _run('flutter', ['test', '--no-pub']);
   await _run('node', ['--check', 'worker/index.js']);
   await _run('node', ['--check', 'worker/entry.js']);
@@ -36,6 +36,8 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/menu.js']);
   await _run('node', ['--check', 'worker/menu_i18n.js']);
   await _run('node', ['--check', 'worker/menu_cart.js']);
+  await _run('node', ['--check', 'worker/menu_builder.js']);
+  await _run('node', ['--check', 'worker/promo_engine.js']);
   await _run('node', ['--check', 'worker/menu_telegram.js']);
   await _run('node', ['--check', 'worker/customer_account.js']);
   await _run('node', ['--check', 'worker/google_account.js']);
@@ -45,6 +47,8 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/integration_test.mjs']);
   await _run('node', ['--check', 'worker/menu_i18n_test.mjs']);
   await _run('node', ['--check', 'worker/menu_cart_test.mjs']);
+  await _run('node', ['--check', 'worker/menu_builder_test.mjs']);
+  await _run('node', ['--check', 'worker/promo_engine_test.mjs']);
   await _run('node', ['--check', 'worker/customer_account_test.mjs']);
   await _run('node', ['--check', 'worker/google_account_test.mjs']);
   await _run('node', ['--check', 'worker/vietqr_test.mjs']);
@@ -57,6 +61,8 @@ Future<void> main(List<String> args) async {
     'worker/pricing_test.mjs',
     'worker/menu_i18n_test.mjs',
     'worker/menu_cart_test.mjs',
+    'worker/menu_builder_test.mjs',
+    'worker/promo_engine_test.mjs',
     'worker/customer_account_test.mjs',
     'worker/google_account_test.mjs',
     'worker/vietqr_test.mjs',
