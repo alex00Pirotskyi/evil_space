@@ -37,7 +37,7 @@ export const languages = Object.freeze({
         title: 'Coworking Space in Nha Trang | Evil Space',
         description: 'A quiet coworking space in Nha Trang at 60 Cao Văn Bé. Day passes, monthly desks, daily hours 11:00–23:00 and online desk booking.',
         eyebrow: 'Nha Trang / Coworking / Open 11:00–23:00',
-        heading: 'Room for your next good workday.',
+        heading: 'Coworking in Nha Trang for your next good workday.',
         lead: 'Evil Space is a coworking space in Nha Trang for people who want a desk, a clear plan and time to focus. Come for a day or make it your place for a month.',
         sections: [
           { heading: 'Choose the day that works', paragraphs: [
@@ -132,7 +132,7 @@ export const languages = Object.freeze({
         title: 'Коворкинг в Нячанге — Evil Space | Рабочее место на день и месяц',
         description: 'Коворкинг Evil Space в Нячанге: 60 Cao Văn Bé, рабочее место на день или месяц, ежедневно с 11:00 до 23:00. Проверить свободные места.',
         eyebrow: 'Нячанг / Коворкинг / Ежедневно 11:00–23:00',
-        heading: 'Место для хорошего рабочего дня.',
+        heading: 'Коворкинг в Нячанге для хорошего рабочего дня.',
         lead: 'Evil Space — коворкинг в Нячанге для тех, кому нужен рабочий стол и время сосредоточиться. Приходите на день или выберите место на месяц.',
         sections: [
           { heading: 'Выберите удобный день', paragraphs: [
@@ -227,7 +227,7 @@ export const languages = Object.freeze({
         title: 'Không gian làm việc chung tại Nha Trang | Evil Space',
         description: 'Evil Space tại 60 Cao Văn Bé, Nha Trang: không gian làm việc chung yên tĩnh, vé ngày, gói tháng, mở cửa 11:00–23:00 và đặt bàn trực tuyến.',
         eyebrow: 'Nha Trang / Không gian làm việc / 11:00–23:00',
-        heading: 'Một chỗ ngồi cho ngày làm việc hiệu quả.',
+        heading: 'Không gian làm việc chung tại Nha Trang.',
         lead: 'Evil Space là không gian làm việc chung tại Nha Trang dành cho những ai cần một chiếc bàn và thời gian để tập trung. Ghé làm việc một ngày hoặc chọn gói một tháng.',
         sections: [
           { heading: 'Chọn ngày phù hợp', paragraphs: [
