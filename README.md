@@ -118,7 +118,7 @@ make test
 - Flutter tests
 - Worker syntax checks
 - Worker helper tests
-- a real local Cloudflare Worker + D1 integration flow covering migrations, admin login/session/logout, unauthorized access, public booking, booking acceptance, live status, and owner rejection
+- a real local Cloudflare Worker + D1 integration flow covering migrations, admin login/session/logout, unauthorized access, public booking, booking acceptance, live status, owner rejection and localized page routing
 
 The old source-string Worker contract tests were removed once the runtime integration flow covered those paths.
 
