@@ -8,6 +8,7 @@ The public site keeps the quiet paper / e-reader visual language, while the back
 
 - Flutter 3.47.2 web application
 - Cloudflare Worker for `/api/*`
+- Static English, Russian and Vietnamese pages for people and search engines
 - Cloudflare D1 database
 - Cloudflare Email Service for admin approval
 - Telegram Bot API for customer/admin workflows
@@ -29,6 +30,24 @@ The public site provides:
 - Instagram, Google Maps, Zalo, and phone contact actions
 
 `/qr` opens the public experience at the visit/contact section.
+
+## Search and local discovery
+
+The Flutter booking app remains at `/`. The release build also publishes
+readable HTML pages at `/en/`, `/ru/` and `/vi/`, each with `/pricing/` and
+`/visit/` pages. These pages contain localized titles, descriptions, canonicals,
+reciprocal `hreflang`, visible business details and booking links that carry the
+selected language into the app. `/robots.txt` and `/sitemap.xml` are generated
+with the pages. Unknown localized URLs return 404 instead of the SPA shell.
+
+Edit source copy and verified business facts in `seo/content.mjs`. The release
+script runs `node tool/build_seo.mjs build/web` after the Flutter build. Pricing
+is checked against `worker/pricing.js` before pages are emitted. Run the fast
+SEO check with `node --test test/seo_site_test.mjs`.
+
+After deployment, verify the live pages and submit the sitemap in Google Search
+Console. The Google Business Profile website link, address, hours, photos and
+services need owner review; see [SEO operations](docs/seo-operations.md).
 
 ## Admin
 
@@ -99,7 +118,7 @@ make test
 - Flutter tests
 - Worker syntax checks
 - Worker helper tests
-- a real local Cloudflare Worker + D1 integration flow covering migrations, admin login/session/logout, unauthorized access, public booking, booking acceptance, live status, and owner rejection
+- a real local Cloudflare Worker + D1 integration flow covering migrations, admin login/session/logout, unauthorized access, public booking, booking acceptance, live status, owner rejection and localized page routing
 
 The old source-string Worker contract tests were removed once the runtime integration flow covered those paths.
 
@@ -138,11 +157,12 @@ The release script performs, in order:
 4. Worker syntax/helper tests
 5. full local D1 migration + Worker integration test
 6. optimized Flutter Wasm build
-7. release bundle verification
-8. pinned-Wrangler deployment dry run
-9. remote D1 migrations
-10. Worker/assets deployment
-11. production `/api/health` verification
+7. localized SEO page and sitemap generation
+8. release bundle verification
+9. pinned-Wrangler deployment dry run
+10. remote D1 migrations
+11. Worker/assets deployment
+12. production `/api/health` verification
 
 The dry run and clean local migration rehearsal happen before remote D1 changes, reducing the chance of discovering a packaging or schema problem only after production migration.
 

@@ -31,6 +31,8 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/admin_worker.js']);
   await _run('node', ['--check', 'worker/admin_review.js']);
   await _run('node', ['--check', 'worker/secure_entry.js']);
+  await _run('node', ['--check', 'worker/seo_pages.js']);
+  await _run('node', ['--check', 'tool/build_seo.mjs']);
   await _run('node', ['--check', 'worker/security.js']);
   await _run('node', ['--check', 'worker/telegram.js']);
   await _run('node', ['--check', 'worker/menu.js']);
@@ -68,6 +70,7 @@ Future<void> main(List<String> args) async {
     'worker/vietqr_test.mjs',
   ]);
   await _run('node', ['worker/integration_test.mjs']);
+  await _run('node', ['--test', 'test/seo_site_test.mjs']);
 
   if (verifyOnly) {
     stdout.writeln('Verification complete. No build or deployment performed.');
@@ -88,6 +91,7 @@ Future<void> main(List<String> args) async {
     '--dart-define=EVIL_SPACE_ADMIN_PREVIEW=true',
   ]);
   await _run('node', ['--check', 'build/web/flutter_bootstrap.js']);
+  await _run('node', ['tool/build_seo.mjs', 'build/web']);
   await _run('dart', ['run', 'tool/verify_release.dart', 'build/web']);
 
   if (buildOnly) {

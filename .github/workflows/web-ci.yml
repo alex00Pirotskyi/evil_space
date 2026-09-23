@@ -49,6 +49,8 @@ jobs:
           node --check worker/admin_worker.js
           node --check worker/admin_review.js
           node --check worker/secure_entry.js
+          node --check worker/seo_pages.js
+          node --check tool/build_seo.mjs
           node --check worker/security.js
           node --check worker/telegram.js
           node --check worker/menu.js
@@ -78,6 +80,9 @@ jobs:
       - name: Test Worker against local D1
         run: node worker/integration_test.mjs
 
+      - name: Test crawlable pages and routing
+        run: node --test test/seo_site_test.mjs
+
       - name: Analyze
         run: flutter analyze --no-pub --no-fatal-infos
 
@@ -89,6 +94,9 @@ jobs:
 
       - name: Check generated bootstrap syntax
         run: node --check build/web/flutter_bootstrap.js
+
+      - name: Build localized pages and sitemap
+        run: node tool/build_seo.mjs build/web
 
       - name: Verify release contract and bundle budget
         run: dart run tool/verify_release.dart build/web

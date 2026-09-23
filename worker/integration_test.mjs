@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { buildSeo } from '../tool/build_seo.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const wranglerVersion = readFileSync(
@@ -31,6 +32,7 @@ try {
       path.join(buildWebDir, 'index.html'),
       '<!doctype html><title>Evil Space integration test</title>',
     );
+    await buildSeo(buildWebDir);
   }
 
   console.log('Integration: applying clean local D1 migrations');
@@ -53,6 +55,10 @@ try {
 
   console.log('Integration: running API flow');
   await runFlow();
+  if (existsSync(path.join(buildWebDir, 'en', 'index.html'))) {
+    console.log('Integration: checking crawlable routes');
+    await runSeoFlow();
+  }
   console.log('Worker integration flow passed.');
 } finally {
   await stopDev();
@@ -282,6 +288,31 @@ async function waitForServer() {
     await delay(200);
   }
   throw new Error(`Wrangler dev did not become ready.\n${devOutput}`);
+}
+
+async function runSeoFlow() {
+  for (const lang of ['en', 'ru', 'vi']) {
+    const response = await http(`/${lang}/`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), new RegExp(`<html lang="${lang}">`));
+    assert.equal(response.headers.get('content-language'), lang);
+
+    const redirect = await fetch(`${baseUrl}/${lang}/pricing`, { redirect: 'manual' });
+    assert.equal(redirect.status, 308);
+    assert.equal(new URL(redirect.headers.get('location')).pathname, `/${lang}/pricing/`);
+
+    const unknown = await http(`/${lang}/this-page-does-not-exist`);
+    assert.equal(unknown.status, 404);
+  }
+
+  const robots = await http('/robots.txt');
+  assert.equal(robots.status, 200);
+  assert.match(await robots.text(), /Sitemap: https:\/\/evils\.space\/sitemap\.xml/);
+  const sitemap = await http('/sitemap.xml');
+  assert.equal(sitemap.status, 200);
+  assert.match(await sitemap.text(), /https:\/\/evils\.space\/ru\/visit\//);
+  const admin = await http('/admin');
+  assert.equal(admin.headers.get('x-robots-tag'), 'noindex, follow');
 }
 
 async function runFlow() {
