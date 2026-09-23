@@ -14,6 +14,15 @@ void main(List<String> args) {
     'google_sign_in.js',
     'manifest.json',
     '_headers',
+    'robots.txt',
+    'sitemap.xml',
+    'seo/site.css',
+    'seo/share.png',
+    for (final lang in ['en', 'ru', 'vi']) ...[
+      '$lang/index.html',
+      '$lang/pricing/index.html',
+      '$lang/visit/index.html',
+    ],
   ];
   for (final name in requiredFiles) {
     final file = File('${root.path}${Platform.pathSeparator}$name');
@@ -45,6 +54,28 @@ void main(List<String> args) {
   if (!headers.contains('Cross-Origin-Opener-Policy: same-origin') ||
       !headers.contains('Cross-Origin-Embedder-Policy: credentialless')) {
     _fail('Cloudflare isolation headers required by threaded SkWasm are missing.');
+  }
+  if (!index.contains('href="https://evils.space/"') ||
+      !index.contains('href="/en/"') || index.contains('250K VND')) {
+    _fail('Booking app must link to the SEO site without advertising the old price.');
+  }
+  final sitemap = File('${root.path}${Platform.pathSeparator}sitemap.xml')
+      .readAsStringSync();
+  if (!sitemap.contains('https://evils.space/en/') ||
+      !sitemap.contains('https://evils.space/ru/') ||
+      !sitemap.contains('https://evils.space/vi/')) {
+    _fail('The multilingual sitemap is incomplete.');
+  }
+  for (final lang in ['en', 'ru', 'vi']) {
+    for (final slug in ['', 'pricing/', 'visit/']) {
+      final page = File('${root.path}${Platform.pathSeparator}$lang${Platform.pathSeparator}${slug}index.html')
+          .readAsStringSync();
+      if (!page.contains('<html lang="$lang">') ||
+          !page.contains('<h1') ||
+          !page.contains('rel="canonical" href="https://evils.space/$lang/$slug"')) {
+        _fail('Localized page $lang/$slug is incomplete.');
+      }
+    }
   }
 
   final files = root

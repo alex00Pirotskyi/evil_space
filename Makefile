@@ -19,6 +19,8 @@ test:
 	node --check worker/app.js
 	node --check worker/admin_worker.js
 	node --check worker/admin_review.js
+	node --check worker/seo_pages.js
+	node --check tool/build_seo.mjs
 	node --check worker/secure_entry.js
 	node --check worker/security.js
 	node --check worker/telegram.js
@@ -39,6 +41,7 @@ test:
 	node --check worker/vietqr_test.mjs
 	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs
 	node worker/integration_test.mjs
+	node --test test/seo_site_test.mjs
 
 telegram-setup:
 	dart run tool/telegram_setup.dart

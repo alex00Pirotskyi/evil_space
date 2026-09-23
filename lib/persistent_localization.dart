@@ -10,6 +10,16 @@ class PersistentLocalizationController extends LocalizationController {
   );
 
   factory PersistentLocalizationController.fromPlatform() {
+    // A visitor who follows a localized page into the booking app should
+    // arrive in that language without seeing the first-visit picker again.
+    final requested = Uri.base.queryParameters['lang'];
+    for (final language in AppLanguage.values) {
+      if (language.code == requested) {
+        saveLanguage(language.code);
+        return PersistentLocalizationController._(language, true);
+      }
+    }
+
     final saved = readSavedLanguage();
     if (saved != null) {
       for (final language in AppLanguage.values) {
