@@ -108,6 +108,7 @@ class LocalizationController extends ChangeNotifier {
       'contact_zalo': 'MESSAGE ZALO',
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'CALL',
+      'about_coworking': 'ABOUT COWORKING IN NHA TRANG ↗',
       'page_one': 'PAGE 1 OF 1',
     },
     'ru': {
@@ -176,6 +177,7 @@ class LocalizationController extends ChangeNotifier {
       'contact_zalo': 'НАПИСАТЬ В ZALO',
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'ПОЗВОНИТЬ',
+      'about_coworking': 'О КОВОРКИНГЕ В НЯЧАНГЕ ↗',
       'page_one': 'СТРАНИЦА 1 ИЗ 1',
     },
     'vi': {
@@ -244,6 +246,7 @@ class LocalizationController extends ChangeNotifier {
       'contact_zalo': 'NHẮN ZALO',
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'GỌI',
+      'about_coworking': 'VỀ KHÔNG GIAN LÀM VIỆC TẠI NHA TRANG ↗',
       'page_one': 'TRANG 1 / 1',
     },
   };
