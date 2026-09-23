@@ -1,0 +1,63 @@
+name: Production release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/seo-release-20260923
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evil-space-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as GitHub Actions secrets before releasing.'
+            exit 1
+          fi
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Check lockfile
+        run: |
+          flutter pub get
+          git diff --exit-code -- pubspec.lock
+
+      - name: Build, test and deploy Flutter app, Worker and SEO pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: dart run tool/release.dart
+
+      - name: Verify updated public page
+        if: github.ref == 'refs/heads/agent/seo-release-20260923'
+        run: |
+          for attempt in 1 2 3; do
+            if curl -fsSL --max-time 20 'https://evils.space/en/' |
+              grep -Fq 'Coworking in Nha Trang for your next good workday.'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo '::error::Production did not serve the updated coworking page.'
+          exit 1

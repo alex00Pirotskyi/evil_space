@@ -40,6 +40,11 @@ reciprocal `hreflang`, visible business details and booking links that carry the
 selected language into the app. `/robots.txt` and `/sitemap.xml` are generated
 with the pages. Unknown localized URLs return 404 instead of the SPA shell.
 
+Visitors can read about [coworking in Nha Trang](https://evils.space/en/)
+in [Russian](https://evils.space/ru/) or
+[Vietnamese](https://evils.space/vi/). The booking app links to the matching
+language page after it loads.
+
 Edit source copy and verified business facts in `seo/content.mjs`. The release
 script runs `node tool/build_seo.mjs build/web` after the Flutter build. Pricing
 is checked against `worker/pricing.js` before pages are emitted. Run the fast
@@ -48,6 +53,12 @@ SEO check with `node --test test/seo_site_test.mjs`.
 After deployment, verify the live pages and submit the sitemap in Google Search
 Console. The Google Business Profile website link, address, hours, photos and
 services need owner review; see [SEO operations](docs/seo-operations.md).
+
+The GitHub [production release workflow](.github/workflows/release.yml) offers
+a manual release from `main` after `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` are set as GitHub Actions secrets. It runs the same
+verified Flutter build, D1 migration, Wrangler deployment and health check as
+`make deploy`; it does not alter the Flutter app or its PWA install URL.
 
 ## Admin
 
