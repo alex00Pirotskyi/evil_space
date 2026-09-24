@@ -60,6 +60,24 @@ a manual release from `main` after `CLOUDFLARE_API_TOKEN` and
 verified Flutter build, D1 migration, Wrangler deployment and health check as
 `make deploy`; it does not alter the Flutter app or its PWA install URL.
 
+To configure that workflow from a terminal, install [GitHub CLI](https://cli.github.com/),
+then run:
+
+```bash
+bash tool/setup_cloudflare_ci.sh
+```
+
+The script signs in to GitHub if necessary, detects your account ID from an
+existing Wrangler login when available (or asks for it), reads your Cloudflare
+API token without echoing it, and sets both repository Actions secrets. Create
+the **first token** in the [Cloudflare dashboard](https://dash.cloudflare.com/):
+use the **Edit Cloudflare Workers** template, add **Account > D1 > Edit/Write**,
+and scope it to the account that owns `evil-space` and the `evils.space` zone.
+Cloudflare requires an initial dashboard token before tokens can be created by
+API. Do not paste the token in a GitHub issue, chat, command argument or file.
+Setting the secrets does not start a release. When ready, run **Production
+release** from GitHub Actions on `main`.
+
 ## Admin
 
 `/admin` uses server-side authentication. The browser receives only an `HttpOnly; Secure; SameSite=Strict` session cookie; passwords and session tokens are not stored in localStorage.
