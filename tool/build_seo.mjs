@@ -60,7 +60,16 @@ function schema(lang, page) {
         inLanguage: lang,
         name: languages[lang].pages[page].title,
         about: { '@id': `${business.origin}/#business` },
+        ...(page === 'home' ? {} : { breadcrumb: { '@id': `${url}#breadcrumbs` } }),
       },
+      ...(page === 'home' ? [] : [{
+        '@type': 'BreadcrumbList',
+        '@id': `${url}#breadcrumbs`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: languages[lang].common.home, item: pageUrl(lang, 'home') },
+          { '@type': 'ListItem', position: 2, name: page === 'pricing' ? languages[lang].common.prices : languages[lang].common.visit, item: url },
+        ],
+      }]),
     ],
   }).replace(/</g, '\\u003c');
 }
@@ -91,6 +100,13 @@ export function renderPage(lang, page) {
   const langNav = Object.entries(languages).map(([code]) =>
     `<a href="${pageUrl(code, page)}" hreflang="${code}" lang="${code}" title="${escapeHtml(languages[code].label)}"${lang === code ? ' aria-current="page"' : ''}>${code.toUpperCase()}</a>`,
   ).join('\n      ');
+  const breadcrumbs = page === 'home' ? '' : `
+      <nav class="breadcrumbs" aria-label="${escapeHtml(c.breadcrumbs)}">
+        <a href="${pageUrl(lang, 'home')}">${escapeHtml(c.home)}</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(page === 'pricing' ? c.prices : c.visit)}</span>
+      </nav>`;
+  const related = Object.keys(slugs).filter((key) => key !== page).map((key) =>
+    `<a class="related-card" href="${pageUrl(lang, key)}">${escapeHtml(c.related[key])}<span aria-hidden="true">↗</span></a>`,
+  ).join('\n          ');
 
   return `<!doctype html>
 <html lang="${locale.htmlLang}">
@@ -113,6 +129,8 @@ export function renderPage(lang, page) {
   <meta property="og:url" content="${url}">
   <meta property="og:image" content="${business.origin}/seo/share.png">
   <meta property="og:image:alt" content="Evil Space Coworking, Nha Trang">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">${schema(lang, page)}</script>
 </head>
@@ -130,6 +148,7 @@ export function renderPage(lang, page) {
   <div class="wrap language-row"><span>${escapeHtml(c.issue)}</span><div class="languages" aria-label="${escapeHtml(c.language)}">${langNav}</div></div>
   <main id="content">
     <div class="wrap">
+      ${breadcrumbs}
       <section class="hero" aria-labelledby="page-heading">
         <div class="eyebrow">${escapeHtml(p.eyebrow)}</div>
         <h1 id="page-heading">${escapeHtml(p.heading)}</h1>
@@ -148,6 +167,10 @@ export function renderPage(lang, page) {
       <section class="questions" aria-labelledby="questions-heading">
         <h2 class="section-title" id="questions-heading"><span class="section-index">02 /</span>${escapeHtml(c.questions)}</h2>
         <div class="qa-grid">${faqs}</div>
+      </section>
+      <section class="related" aria-labelledby="related-heading">
+        <h2 class="section-title" id="related-heading"><span class="section-index">03 /</span>${escapeHtml(c.next)}</h2>
+        <div class="related-grid">${related}</div>
       </section>
     </div>
     <section class="visit-strip" aria-labelledby="action-heading">
