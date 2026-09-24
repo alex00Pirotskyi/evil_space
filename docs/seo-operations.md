@@ -18,17 +18,25 @@
 
 ## Google Search Console
 
-1. Verify a **Domain property** for `evils.space` using Google's DNS TXT
-   record in the Cloudflare DNS zone. Keep any existing TXT records intact.
-2. Submit `https://evils.space/sitemap.xml` in the property. Inspect `/en/`,
-   `/ru/` and `/vi/` and request indexing after the production pages are live.
-3. Review Page indexing and query performance weekly. Track clicks and
-   impressions for `coworking nha trang`, `coworking space nha trang`,
+The `evils.space` Domain property is verified. On **September 24, 2026**, the
+submitted `https://evils.space/sitemap.xml` showed **Success** and **9 discovered
+pages**. Discovery does not tell us whether any particular page is indexed.
+
+1. After each production release, inspect `https://evils.space/en/`, `/ru/`
+   and `/vi/` in the property's URL Inspection tool. Check **Indexing status**
+   and **Google-selected canonical**, run **Test live URL** if necessary, and
+   request indexing for important live pages that are eligible but not indexed.
+   Check the Page indexing report for any crawl, canonical or soft-404 issues.
+2. Review the Search results Performance report weekly with **Search type: Web**.
+   Compare the same countries, devices and date ranges before and after changes.
+   Track clicks, impressions, CTR and average position for
+   `coworking nha trang`, `coworking space nha trang`,
    `коворкинг нячанг`, `không gian làm việc chung nha trang` and branded
-   queries. Record a baseline before judging improvement.
-4. Check Google-selected canonical and language alternates for each page.
-   Crawl and ranking changes can take time; a sitemap is a discovery signal,
-   not a guarantee of placement.
+   queries. Filter by page to learn whether Google chooses `/en/`, `/ru/`, `/vi/`
+   or the Flutter booking app at `/` for each query.
+3. Check Google-selected canonicals and the intended language alternates.
+   Wait for meaningful search data before evaluating changes; a sitemap is a
+   discovery signal, not a guarantee of indexing or placement.
 
 ## Google Business Profile
 
@@ -38,9 +46,10 @@
    include `53/14 Cao Văn Bé`; correct any stale third-party citations if the
    current listing is accurate. Do not change the listing address to match an
    old query.
-2. Add the website URL of the most suitable public landing page (`/en/` or
-   `/vi/`, based on the primary audience) if the existing root booking URL is
-   underperforming. Verify customers can still reach booking in one click.
+2. Check the current **Website** link. If it points to `/` and qualified visitors
+   leave before booking, try the most suitable public landing page (`/en/` or
+   `/vi/`, based on the primary audience); both link to the Flutter booking app
+   in one click. Compare Website clicks and bookings before keeping the change.
 3. Add genuine current interior, exterior, entrance and desk photos, accurate
    services and price details, and holiday hours. Reply to real reviews.
    Avoid invented amenities, keywords in the business name and purchased
@@ -53,8 +62,12 @@
 ## Editorial growth
 
 Keep the three languages useful to their readers. Add only verifiable details:
-workspace photos, what a day pass includes, payment options, Wi-Fi details,
-arrival guidance and any confirmed special schedule. A page about a distinct
+original workspace and entrance photos with descriptive alt text, what a day
+pass includes, payment options, Wi-Fi details, arrival guidance and any
+confirmed special schedule. A page about a distinct
 service should exist only if that service is currently available. Seek relevant
-mentions from local Nha Trang directories, community sites and partner spaces
-where the address and contact information can stay current.
+mentions from local Nha Trang directories, remote-work communities, hotels
+and partner sites where the address and contact information can stay current.
+Request honest reviews from real visitors after their visit; do not offer rewards
+or buy links/reviews. The owner has to provide rights-cleared photos and confirm
+the actual amenities before they can be accurately published here.

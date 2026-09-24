@@ -39,8 +39,30 @@ test('each localized page has readable business content and complete reciprocal 
       assert.equal(graph[0].telephone, business.phone);
       assert.equal(graph[0].priceRange, '200K VND day / 2.5M VND month');
       assert.equal(graph[1].inLanguage, lang);
+      for (const other of Object.keys(pages)) {
+        if (other !== page) {
+          assert.ok(html.includes(`class="related-card" href="${pageUrl(lang, other)}"`));
+        }
+      }
+      if (page !== 'home') {
+        assert.equal(graph[1].breadcrumb['@id'], `${pageUrl(lang, page)}#breadcrumbs`);
+        assert.deepEqual(graph[2].itemListElement.map(({ item }) => item), [pageUrl(lang, 'home'), pageUrl(lang, page)]);
+        assert.ok(html.includes(`class="breadcrumbs" aria-label="${languages[lang].common.breadcrumbs}"`));
+      }
     }
   }
+});
+
+test('booking app remains an installable Flutter app and links all language pages', async () => {
+  const index = await readFile(path.join(import.meta.dirname, '..', 'web', 'index.html'), 'utf8');
+  assert.ok(index.includes('href="manifest.json"'));
+  assert.ok(index.includes('src="flutter_bootstrap.js"'));
+  assert.ok(index.includes('id="evil-space-boot"'));
+  for (const lang of Object.keys(languages)) {
+    assert.ok(index.includes(`href="/${lang}/"`));
+  }
+  const json = index.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
+  assert.equal(JSON.parse(json)['@id'], `${business.origin}/#business`);
 });
 
 test('the sitemap includes exactly the nine public pages and robots points to it', async () => {
