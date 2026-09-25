@@ -2,10 +2,12 @@
 
 ## Publish and check
 
-1. Use `make` to start the GitHub production release, or `make build` for a
-   local build. The GitHub workflow uses pinned Flutter and Wrangler versions.
-   The SEO generator runs after Flutter's web build. Do not upload only the
-   Flutter build without the generated pages.
+1. Merging a change to the SEO content, generator, route handling or web entry
+   page into `main` starts the GitHub production release. Other app changes
+   still use `make` to request the manual release. Use `make build` for a local
+   build. The release runs checks before deploying and builds the SEO pages
+   after the pinned Flutter web build. Do not upload only the Flutter build
+   without the generated pages.
 2. Check `/en/`, `/ru/`, `/vi/`, their `/pricing/` and `/visit/` pages,
    `/robots.txt` and `/sitemap.xml` on the live `https://evils.space` domain.
    Each page should return 200, contain readable localized HTML in View Source,
