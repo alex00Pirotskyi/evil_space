@@ -20,6 +20,7 @@ test('Flutter app stays indexable at the only canonical public URL', async () =>
   const app = await readFile(path.join(import.meta.dirname, '..', 'lib', 'main.dart'), 'utf8');
   assert.match(index, /<title>Evil Space \| Coworking Space in Nha Trang<\/title>/);
   assert.ok(app.includes("title: 'Evil Space | Coworking Space in Nha Trang'"));
+  assert.ok(app.includes('SemanticsBinding.instance.ensureSemantics()'));
   assert.match(index, /<link rel="canonical" href="https:\/\/evils\.space\/">/);
   assert.match(index, /<meta name="robots" content="index,follow">/);
   assert.ok(index.includes('href="manifest.json"'));
