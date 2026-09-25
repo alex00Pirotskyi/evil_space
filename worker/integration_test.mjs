@@ -13,9 +13,7 @@ const wranglerVersion = readFileSync(
 ).trim();
 const npxInvocation = resolveNpxInvocation();
 const persistDir = path.join(repoRoot, '.wrangler', 'integration-test');
-const buildDir = path.join(repoRoot, 'build');
-const buildWebDir = path.join(buildDir, 'web');
-const hadBuildWeb = existsSync(buildWebDir);
+const testAssetsDir = path.join(persistDir, 'assets');
 const port = 8794;
 const baseUrl = `http://127.0.0.1:${port}`;
 const adminEmail = `ci-${randomBytes(6).toString('hex')}@example.invalid`;
@@ -29,16 +27,12 @@ let devOutput = '';
 try {
   assert.match(wranglerVersion, /^4\.\d+\.\d+$/);
   await removePathWithRetry(persistDir, { required: true });
-  mkdirSync(persistDir, { recursive: true });
-
-  if (!hadBuildWeb) {
-    mkdirSync(buildWebDir, { recursive: true });
-    writeFileSync(
-      path.join(buildWebDir, 'index.html'),
-      readFileSync(path.join(repoRoot, 'web', 'index.html'), 'utf8'),
-    );
-    await buildSeo(buildWebDir);
-  }
+  mkdirSync(testAssetsDir, { recursive: true });
+  writeFileSync(
+    path.join(testAssetsDir, 'index.html'),
+    readFileSync(path.join(repoRoot, 'web', 'index.html'), 'utf8'),
+  );
+  await buildSeo(testAssetsDir);
 
   console.log('Integration: applying clean local D1 migrations');
   await runWrangler([
@@ -66,7 +60,6 @@ try {
 } finally {
   await stopDev();
   await removePathWithRetry(persistDir);
-  if (!hadBuildWeb) await removePathWithRetry(buildDir);
 }
 
 function resolveNpxInvocation() {
@@ -237,6 +230,8 @@ function startDev() {
     wranglerArgs([
       'dev',
       '--local',
+      '--assets',
+      testAssetsDir,
       '--persist-to',
       persistDir,
       '--ip',
