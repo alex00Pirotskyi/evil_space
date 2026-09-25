@@ -66,7 +66,7 @@ class _EvilSpaceAppState extends State<EvilSpaceApp> {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: 'Evil Space Daily',
+      title: 'Evil Space | Coworking Space in Nha Trang',
       theme: _theme,
       builder: (context, child) => ListenableBuilder(
         listenable: _localization,
