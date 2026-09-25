@@ -418,6 +418,8 @@ class _DailyScreenState extends State<DailyScreen>
                                     const SizedBox(height: 50),
                                     _prices(compact),
                                     const SizedBox(height: 50),
+                                    _amenities(),
+                                    const SizedBox(height: 50),
                                     _openings(compact),
                                     const SizedBox(height: 50),
                                     _note(compact),
@@ -786,6 +788,92 @@ class _DailyScreenState extends State<DailyScreen>
               );
             })
             .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _amenities() {
+    const amenities = <(IconData, String, String)>[
+      (Icons.chair_alt_outlined, 'amenity_chairs', 'amenity_chairs_detail'),
+      (Icons.wifi_outlined, 'amenity_wifi', 'amenity_wifi_detail'),
+      (Icons.table_restaurant_outlined, 'amenity_desks', 'amenity_desks_detail'),
+      (Icons.ac_unit_outlined, 'amenity_air', 'amenity_air_detail'),
+      (Icons.coffee_outlined, 'amenity_coffee', 'amenity_coffee_detail'),
+      (Icons.view_week_outlined, 'amenity_panels', 'amenity_panels_detail'),
+    ];
+
+    return _Section(
+      title: widget.localization.t('about_title'),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 620
+                ? 6
+                : constraints.maxWidth < 260
+                ? 2
+                : 3;
+            final cellWidth = constraints.maxWidth / columns;
+
+            return Wrap(
+              children: [
+                for (var i = 0; i < amenities.length; i++)
+                  SizedBox(
+                    width: cellWidth,
+                    child: Semantics(
+                      label: widget.localization.t(amenities[i].$3),
+                      child: ExcludeSemantics(
+                        child: Tooltip(
+                          message: widget.localization.t(amenities[i].$3),
+                          decoration: const BoxDecoration(
+                            color: BrandPalette.ink,
+                          ),
+                          textStyle: _mono(10, color: BrandPalette.paperLift),
+                          child: Container(
+                            height: 106,
+                            padding: EdgeInsets.fromLTRB(
+                              i % columns == 0 ? 0 : 13,
+                              15,
+                              6,
+                              13,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: const BorderSide(color: BrandPalette.rule),
+                                right: i % columns == columns - 1
+                                    ? BorderSide.none
+                                    : const BorderSide(color: BrandPalette.rule),
+                                bottom: i >= amenities.length - columns
+                                    ? const BorderSide(color: BrandPalette.rule)
+                                    : BorderSide.none,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Icon(
+                                  amenities[i].$1,
+                                  size: 26,
+                                  color: BrandPalette.ink,
+                                ),
+                                Text(
+                                  widget.localization.t(amenities[i].$2),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _mono(9.5, spacing: 0.5, height: 1.25),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

@@ -21,8 +21,10 @@
    Keep the business metadata in `web/index.html`, visible functional labels
    in `lib/localization.dart`, pricing in `worker/pricing.js`, and the Business
    Profile consistent. The owner wants a quiet booking tool: use the compact
-   brand, location, hours, prices and actions already on the page. Do not add
-   explanatory SEO paragraphs or hidden keyword text to the Flutter UI.
+   brand, location, hours, prices and actions already on the page. Owner-verified
+   amenities belong in a small icon strip with brief labels and accessible
+   descriptions. Do not add explanatory SEO paragraphs or hidden keyword text
+   to the Flutter UI.
 
 ## Google Search Console
 
