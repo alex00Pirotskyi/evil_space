@@ -1,76 +1,72 @@
 # Evil Space search operations
 
-## Publish and check
+## Publish and verify
 
-1. Merging a change to the SEO content, generator, route handling or web entry
-   page into `main` starts the GitHub production release. Other app changes
-   still use `make` to request the manual release. Use `make build` for a local
-   build. The release runs checks before deploying and builds the SEO pages
-   after the pinned Flutter web build. Do not upload only the Flutter build
-   without the generated pages.
-2. Check `/en/`, `/ru/`, `/vi/`, their `/pricing/` and `/visit/` pages,
-   `/robots.txt` and `/sitemap.xml` on the live `https://evils.space` domain.
-   Each page should return 200, contain readable localized HTML in View Source,
-   and link to the booking app in its language. An unknown path such as
-   `/en/does-not-exist` should return 404.
-3. Inspect the live booking price before each release. The source business
-   facts are in `seo/content.mjs`; the regular day price is **200K VND** and
-   the month price is **2.5M VND**. Active offers or admin pricing changes can
-   override the regular price. Keep visible copy, structured data and the
-   Google Business Profile in sync.
+1. `https://evils.space/` is the only public indexable page. Keep the Flutter
+   web app and its PWA installation at this URL. The old `/en/`, `/ru/` and
+   `/vi/` landing pages redirect to `/`; internal `/menu`, `/qr` and `/admin`
+   routes work but are not indexable. Do not create localized public URLs to
+   chase keywords without an explicit design change.
+2. The GitHub production release runs automatically when `web/index.html` or
+   another path listed in `.github/workflows/release.yml` changes on `main`.
+   Flutter-only changes require the manual Production release workflow or
+   `make`. Builds run checks, compile Flutter and deploy the Worker together.
+3. After release, check the root URL, its visible rendered text, canonical,
+   `/robots.txt`, `/sitemap.xml` and app installation. Verify that retired
+   language URLs redirect to `/` and that unknown paths return 404. The
+   sitemap must list the root only.
+4. Verify all business facts against the operation before changing copy. The
+   current regular day price is **200K VND** and monthly price **2.5M VND**;
+   promotions or admin pricing may change what the app shows on a given day.
+   Keep the business metadata in `web/index.html`, visible copy in
+   `lib/localization.dart`, pricing in `worker/pricing.js`, and the Business
+   Profile consistent.
 
 ## Google Search Console
 
-The `evils.space` Domain property is verified. On **September 24, 2026**, the
-submitted `https://evils.space/sitemap.xml` showed **Success** and **9 discovered
-pages**. Discovery does not tell us whether any particular page is indexed.
+The `evils.space` Domain property is verified. On September 25, 2026, URL
+Inspection reported that the root is indexed and that the live page is eligible
+for indexing. The sitemap submission succeeded; its historical count of nine
+discovered pages can remain until Google rereads the new root-only sitemap.
+Indexing requests do not guarantee ranking, and repeating them does not speed
+up the queue.
 
-1. After each production release, inspect `https://evils.space/en/`, `/ru/`
-   and `/vi/` in the property's URL Inspection tool. Check **Indexing status**
-   and **Google-selected canonical**, run **Test live URL** if necessary, and
-   request indexing for important live pages that are eligible but not indexed.
-   Check the Page indexing report for any crawl, canonical or soft-404 issues.
-2. Review the Search results Performance report weekly with **Search type: Web**.
-   Compare the same countries, devices and date ranges before and after changes.
-   Track clicks, impressions, CTR and average position for
-   `coworking nha trang`, `coworking space nha trang`,
-   `коворкинг нячанг`, `không gian làm việc chung nha trang` and branded
-   queries. Filter by page to learn whether Google chooses `/en/`, `/ru/`, `/vi/`
-   or the Flutter booking app at `/` for each query.
-3. Check Google-selected canonicals and the intended language alternates.
-   Wait for meaningful search data before evaluating changes; a sitemap is a
-   discovery signal, not a guarantee of indexing or placement.
+1. After significant releases, inspect `https://evils.space/` in URL
+   Inspection. Check the last crawl, indexed canonical and live-rendered page.
+   If a new version has not yet been crawled, wait for normal recrawling; do not
+   keep resubmitting the same URL.
+2. In **Performance → Search results**, select **Web**, compare consistent
+   country, date and device filters, and track impressions, clicks, CTR and
+   average position for `coworking space nha trang`, `coworking nha trang`,
+   `коворкинг нячанг`, Vietnamese coworking searches and the brand name.
+   Sparse query data can be hidden by Google's privacy thresholds.
+3. Distinguish website Search Console data from Google Business Profile search
+   terms. Profile search counts show when a profile appeared on Search or Maps;
+   they are not the website's organic rankings or clicks.
 
 ## Google Business Profile
 
-1. Check the listing's current **60 Cao Văn Bé, Vĩnh Phước, Nha Trang** address,
-   map pin, phone **0565 056 748**, daily **11:00–23:00** hours and primary
-   category **Coworking space** against the actual business. Older search terms
-   include `53/14 Cao Văn Bé`; correct any stale third-party citations if the
-   current listing is accurate. Do not change the listing address to match an
-   old query.
-2. Check the current **Website** link. If it points to `/` and qualified visitors
-   leave before booking, try the most suitable public landing page (`/en/` or
-   `/vi/`, based on the primary audience); both link to the Flutter booking app
-   in one click. Compare Website clicks and bookings before keeping the change.
-3. Add genuine current interior, exterior, entrance and desk photos, accurate
-   services and price details, and holiday hours. Reply to real reviews.
-   Avoid invented amenities, keywords in the business name and purchased
-   reviews.
-4. Inspect the profile's **Website clicks**, **Calls** and **Directions**
-   separately from website impressions and clicks in Search Console. The
-   April–September 2026 profile baseline supplied by the owner was **1,982
-   views** and **595 interactions**; these are not organic website clicks.
+1. Check the current **60 Cao Văn Bé, Vĩnh Phước, Nha Trang** address and map
+   pin, phone **0565 056 748**, daily **11:00–23:00** hours, Website link to
+   `https://evils.space/` and primary category **Coworking space** against the
+   actual business. A `53/14 Cao Văn Bé` search query does not prove that
+   address belongs to this business; correct outdated external citations only
+   after confirming the real address.
+2. Add authentic current exterior, entrance and desk photos, accurate services
+   and holiday hours. Request honest reviews from actual guests after visits
+   and respond to them. Avoid keywords in the business name, invented
+   amenities and purchased reviews.
+3. Review **Website clicks**, **Calls** and **Directions** separately from
+   organic website impressions and clicks. The April–September 2026 baseline
+   supplied by the owner was **1,982 profile views** and **595 interactions**.
 
 ## Editorial growth
 
-Keep the three languages useful to their readers. Add only verifiable details:
-original workspace and entrance photos with descriptive alt text, what a day
-pass includes, payment options, Wi-Fi details, arrival guidance and any
-confirmed special schedule. A page about a distinct
-service should exist only if that service is currently available. Seek relevant
-mentions from local Nha Trang directories, remote-work communities, hotels
-and partner sites where the address and contact information can stay current.
-Request honest reviews from real visitors after their visit; do not offer rewards
-or buy links/reviews. The owner has to provide rights-cleared photos and confirm
-the actual amenities before they can be accurately published here.
+Keep the single page useful in each language. Add only verified details such
+as what a day pass includes, working conditions, arrival guidance and current
+room availability. Maintain the quiet design. Earn relevant mentions from
+Nha Trang hotels, remote-work communities, local directories and partners with
+accurate name, address and website; do not buy links or reviews. Google
+recommends distinct URLs for full language-specific search targeting, so the
+one-page design trades some Russian/Vietnamese search reach for its simple
+visitor experience.

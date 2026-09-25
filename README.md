@@ -8,7 +8,7 @@ The public site keeps the quiet paper / e-reader visual language, while the back
 
 - Flutter 3.47.2 web application
 - Cloudflare Worker for `/api/*`
-- Static English, Russian and Vietnamese pages for people and search engines
+- One installable Flutter site with English, Russian and Vietnamese on `/`
 - Cloudflare D1 database
 - Cloudflare Email Service for admin approval
 - Telegram Bot API for customer/admin workflows
@@ -33,26 +33,20 @@ The public site provides:
 
 ## Search and local discovery
 
-The Flutter booking app remains at `/`. The release build also publishes
-readable HTML pages at `/en/`, `/ru/` and `/vi/`, each with `/pricing/` and
-`/visit/` pages. These pages contain localized titles, descriptions, canonicals,
-reciprocal `hreflang`, visible business details and booking links that carry the
-selected language into the app. `/robots.txt` and `/sitemap.xml` are generated
-with the pages. Unknown localized URLs return 404 instead of the SPA shell.
+The public Flutter app and its installable web app both live at
+[evils.space](https://evils.space/). Visitors choose English, Russian or
+Vietnamese on that one page. Its title, description and business data describe
+the coworking space; the visible Flutter text includes service, location and
+booking details. `/robots.txt` and the root-only `/sitemap.xml` are generated
+after the Flutter build. Old language URLs redirect to `/`, and unknown URLs
+return 404. This one-URL design deliberately limits separate language targeting
+in search results.
 
-Visitors can read about [coworking in Nha Trang](https://evils.space/en/)
-in [Russian](https://evils.space/ru/) or
-[Vietnamese](https://evils.space/vi/). The booking app links to the matching
-language page after it loads.
-
-Edit source copy and verified business facts in `seo/content.mjs`. The release
-script runs `node tool/build_seo.mjs build/web` after the Flutter build. Pricing
-is checked against `worker/pricing.js` before pages are emitted. Run the fast
-SEO check with `node --test test/seo_site_test.mjs`.
-
-After deployment, verify the live pages and submit the sitemap in Google Search
-Console. The Google Business Profile website link, address, hours, photos and
-services need owner review; see [SEO operations](docs/seo-operations.md).
+Edit visible copy in `lib/localization.dart`, business metadata in
+`web/index.html`, and actual prices in `worker/pricing.js`. Keep those facts in
+sync, and run `node --test test/seo_site_test.mjs` for the site SEO checks.
+See [SEO operations](docs/seo-operations.md) for Search Console and Google
+Business Profile follow-up.
 
 The GitHub [production release workflow](.github/workflows/release.yml) offers
 a manual release from `main` after `CLOUDFLARE_API_TOKEN` and
