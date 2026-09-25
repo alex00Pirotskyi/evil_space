@@ -23,13 +23,14 @@ void main() {
     );
   });
 
-  test('public startup keeps admin behind a deferred Flutter boundary', () {
+  test('public startup shows the homepage and defers the admin bundle', () {
     final router = File('lib/app_router.dart').readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
 
     expect(router, contains("deferred as admin_portal"));
     expect(router, contains('admin_portal.loadLibrary()'));
-    expect(main, contains('ListenableBuilder('));
+    expect(main, contains('MaterialApp.router('));
+    expect(main, isNot(contains('_FirstVisitLanguageGate')));
     expect(main, isNot(contains('return AnimatedBuilder(')));
   });
 
