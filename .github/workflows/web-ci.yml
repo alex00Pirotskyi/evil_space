@@ -95,7 +95,7 @@ jobs:
       - name: Check generated bootstrap syntax
         run: node --check build/web/flutter_bootstrap.js
 
-      - name: Build localized pages and sitemap
+      - name: Build root sitemap and share image
         run: node tool/build_seo.mjs build/web
 
       - name: Verify release contract and bundle budget

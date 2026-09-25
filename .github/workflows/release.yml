@@ -2,13 +2,13 @@ name: Production release
 
 on:
   workflow_dispatch:
-  # Publish crawlable pages when their source changes on main. Full app releases
-  # remain manual; this job runs the same tests and production preflight first.
+  # Publish root search metadata, redirects and sitemap changes on main.
+  # Other Flutter app releases remain manual.
   push:
     branches:
       - main
     paths:
-      - 'seo/**'
+      - 'seo/share.png'
       - 'tool/build_seo.mjs'
       - 'worker/seo_pages.js'
       - 'web/index.html'

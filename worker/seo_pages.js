@@ -1,7 +1,10 @@
-// Localized marketing pages are built as static assets beside the Flutter app.
-// Whitelist the public page URLs here so unknown /en, /ru and /vi paths return
-// an actual 404 instead of Cloudflare's Flutter SPA fallback.
-const pages = new Set(['', 'pricing/', 'visit/']);
+// Redirect the retired localized marketing pages to the sole public homepage.
+// Keep unknown paths out of the Flutter SPA fallback so they cannot be indexed.
+const retiredPages = new Set([
+  '', 'index.html',
+  'pricing', 'pricing/', 'pricing/index.html',
+  'visit', 'visit/', 'visit/index.html',
+]);
 
 export async function seoResponse(request, env) {
   const url = new URL(request.url);
@@ -11,35 +14,17 @@ export async function seoResponse(request, env) {
       return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } });
     }
 
-    const lang = match[1];
     const rest = match[2];
-    if (rest === undefined || rest === 'pricing' || rest === 'visit' ||
-        rest === 'index.html' || rest === 'pricing/index.html' || rest === 'visit/index.html') {
-      const page = rest === undefined || rest === 'index.html' ? '' :
-        rest.startsWith('pricing') ? 'pricing/' : 'visit/';
-      return Response.redirect(`${url.origin}/${lang}/${page}${url.search}`, 308);
+    if (retiredPages.has(rest ?? '')) {
+      return Response.redirect('https://evils.space/', 301);
     }
-    if (!pages.has(rest)) {
-      return new Response(request.method === 'HEAD' ? null : 'Page not found', {
-        status: 404,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'X-Robots-Tag': 'noindex',
-          'Cache-Control': 'no-store',
-        },
-      });
-    }
-
-    const response = await env.ASSETS.fetch(request);
-    const headers = new Headers(response.headers);
-    headers.set('Content-Language', lang);
-    headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
-    headers.set('X-Content-Type-Options', 'nosniff');
-    headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    headers.set('X-Frame-Options', 'SAMEORIGIN');
-    return new Response(request.method === 'HEAD' ? null : response.body, {
-      status: response.status,
-      headers,
+    return new Response(request.method === 'HEAD' ? null : 'Page not found', {
+      status: 404,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Robots-Tag': 'noindex',
+        'Cache-Control': 'no-store',
+      },
     });
   }
 

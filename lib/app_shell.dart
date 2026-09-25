@@ -956,23 +956,6 @@ class _DailyScreenState extends State<DailyScreen>
       children: [
         const _Rule(),
         const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () => _launch(
-              'https://evils.space/${widget.localization.language.code}/',
-            ),
-            style: TextButton.styleFrom(
-              foregroundColor: BrandPalette.ink,
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-            ),
-            child: Text(
-              widget.localization.t('about_coworking'),
-              style: _mono(10, spacing: 0.5),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(

@@ -16,13 +16,7 @@ void main(List<String> args) {
     '_headers',
     'robots.txt',
     'sitemap.xml',
-    'seo/site.css',
     'seo/share.png',
-    for (final lang in ['en', 'ru', 'vi']) ...[
-      '$lang/index.html',
-      '$lang/pricing/index.html',
-      '$lang/visit/index.html',
-    ],
   ];
   for (final name in requiredFiles) {
     final file = File('${root.path}${Platform.pathSeparator}$name');
@@ -56,25 +50,22 @@ void main(List<String> args) {
     _fail('Cloudflare isolation headers required by threaded SkWasm are missing.');
   }
   if (!index.contains('href="https://evils.space/"') ||
-      !index.contains('href="/en/"') || index.contains('250K VND')) {
-    _fail('Booking app must link to the SEO site without advertising the old price.');
+      !index.contains('src="flutter_bootstrap.js"') ||
+      index.contains('href="/en/"') ||
+      index.contains('href="/ru/"') ||
+      index.contains('href="/vi/"') ||
+      index.contains('250K VND')) {
+    _fail('The Flutter app must remain at / without links to retired pages.');
   }
   final sitemap = File('${root.path}${Platform.pathSeparator}sitemap.xml')
       .readAsStringSync();
-  if (!sitemap.contains('https://evils.space/en/') ||
-      !sitemap.contains('https://evils.space/ru/') ||
-      !sitemap.contains('https://evils.space/vi/')) {
-    _fail('The multilingual sitemap is incomplete.');
+  if (!sitemap.contains('<loc>https://evils.space/</loc>') ||
+      RegExp(r'<loc>').allMatches(sitemap).length != 1) {
+    _fail('The sitemap must list only the Flutter homepage.');
   }
   for (final lang in ['en', 'ru', 'vi']) {
-    for (final slug in ['', 'pricing/', 'visit/']) {
-      final page = File('${root.path}${Platform.pathSeparator}$lang${Platform.pathSeparator}${slug}index.html')
-          .readAsStringSync();
-      if (!page.contains('<html lang="$lang">') ||
-          !page.contains('<h1') ||
-          !page.contains('rel="canonical" href="https://evils.space/$lang/$slug"')) {
-        _fail('Localized page $lang/$slug is incomplete.');
-      }
+    if (Directory('${root.path}${Platform.pathSeparator}$lang').existsSync()) {
+      _fail('Retired localized pages must not be deployed: /$lang/');
     }
   }
 
