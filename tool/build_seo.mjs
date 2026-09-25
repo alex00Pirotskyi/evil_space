@@ -192,6 +192,7 @@ export function renderPage(lang, page) {
 function sitemap() {
   const urls = Object.keys(languages).flatMap((lang) => Object.keys(slugs).map((page) => ({ lang, page })));
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n` +
+    `  <url>\n    <loc>${business.origin}/</loc>\n  </url>\n` +
     urls.map(({ lang, page }) => `  <url>\n    <loc>${pageUrl(lang, page)}</loc>\n` +
       Object.keys(languages).map((other) => `    <xhtml:link rel="alternate" hreflang="${other}" href="${pageUrl(other, page)}"/>`).join('\n') +
       `\n    <xhtml:link rel="alternate" hreflang="x-default" href="${pageUrl('en', page)}"/>\n  </url>`).join('\n') +
