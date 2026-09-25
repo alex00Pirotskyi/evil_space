@@ -44,7 +44,11 @@ test('sitemap lists only the root and the build removes old localized pages', as
 });
 
 test('old page URLs permanently redirect to root, unknown pages return 404', async () => {
-  const env = { ASSETS: { fetch: async () => new Response('Flutter app') } };
+  const assetPaths = [];
+  const env = { ASSETS: { fetch: async (request) => {
+    assetPaths.push(new URL(request.url).pathname);
+    return new Response('Flutter app');
+  } } };
   for (const lang of ['en', 'ru', 'vi']) {
     for (const slug of ['', '/', '/pricing', '/pricing/', '/visit', '/visit/']) {
       const res = await seoResponse(new Request(`https://evils.space/${lang}${slug}`), env);
@@ -57,6 +61,15 @@ test('old page URLs permanently redirect to root, unknown pages return 404', asy
   }
   const head = await seoResponse(new Request('https://evils.space/en/', { method: 'HEAD' }), env);
   assert.equal(head.status, 301);
-  assert.equal((await seoResponse(new Request('https://evils.space/admin'), env)).headers.get('x-robots-tag'), 'noindex, follow');
+  for (const route of ['/admin', '/admin/menu', '/menu', '/menu/', '/qr', '/qr/']) {
+    const response = await seoResponse(new Request(`https://evils.space${route}`), env);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-robots-tag'), 'noindex, follow');
+  }
+  assert.deepEqual(assetPaths, Array(6).fill('/'));
+  const config = await readFile(path.join(import.meta.dirname, '..', 'wrangler.toml'), 'utf8');
+  assert.match(config, /not_found_handling = "404-page"/);
+  assert.match(config, /"\/menu\/\*"/);
+  assert.match(config, /"\/qr\/\*"/);
   assert.equal(await seoResponse(new Request('https://evils.space/api/health'), env), null);
 });

@@ -31,9 +31,12 @@ export async function seoResponse(request, env) {
   // Preserve Flutter's existing deep links but keep duplicate app and admin
   // routes out of search results. The root still works as the booking app.
   if (url.pathname === '/admin' || url.pathname.startsWith('/admin/') ||
-      url.pathname === '/menu' || url.pathname === '/qr') {
+      url.pathname === '/menu' || url.pathname === '/menu/' ||
+      url.pathname === '/qr' || url.pathname === '/qr/') {
     if (request.method !== 'GET' && request.method !== 'HEAD') return null;
-    const response = await env.ASSETS.fetch(request);
+    // Explicitly serve the app shell at functional deep links. Cloudflare's
+    // unknown-path fallback is disabled so arbitrary URLs get a real 404.
+    const response = await env.ASSETS.fetch(new Request(new URL('/', request.url), request));
     const headers = new Headers(response.headers);
     headers.set('X-Robots-Tag', 'noindex, follow');
     return new Response(request.method === 'HEAD' ? null : response.body, {
