@@ -26,7 +26,6 @@ test:
 	node --check tool/build_seo.mjs
 	node --check worker/secure_entry.js
 	node --check worker/security.js
-	node --check worker/assistant_booking.js
 	node --check worker/telegram.js
 	node --check worker/menu.js
 	node --check worker/menu_i18n.js
@@ -43,7 +42,7 @@ test:
 	node --check worker/customer_account_test.mjs
 	node --check worker/google_account_test.mjs
 	node --check worker/vietqr_test.mjs
-	node --test worker/security_test.mjs worker/assistant_booking_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs
+	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs
 	node worker/integration_test.mjs
 	node --test test/seo_site_test.mjs
 

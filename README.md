@@ -54,15 +54,6 @@ After deployment, verify the live pages and submit the sitemap in Google Search
 Console. The Google Business Profile website link, address, hours, photos and
 services need owner review; see [SEO operations](docs/seo-operations.md).
 
-## ChatGPT desk requests
-
-The optional [ChatGPT booking action](docs/chatgpt-booking.md) reads live
-availability and can submit a **pending** desk request through the same staff
-approval flow as the Flutter app. Its published OpenAPI schema is
-`/chatgpt-booking-openapi.json`. Booking writes require a separately configured
-assistant credential; the public read endpoint needs none. This integration
-does not change the Flutter app or its installable PWA.
-
 The GitHub [production release workflow](.github/workflows/release.yml) offers
 a manual release from `main` after `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` are set as GitHub Actions secrets. It runs the same

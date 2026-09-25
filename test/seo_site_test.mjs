@@ -75,9 +75,6 @@ test('the sitemap includes exactly the nine public pages and robots points to it
   assert.match(robots, /^User-agent: \*\nAllow: \/\n/m);
   assert.match(robots, /Sitemap: https:\/\/evils\.space\/sitemap\.xml/);
   assert.ok((await readFile(path.join(output, 'seo/share.png'))).length > 1000);
-  const schema = JSON.parse(await readFile(path.join(output, 'chatgpt-booking-openapi.json'), 'utf8'));
-  assert.equal(schema.servers[0].url, business.origin);
-  assert.equal(schema.paths['/api/assistant/booking'].post['x-openai-isConsequential'], true);
 });
 
 test('language routes serve pages, redirect to canonical slashes, and reject nonexistent pages', async () => {
