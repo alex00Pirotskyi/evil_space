@@ -65,11 +65,14 @@ test('booking app remains an installable Flutter app and links all language page
   assert.equal(JSON.parse(json)['@id'], `${business.origin}/#business`);
 });
 
-test('the sitemap includes exactly the nine public pages and robots points to it', async () => {
+test('the sitemap includes the booking app and nine localized pages and robots points to it', async () => {
   const xml = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  const expected = Object.keys(languages).flatMap((lang) =>
-    Object.keys(pages).map((page) => pageUrl(lang, page)));
+  const expected = [
+    `${business.origin}/`,
+    ...Object.keys(languages).flatMap((lang) =>
+      Object.keys(pages).map((page) => pageUrl(lang, page))),
+  ];
   assert.deepEqual(locs, expected);
   const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
   assert.match(robots, /^User-agent: \*\nAllow: \/\n/m);
