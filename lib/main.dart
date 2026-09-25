@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:evil_space/app_router.dart';
@@ -9,6 +11,10 @@ import 'package:evil_space/persistent_localization.dart';
 void main() {
   usePathUrlStrategy();
   runApp(const EvilSpaceApp());
+  if (kIsWeb) {
+    // Expose the same visible Flutter text to browsers and screen readers.
+    SemanticsBinding.instance.ensureSemantics();
+  }
 }
 
 class EvilSpaceApp extends StatefulWidget {
