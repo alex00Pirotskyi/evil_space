@@ -18,6 +18,7 @@ const buildWebDir = path.join(buildDir, 'web');
 const hadBuildWeb = existsSync(buildWebDir);
 const port = 8794;
 const baseUrl = `http://127.0.0.1:${port}`;
+const assistantKey = 'integration-assistant-booking-key-0123456789';
 let dev = null;
 let devOutput = '';
 
@@ -249,6 +250,8 @@ function startDev() {
       'VIETQR_ACCOUNT_NUMBER:0123456789',
       '--var',
       'VIETQR_BANK_BIN:970436',
+      '--var',
+      `ASSISTANT_BOOKING_KEY:${assistantKey}`,
       '--log-level',
       'warn',
     ]),
@@ -291,6 +294,9 @@ async function waitForServer() {
 }
 
 async function runSeoFlow() {
+  const actionSchema = await http('/chatgpt-booking-openapi.json');
+  assert.equal(actionSchema.status, 200);
+  assert.equal((await actionSchema.json()).paths['/api/assistant/booking'].post['x-openai-isConsequential'], true);
   for (const lang of ['en', 'ru', 'vi']) {
     const response = await http(`/${lang}/`);
     assert.equal(response.status, 200);
@@ -419,6 +425,49 @@ async function runFlow() {
   payload = await response.json();
   assert.equal(payload.ok, true);
   assert.ok(Number(payload.status.total) > 0);
+
+  response = await http('/api/assistant/availability');
+  assert.equal(response.status, 200);
+  const availability = await response.json();
+  assert.equal(availability.timeZone, 'Asia/Ho_Chi_Minh');
+  assert.equal(availability.days.length, 2);
+  assert.equal(availability.days[0].date, nhaTrangDateKey());
+  assert.ok(availability.days[0].dayPassPriceVnd > 0);
+
+  const assistantRequest = {
+    name: 'Assistant Integration Guest',
+    contactType: 'phone',
+    contactValue: `+8491${String(Date.now()).slice(-7)}`,
+    serviceDate: availability.days[0].date,
+    language: 'en',
+    userConfirmed: true,
+  };
+  response = await jsonRequest('/api/assistant/booking', assistantRequest);
+  assert.equal(response.status, 401);
+  const assistantHeaders = { Authorization: `Bearer ${assistantKey}` };
+  response = await jsonRequest('/api/assistant/booking', {
+    ...assistantRequest, userConfirmed: false,
+  }, assistantHeaders);
+  assert.equal(response.status, 400);
+  response = await jsonRequest('/api/assistant/booking', {
+    ...assistantRequest, contactValue: 'not a phone',
+  }, assistantHeaders);
+  assert.equal(response.status, 400);
+  response = await jsonRequest('/api/assistant/booking', assistantRequest, assistantHeaders);
+  assert.equal(response.status, 201);
+  const assistantBooking = await response.json();
+  assert.equal(assistantBooking.status, 'pending');
+  assert.equal(assistantBooking.amountVnd, availability.days[0].dayPassPriceVnd);
+  assert.ok(assistantBooking.token.length >= 32);
+  response = await http(`/api/assistant/booking?token=${assistantBooking.token}`);
+  assert.equal(response.status, 401);
+  response = await http(`/api/assistant/booking?token=${assistantBooking.token}`, {
+    headers: assistantHeaders,
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, 'pending');
+  response = await jsonRequest('/api/assistant/booking', assistantRequest, assistantHeaders);
+  assert.equal(response.status, 409);
 
   const contactValue = `+8490${Date.now()}`;
   response = await jsonRequest('/api/public/book', {

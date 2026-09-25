@@ -1,0 +1,144 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Evil Space coworking desk requests",
+    "version": "1.0.0",
+    "description": "Check live coworking desk availability in Nha Trang and submit a request for staff approval. Submitting a request does not confirm a desk."
+  },
+  "servers": [{ "url": "https://evils.space" }],
+  "components": {
+    "securitySchemes": {
+      "assistantCredential": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Assistant booking key stored privately in ChatGPT Action authentication settings."
+      }
+    },
+    "schemas": {
+      "Availability": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "business": { "type": "string" },
+          "timeZone": { "type": "string" },
+          "openingHours": { "type": "string" },
+          "currency": { "type": "string" },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": { "type": "string", "format": "date" },
+                "freeDesks": { "type": "integer" },
+                "dayPassPriceVnd": { "type": "integer" }
+              }
+            }
+          },
+          "note": { "type": "string" }
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["pending"] },
+          "token": { "type": "string", "description": "Private status token; share only with the guest who made this request." },
+          "serviceDate": { "type": "string", "format": "date" },
+          "amountVnd": { "type": "integer" },
+          "telegramLinkUrl": { "type": ["string", "null"] },
+          "telegramLinked": { "type": "boolean" },
+          "message": { "type": "string" }
+        }
+      },
+      "BookingStatus": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["pending", "accepted", "declined", "cancelled"] },
+          "serviceDate": { "type": "string", "format": "date" },
+          "amountVnd": { "type": "integer" },
+          "telegramLinked": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/assistant/availability": {
+      "get": {
+        "operationId": "checkCoworkingDesks",
+        "summary": "Check desks for today or tomorrow in Nha Trang",
+        "description": "Read current accepted desk occupancy and price before offering to request a booking. Use the service dates returned by this endpoint, never guess a date from the chat timezone. Free counts can change and exclude pending requests.",
+        "responses": {
+          "200": {
+            "description": "Live dates, free desks and day pass prices in VND.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Availability" } } }
+          }
+        }
+      }
+    },
+    "/api/assistant/booking": {
+      "post": {
+        "operationId": "requestCoworkingDesk",
+        "summary": "Submit a desk request after the guest explicitly confirms",
+        "description": "Only use after telling the guest the local date, live VND price, that staff must accept the request, and which name and contact will be shared with Evil Space. Obtain their explicit agreement to submit before sending. Never invent personal details. A successful response means pending, not confirmed.",
+        "x-openai-isConsequential": true,
+        "security": [{ "assistantCredential": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "serviceDate": { "type": "string", "format": "date", "description": "One of the exact dates in checkCoworkingDesks (Nha Trang local date)." },
+                  "name": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Guest's own name." },
+                  "contactType": { "type": "string", "enum": ["phone", "telegram"] },
+                  "contactValue": { "type": "string", "maxLength": 160, "description": "Guest's phone number or Telegram @username, provided by the guest." },
+                  "language": { "type": "string", "enum": ["en", "ru", "vi"] },
+                  "userConfirmed": { "type": "boolean", "const": true, "description": "True only after the guest explicitly agrees to send this pending request with the displayed price and contact details." }
+                },
+                "required": ["serviceDate", "name", "contactType", "contactValue", "language", "userConfirmed"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pending request sent to staff. Token lets the assistant check its status.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Booking" } } }
+          },
+          "400": { "description": "Missing/invalid details or invalid date." },
+          "401": { "description": "Assistant booking credential missing or incorrect." },
+          "409": { "description": "No desks left or this contact already has an active request." },
+          "429": { "description": "Rate limit reached." },
+          "503": { "description": "Booking credential not configured on the Worker." }
+        }
+      },
+      "get": {
+        "operationId": "checkCoworkingBooking",
+        "summary": "Check whether staff accepted a previously submitted request",
+        "description": "Only use with the token returned to the same guest by requestCoworkingDesk. A pending booking is not confirmed.",
+        "security": [{ "assistantCredential": [] }],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": { "type": "string", "minLength": 32 },
+            "description": "Private booking token for this guest."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending, accepted, declined or cancelled status.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BookingStatus" } } }
+          },
+          "401": { "description": "Assistant booking credential missing or incorrect." },
+          "404": { "description": "Booking not found." },
+          "410": { "description": "Booking no longer in the today/tomorrow window." }
+        }
+      }
+    }
+  }
+}

@@ -218,6 +218,7 @@ export async function buildSeo(outputDir = path.join(root, 'build', 'web')) {
   await mkdir(path.join(outputDir, 'seo'), { recursive: true });
   await copyFile(path.join(root, 'seo', 'site.css'), path.join(outputDir, 'seo', 'site.css'));
   await copyFile(path.join(root, 'seo', 'share.png'), path.join(outputDir, 'seo', 'share.png'));
+  await copyFile(path.join(root, 'docs', 'chatgpt-booking-openapi.json'), path.join(outputDir, 'chatgpt-booking-openapi.json'));
   await writeFile(path.join(outputDir, 'robots.txt'),
     `User-agent: *\nAllow: /\n\nSitemap: ${business.origin}/sitemap.xml\n`, 'utf8');
   await writeFile(path.join(outputDir, 'sitemap.xml'), sitemap(), 'utf8');
