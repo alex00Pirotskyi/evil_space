@@ -61,12 +61,13 @@ node worker/integration_test.mjs
 
 For a manual remote migration run, use the repository-pinned Wrangler version from `tool/wrangler_version.txt` rather than an unversioned latest release.
 
-Normal production deployment should use:
+Normal production deployment can be started with GitHub CLI using:
 
 ```bat
 make
 ```
 
+`make` starts the GitHub Actions release using the existing Cloudflare secrets.
 The release script rehearses all migrations against clean local D1, performs a Wrangler deployment dry run, then applies remote migrations and deploys the Worker/assets.
 
 ## 4. Admin build switch

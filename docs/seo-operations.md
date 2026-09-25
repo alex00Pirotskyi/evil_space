@@ -2,7 +2,8 @@
 
 ## Publish and check
 
-1. Use `make build` or `make` with the pinned Flutter and Wrangler versions.
+1. Use `make` to start the GitHub production release, or `make build` for a
+   local build. The GitHub workflow uses pinned Flutter and Wrangler versions.
    The SEO generator runs after Flutter's web build. Do not upload only the
    Flutter build without the generated pages.
 2. Check `/en/`, `/ru/`, `/vi/`, their `/pricing/` and `/visit/` pages,
