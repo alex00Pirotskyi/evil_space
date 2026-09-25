@@ -45,8 +45,6 @@ class LocalizationController extends ChangeNotifier {
       'brand_daily': 'EVIL SPACE / DAILY',
       'hero_heading': 'Evil Space coworking space in Nha Trang',
       'hero_kicker': 'NHA TRANG / COWORKING / OPEN DAILY 11:00–23:00',
-      'hero_intro':
-          'Evil Space is a coworking space in Nha Trang with day passes and monthly desks at 60 Cao Văn Bé, Vĩnh Phước.',
       'desk_free': 'DESK AVAILABLE',
       'desks_free': 'DESKS AVAILABLE',
       'occupied': 'OCCUPIED',
@@ -102,8 +100,6 @@ class LocalizationController extends ChangeNotifier {
       'now_open': 'NOW OPEN',
       'notes_title': "TODAY'S NOTE",
       'visit_title': 'FIND EVIL SPACE',
-      'visit_copy':
-          'PHOTOS STAY ON INSTAGRAM AND GOOGLE MAPS. THIS PAGE STAYS QUIET.',
       'contact_location': '60 CAO VĂN BÉ / BẮC NHA TRANG / KHÁNH HÒA',
       'contact_instagram': 'INSTAGRAM',
       'contact_map': 'PHOTOS & REVIEWS',
@@ -111,15 +107,12 @@ class LocalizationController extends ChangeNotifier {
       'contact_zalo': 'MESSAGE ZALO',
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'CALL',
-      'about_coworking': 'ABOUT COWORKING IN NHA TRANG ↗',
       'page_one': 'PAGE 1 OF 1',
     },
     'ru': {
       'brand_daily': 'EVIL SPACE / DAILY',
       'hero_heading': 'Evil Space — коворкинг в Нячанге',
       'hero_kicker': 'НЯЧАНГ / КОВОРКИНГ / ЕЖЕДНЕВНО 11:00–23:00',
-      'hero_intro':
-          'Evil Space — коворкинг в Нячанге с рабочими местами на день и на месяц по адресу 60 Cao Văn Bé, Vĩnh Phước.',
       'desk_free': 'СВОБОДНЫЙ СТОЛ',
       'desks_free': 'СВОБОДНЫХ СТОЛОВ',
       'occupied': 'ЗАНЯТО',
@@ -175,7 +168,6 @@ class LocalizationController extends ChangeNotifier {
       'now_open': 'УЖЕ ОТКРЫТО',
       'notes_title': 'ЗАМЕТКА НА СЕГОДНЯ',
       'visit_title': 'НАЙТИ EVIL SPACE',
-      'visit_copy': 'ФОТО — В INSTAGRAM И GOOGLE MAPS. ЗДЕСЬ ОСТАЁТСЯ ТИШИНА.',
       'contact_location': '60 CAO VĂN BÉ / СЕВЕРНЫЙ НЯЧАНГ / KHÁNH HÒA',
       'contact_instagram': 'INSTAGRAM',
       'contact_map': 'ФОТО И ОТЗЫВЫ',
@@ -183,15 +175,12 @@ class LocalizationController extends ChangeNotifier {
       'contact_zalo': 'НАПИСАТЬ В ZALO',
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'ПОЗВОНИТЬ',
-      'about_coworking': 'О КОВОРКИНГЕ В НЯЧАНГЕ ↗',
       'page_one': 'СТРАНИЦА 1 ИЗ 1',
     },
     'vi': {
       'brand_daily': 'EVIL SPACE / DAILY',
       'hero_heading': 'Evil Space — không gian làm việc chung tại Nha Trang',
       'hero_kicker': 'NHA TRANG / COWORKING / MỞ CỬA HẰNG NGÀY 11:00–23:00',
-      'hero_intro':
-          'Evil Space là không gian làm việc chung tại Nha Trang, có vé ngày và chỗ ngồi theo tháng tại 60 Cao Văn Bé, Vĩnh Phước.',
       'desk_free': 'BÀN TRỐNG',
       'desks_free': 'BÀN TRỐNG',
       'occupied': 'ĐANG DÙNG',
@@ -247,7 +236,6 @@ class LocalizationController extends ChangeNotifier {
       'now_open': 'ĐÃ MỞ CỬA',
       'notes_title': 'GHI CHÚ HÔM NAY',
       'visit_title': 'TÌM EVIL SPACE',
-      'visit_copy': 'ẢNH Ở INSTAGRAM VÀ GOOGLE MAPS. TRANG NÀY LUÔN YÊN TĨNH.',
       'contact_location': '60 CAO VĂN BÉ / BẮC NHA TRANG / KHÁNH HÒA',
       'contact_instagram': 'INSTAGRAM',
       'contact_map': 'ẢNH & ĐÁNH GIÁ',
@@ -255,7 +243,6 @@ class LocalizationController extends ChangeNotifier {
       'contact_zalo': 'NHẮN ZALO',
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'GỌI',
-      'about_coworking': 'VỀ KHÔNG GIAN LÀM VIỆC TẠI NHA TRANG ↗',
       'page_one': 'TRANG 1 / 1',
     },
   };

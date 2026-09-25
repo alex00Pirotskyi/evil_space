@@ -489,11 +489,6 @@ class _DailyScreenState extends State<DailyScreen>
           widget.localization.t('hero_kicker'),
           style: _mono(11, color: BrandPalette.inkMuted, spacing: 1.35),
         ),
-        const SizedBox(height: 14),
-        Text(
-          widget.localization.t('hero_intro'),
-          style: _serif(compact ? 17 : 19, height: 1.3),
-        ),
       ],
     );
   }
@@ -885,11 +880,6 @@ class _DailyScreenState extends State<DailyScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 22),
-          Text(
-            widget.localization.t('visit_copy'),
-            style: _serif(compact ? 18 : 21, height: 1.35),
-          ),
-          const SizedBox(height: 24),
           Container(
             height: compact ? 170 : 190,
             decoration: BoxDecoration(

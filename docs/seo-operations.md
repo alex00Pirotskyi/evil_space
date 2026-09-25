@@ -18,9 +18,11 @@
 4. Verify all business facts against the operation before changing copy. The
    current regular day price is **200K VND** and monthly price **2.5M VND**;
    promotions or admin pricing may change what the app shows on a given day.
-   Keep the business metadata in `web/index.html`, visible copy in
-   `lib/localization.dart`, pricing in `worker/pricing.js`, and the Business
-   Profile consistent.
+   Keep the business metadata in `web/index.html`, visible functional labels
+   in `lib/localization.dart`, pricing in `worker/pricing.js`, and the Business
+   Profile consistent. The owner wants a quiet booking tool: use the compact
+   brand, location, hours, prices and actions already on the page. Do not add
+   explanatory SEO paragraphs or hidden keyword text to the Flutter UI.
 
 ## Google Search Console
 
@@ -62,9 +64,8 @@ up the queue.
 
 ## Editorial growth
 
-Keep the single page useful in each language. Add only verified details such
-as what a day pass includes, working conditions, arrival guidance and current
-room availability. Maintain the quiet design. Earn relevant mentions from
+Keep the single page useful in each language through accurate prices, booking
+availability, directions, and concise labels. Earn relevant mentions from
 Nha Trang hotels, remote-work communities, local directories and partners with
 accurate name, address and website; do not buy links or reviews. Google
 recommends distinct URLs for full language-specific search targeting, so the
