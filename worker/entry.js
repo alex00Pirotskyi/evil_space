@@ -202,7 +202,7 @@ function constantTimeEqual(a, b) {
   return diff === 0;
 }
 
-async function handlePublicStatus(env) {
+export async function handlePublicStatus(env) {
   const now = nowSeconds();
   const { today, tomorrow, end } = bookingWindow(now);
   const row = await env.evil_space
@@ -244,7 +244,7 @@ async function handlePublicStatus(env) {
   });
 }
 
-async function handlePublicBooking(request, env, ctx) {
+export async function handlePublicBooking(request, env, ctx) {
   const body = await readJson(request);
   if (!body) return jsonError('Invalid request.', 400);
 
@@ -334,7 +334,7 @@ async function handlePublicBooking(request, env, ctx) {
   );
 }
 
-async function handlePublicBookingStatus(url, env) {
+export async function handlePublicBookingStatus(url, env) {
   const token = url.searchParams.get('token') ?? '';
   if (!isReasonableToken(token)) return jsonError('Invalid booking.', 400);
 

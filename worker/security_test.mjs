@@ -108,6 +108,24 @@ test('public booking is rate limited by contact plus client identity', async () 
   assert.equal(bookings.calls[0].key.includes('+84'), false);
 });
 
+test('assistant booking requires an authorized key and limits both contact and IP', async () => {
+  const bookings = limiter(true);
+  const key = 'test-assistant-booking-key-0123456789';
+  const body = {
+    name: 'Guest', contactType: 'phone', contactValue: '+84912345678',
+    serviceDate: '2026-09-25', userConfirmed: true,
+  };
+  const env = { PUBLIC_BOOKING_RATE_LIMITER: bookings, ASSISTANT_BOOKING_KEY: key };
+  assert.equal(await securityGate(request('/api/assistant/booking', body), env), null);
+  assert.equal(bookings.calls.length, 0);
+  assert.equal(await securityGate(request('/api/assistant/booking', body,
+    { Authorization: `Bearer ${key}` }), env), null);
+  assert.equal(bookings.calls.length, 2);
+  assert.match(bookings.calls[0].key, /^assistant-book:[a-f0-9]{64}$/);
+  assert.match(bookings.calls[1].key, /^assistant-book-ip:[a-f0-9]{64}$/);
+  assert.ok(bookings.calls.every(({ key: hashed }) => !hashed.includes('+84')));
+});
+
 test('multi-item menu carts are rate limited too', async () => {
   const bookings = limiter(false);
   const response = await securityGate(

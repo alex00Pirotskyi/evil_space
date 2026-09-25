@@ -1,3 +1,5 @@
+import { assistantKeyAuthorized } from './assistant_booking.js';
+
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const MAX_JSON_BYTES = 16384;
 
@@ -53,6 +55,15 @@ export async function securityGate(request, env) {
     limiter = env.PUBLIC_BOOKING_RATE_LIMITER;
     scope = 'public-book';
     identity = `${contactType}:${contactValue.toLowerCase()}`;
+  } else if (url.pathname === '/api/assistant/booking') {
+    // Unauthorized requests must not consume the customer rate limit.
+    if (!assistantKeyAuthorized(request, env)) return null;
+    const body = await readJsonClone(request);
+    const contactValue = cleanText(body?.contactValue, 160);
+    if (!contactValue) return null;
+    limiter = env.PUBLIC_BOOKING_RATE_LIMITER;
+    scope = 'assistant-book';
+    identity = `${body?.contactType}:${contactValue.toLowerCase()}`;
   } else if (url.pathname === '/api/public/menu/order') {
     const body = await readJsonClone(request);
     const direct = cleanText(body?.itemId, 64);
@@ -73,7 +84,15 @@ export async function securityGate(request, env) {
   try {
     const key = await rateLimitKey(scope, identity, ip);
     const result = await limiter.limit({ key });
-    if (result?.success === true) return null;
+    if (result?.success === true) {
+      if (scope === 'assistant-book') {
+        // Also limit contact rotation from the same caller.
+        const ipKey = await rateLimitKey('assistant-book-ip', 'all-contacts', ip);
+        const perIp = await limiter.limit({ key: ipKey });
+        if (perIp?.success !== true) return rateLimitResponse();
+      }
+      return null;
+    }
     return rateLimitResponse();
   } catch (error) {
     console.error('Security rate limiter failed', safeError(error));

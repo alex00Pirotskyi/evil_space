@@ -7,6 +7,7 @@ import promoWorker from './promo_engine.js';
 import customerAccountWorker, { handleCustomerTelegramShortcut } from './customer_account.js';
 import googleAccountWorker from './google_account.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
+import assistantBooking from './assistant_booking.js';
 
 const FEATURE_ROUTES = new Set([
   'POST /api/telegram/webhook',
@@ -28,6 +29,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const route = `${request.method} ${url.pathname}`;
+
+    if (url.pathname.startsWith('/api/assistant/')) {
+      return assistantBooking.fetch(request, env, ctx);
+    }
 
     if (route === 'GET /api/admin/review') {
       return adminReview.review(url, env);
