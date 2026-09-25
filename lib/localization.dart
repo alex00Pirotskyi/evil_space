@@ -43,7 +43,10 @@ class LocalizationController extends ChangeNotifier {
   static const Map<String, Map<String, String>> strings = {
     'en': {
       'brand_daily': 'EVIL SPACE / DAILY',
+      'hero_heading': 'Evil Space coworking space in Nha Trang',
       'hero_kicker': 'NHA TRANG / COWORKING / OPEN DAILY 11:00–23:00',
+      'hero_intro':
+          'Evil Space is a coworking space in Nha Trang with day passes and monthly desks at 60 Cao Văn Bé, Vĩnh Phước.',
       'desk_free': 'DESK AVAILABLE',
       'desks_free': 'DESKS AVAILABLE',
       'occupied': 'OCCUPIED',
@@ -113,7 +116,10 @@ class LocalizationController extends ChangeNotifier {
     },
     'ru': {
       'brand_daily': 'EVIL SPACE / DAILY',
+      'hero_heading': 'Evil Space — коворкинг в Нячанге',
       'hero_kicker': 'НЯЧАНГ / КОВОРКИНГ / ЕЖЕДНЕВНО 11:00–23:00',
+      'hero_intro':
+          'Evil Space — коворкинг в Нячанге с рабочими местами на день и на месяц по адресу 60 Cao Văn Bé, Vĩnh Phước.',
       'desk_free': 'СВОБОДНЫЙ СТОЛ',
       'desks_free': 'СВОБОДНЫХ СТОЛОВ',
       'occupied': 'ЗАНЯТО',
@@ -182,7 +188,10 @@ class LocalizationController extends ChangeNotifier {
     },
     'vi': {
       'brand_daily': 'EVIL SPACE / DAILY',
+      'hero_heading': 'Evil Space — không gian làm việc chung tại Nha Trang',
       'hero_kicker': 'NHA TRANG / COWORKING / MỞ CỬA HẰNG NGÀY 11:00–23:00',
+      'hero_intro':
+          'Evil Space là không gian làm việc chung tại Nha Trang, có vé ngày và chỗ ngồi theo tháng tại 60 Cao Văn Bé, Vĩnh Phước.',
       'desk_free': 'BÀN TRỐNG',
       'desks_free': 'BÀN TRỐNG',
       'occupied': 'ĐANG DÙNG',

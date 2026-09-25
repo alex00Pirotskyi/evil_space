@@ -476,7 +476,11 @@ class _DailyScreenState extends State<DailyScreen>
         const SizedBox(height: 26),
         Align(
           alignment: Alignment.centerLeft,
-          child: EvilCoworkingLogo(width: compact ? 210 : 270),
+          child: Semantics(
+            header: true,
+            label: widget.localization.t('hero_heading'),
+            child: EvilCoworkingLogo(width: compact ? 210 : 270),
+          ),
         ),
         const SizedBox(height: 26),
         const _Rule(),
@@ -484,6 +488,11 @@ class _DailyScreenState extends State<DailyScreen>
         Text(
           widget.localization.t('hero_kicker'),
           style: _mono(11, color: BrandPalette.inkMuted, spacing: 1.35),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          widget.localization.t('hero_intro'),
+          style: _serif(compact ? 17 : 19, height: 1.3),
         ),
       ],
     );
