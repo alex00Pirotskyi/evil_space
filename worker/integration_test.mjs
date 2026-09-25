@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash, pbkdf2Sync } from 'node:crypto';
+import { createHash, pbkdf2Sync, randomBytes, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -18,6 +18,11 @@ const buildWebDir = path.join(buildDir, 'web');
 const hadBuildWeb = existsSync(buildWebDir);
 const port = 8794;
 const baseUrl = `http://127.0.0.1:${port}`;
+const adminEmail = `ci-${randomBytes(6).toString('hex')}@example.invalid`;
+const reviewAdminEmail = `review-${randomBytes(6).toString('hex')}@example.invalid`;
+const adminPassword = randomBytes(24).toString('base64url');
+const reviewApprovalToken = randomBytes(32).toString('base64url');
+const testPaymentAccount = String(randomInt(1000000000, 10000000000));
 let dev = null;
 let devOutput = '';
 
@@ -30,7 +35,7 @@ try {
     mkdirSync(buildWebDir, { recursive: true });
     writeFileSync(
       path.join(buildWebDir, 'index.html'),
-      '<!doctype html><title>Evil Space integration test</title>',
+      readFileSync(path.join(repoRoot, 'web', 'index.html'), 'utf8'),
     );
     await buildSeo(buildWebDir);
   }
@@ -55,10 +60,8 @@ try {
 
   console.log('Integration: running API flow');
   await runFlow();
-  if (existsSync(path.join(buildWebDir, 'en', 'index.html'))) {
-    console.log('Integration: checking crawlable routes');
-    await runSeoFlow();
-  }
+  console.log('Integration: checking root-only search routes');
+  await runSeoFlow();
   console.log('Worker integration flow passed.');
 } finally {
   await stopDev();
@@ -181,33 +184,32 @@ function runProcess(
 
 async function seedAdmins() {
   const now = Math.floor(Date.now() / 1000);
-  const salt = Buffer.alloc(16, 7);
+  const salt = randomBytes(16);
   const saltBase64 = salt.toString('base64');
   const passwordHash = pbkdf2Sync(
-    '1234',
+    adminPassword,
     salt,
     50000,
     32,
     'sha256',
   ).toString('base64');
-  const reviewToken = reviewApprovalToken();
   const reviewHash = createHash('sha256')
-    .update(reviewToken)
+    .update(reviewApprovalToken)
     .digest('base64url');
 
   const sql = `
-    DELETE FROM admins WHERE email IN ('ci-admin@evils.space', 'review-admin@evils.space');
+    DELETE FROM admins WHERE email IN (${sqlString(adminEmail)}, ${sqlString(reviewAdminEmail)});
     INSERT INTO admins
       (email, password_hash, password_salt, status, approval_token_hash,
        approval_expires_at, created_at, approved_at)
     VALUES
-      ('ci-admin@evils.space', ${sqlString(passwordHash)}, ${sqlString(saltBase64)},
+      (${sqlString(adminEmail)}, ${sqlString(passwordHash)}, ${sqlString(saltBase64)},
        'approved', NULL, NULL, ${now}, ${now});
     INSERT INTO admins
       (email, password_hash, password_salt, status, approval_token_hash,
        approval_expires_at, created_at, approved_at)
     VALUES
-      ('review-admin@evils.space', ${sqlString(passwordHash)}, ${sqlString(saltBase64)},
+      (${sqlString(reviewAdminEmail)}, ${sqlString(passwordHash)}, ${sqlString(saltBase64)},
        'pending', ${sqlString(reviewHash)}, ${now + 3600}, ${now}, NULL);
   `;
   const seedFile = path.join(persistDir, 'admin-seed.sql');
@@ -229,10 +231,6 @@ function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function reviewApprovalToken() {
-  return 'integration-review-token-0123456789-ABCDEFGH';
-}
-
 function startDev() {
   const child = spawn(
     npxInvocation.executable,
@@ -246,9 +244,7 @@ function startDev() {
       '--port',
       String(port),
       '--var',
-      'VIETQR_ACCOUNT_NUMBER:0123456789',
-      '--var',
-      'VIETQR_BANK_BIN:970436',
+      `VIETQR_ACCOUNT_NUMBER:${testPaymentAccount}`,
       '--log-level',
       'warn',
     ]),
@@ -291,15 +287,16 @@ async function waitForServer() {
 }
 
 async function runSeoFlow() {
+  const root = await http('/');
+  assert.equal(root.status, 200);
+  assert.match(await root.text(), /<title>Evil Space \| Coworking Space in Nha Trang<\/title>/);
   for (const lang of ['en', 'ru', 'vi']) {
-    const response = await http(`/${lang}/`);
-    assert.equal(response.status, 200);
-    assert.match(await response.text(), new RegExp(`<html lang="${lang}">`));
-    assert.equal(response.headers.get('content-language'), lang);
-
-    const redirect = await fetch(`${baseUrl}/${lang}/pricing`, { redirect: 'manual' });
-    assert.equal(redirect.status, 308);
-    assert.equal(new URL(redirect.headers.get('location')).pathname, `/${lang}/pricing/`);
+    for (const slug of ['/', '/pricing/', '/visit/']) {
+      const redirect = await fetch(`${baseUrl}/${lang}${slug}`, { redirect: 'manual' });
+      assert.equal(redirect.status, 301);
+      // Wrangler dev rewrites the redirect host to its local origin.
+      assert.equal(new URL(redirect.headers.get('location')).pathname, '/');
+    }
 
     const unknown = await http(`/${lang}/this-page-does-not-exist`);
     assert.equal(unknown.status, 404);
@@ -310,7 +307,7 @@ async function runSeoFlow() {
   assert.match(await robots.text(), /Sitemap: https:\/\/evils\.space\/sitemap\.xml/);
   const sitemap = await http('/sitemap.xml');
   assert.equal(sitemap.status, 200);
-  assert.match(await sitemap.text(), /https:\/\/evils\.space\/ru\/visit\//);
+  assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map((m) => m[1]), ['https://evils.space/']);
   const admin = await http('/admin');
   assert.equal(admin.headers.get('x-robots-tag'), 'noindex, follow');
 }
@@ -323,8 +320,8 @@ async function runFlow() {
   assert.equal(response.status, 401);
 
   response = await jsonRequest('/api/admin/login', {
-    email: 'ci-admin@evils.space',
-    password: '1234',
+    email: adminEmail,
+    password: adminPassword,
   });
   assert.equal(response.status, 200);
   const setCookie = response.headers.get('set-cookie');
@@ -337,7 +334,7 @@ async function runFlow() {
   assert.equal(response.status, 200);
   let payload = await response.json();
   assert.equal(payload.authenticated, true);
-  assert.equal(payload.email, 'ci-admin@evils.space');
+  assert.equal(payload.email, adminEmail);
 
   response = await jsonRequest(
     '/api/admin/menu/upload',
@@ -420,10 +417,10 @@ async function runFlow() {
   assert.equal(payload.ok, true);
   assert.ok(Number(payload.status.total) > 0);
 
-  const contactValue = `+8490${Date.now()}`;
+  const contactValue = `@integration_${randomBytes(6).toString('hex')}`;
   response = await jsonRequest('/api/public/book', {
     name: 'Integration Test',
-    contactType: 'phone',
+    contactType: 'telegram',
     contactValue,
     serviceDate: nhaTrangDateKey(),
     language: 'en',
@@ -470,7 +467,7 @@ async function runFlow() {
   payload = await response.json();
   assert.ok(Number(payload.status.occupied) >= 1);
 
-  const reviewToken = reviewApprovalToken();
+  const reviewToken = reviewApprovalToken;
   response = await http(
     `/api/admin/review?token=${encodeURIComponent(reviewToken)}`,
   );

@@ -51,7 +51,7 @@
     "@type": "LocalBusiness",
     "@id": "https://evils.space/#business",
     "name": "Evil Space",
-    "url": "https://evils.space/en/",
+    "url": "https://evils.space/",
     "image": "https://evils.space/seo/share.png",
     "description": "Coworking space in Nha Trang with a 200K VND regular day pass and 2.5M VND month pass.",
     "telephone": "+84565056748",
@@ -154,14 +154,6 @@
       background: var(--rule);
     }
 
-    .evil-space-boot-link {
-      display: inline-block;
-      margin-top: 16px;
-      color: var(--ink);
-      font: 700 11px/1.4 "Courier New", monospace;
-      text-underline-offset: 3px;
-    }
-
     noscript {
       display: block;
       max-width: 720px;
@@ -180,13 +172,11 @@
 <body>
   <div id="evil-space-boot" role="status" aria-live="polite">
     <div class="evil-space-boot-card">
-      <p class="evil-space-boot-brand">EVIL SPACE</p>
+      <h1 class="evil-space-boot-brand">EVIL SPACE</h1>
       <p class="evil-space-boot-meta">NHA TRANG · COWORKING · 11:00–23:00</p>
       <div class="evil-space-boot-rule"></div>
       <p id="evil-space-boot-copy" class="evil-space-boot-meta">OPENING DAILY…</p>
-      <a class="evil-space-boot-link" href="/en/">COWORKING IN NHA TRANG · ENGLISH ↗</a><br>
-      <a class="evil-space-boot-link" href="/ru/" lang="ru">КОВОРКИНГ В НЯЧАНГЕ ↗</a><br>
-      <a class="evil-space-boot-link" href="/vi/" lang="vi">COWORKING NHA TRANG · TIẾNG VIỆT ↗</a>
+      <p class="evil-space-boot-meta">60 CAO VĂN BÉ · DAY & MONTHLY DESKS</p>
     </div>
   </div>
 
@@ -195,9 +185,7 @@
     <p>Visit 60 Cao Văn Bé, Vĩnh Phước, Nha Trang, 11:00–23:00 daily.
       A day pass is 200K VND at the regular rate; a one-month plan is 2.5M VND.
       JavaScript is required to open the booking app.</p>
-    <p>Learn about the coworking space and how to visit in
-      <a href="/en/">English</a>, <a href="/ru/" lang="ru">Русский</a>, or
-      <a href="/vi/" lang="vi">Tiếng Việt</a>.</p>
+    <p>The app offers English, Русский and Tiếng Việt on this same page.</p>
   </noscript>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="google_sign_in.js" defer></script>
