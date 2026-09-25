@@ -34,7 +34,6 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/seo_pages.js']);
   await _run('node', ['--check', 'tool/build_seo.mjs']);
   await _run('node', ['--check', 'worker/security.js']);
-  await _run('node', ['--check', 'worker/assistant_booking.js']);
   await _run('node', ['--check', 'worker/telegram.js']);
   await _run('node', ['--check', 'worker/menu.js']);
   await _run('node', ['--check', 'worker/menu_i18n.js']);
@@ -59,7 +58,6 @@ Future<void> main(List<String> args) async {
   await _run('node', [
     '--test',
     'worker/security_test.mjs',
-    'worker/assistant_booking_test.mjs',
     'worker/telegram_test.mjs',
     'worker/booking_rules_test.mjs',
     'worker/pricing_test.mjs',

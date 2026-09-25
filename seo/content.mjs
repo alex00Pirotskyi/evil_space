@@ -41,10 +41,10 @@ export const languages = Object.freeze({
     pages: {
       home: {
         title: 'Coworking Space in Nha Trang | Evil Space',
-        description: 'A quiet coworking space in Nha Trang at 60 Cao Văn Bé. Day passes, monthly desks, daily hours 11:00–23:00 and online desk booking.',
+        description: 'Coworking space in Nha Trang at 60 Cao Văn Bé, Vĩnh Phước. Day passes from the regular 200K VND rate, monthly desks and online booking.',
         eyebrow: 'Nha Trang / Coworking / Open 11:00–23:00',
-        heading: 'Coworking in Nha Trang for your next good workday.',
-        lead: 'Evil Space is a coworking space in Nha Trang for people who want a desk, a clear plan and time to focus. Come for a day or make it your place for a month.',
+        heading: 'A coworking space in Nha Trang for a day or a month.',
+        lead: 'Work from Evil Space at 60 Cao Văn Bé in Vĩnh Phước, Nha Trang. Choose a day pass or ask about a monthly desk; we open every day from 11:00 to 23:00.',
         sections: [
           { heading: 'Choose the day that works', paragraphs: [
             'See current desk availability and request a desk for today or tomorrow online. The space has ten desks; availability changes as people book.',
@@ -60,7 +60,7 @@ export const languages = Object.freeze({
         ],
         faqs: [
           { q: 'Can I book a desk for tomorrow?', a: 'Yes. The booking app accepts requests for today and tomorrow and shows availability for both days.' },
-          { q: 'Do I need to choose a language to read this page?', a: 'No. English, Russian and Vietnamese each have their own page. You can switch languages at the top of the page.' },
+          { q: 'Where is this Nha Trang coworking space?', a: 'Evil Space is at 60 Cao Văn Bé, Vĩnh Phước, Nha Trang. Follow the Google Maps link on this page to check the location and see photos before visiting.' },
         ],
         ctaHeading: 'Your desk is a few taps away.',
         ctaText: 'Check live availability, choose today or tomorrow, and send your booking request.',
@@ -161,7 +161,7 @@ export const languages = Object.freeze({
         ],
         faqs: [
           { q: 'Можно забронировать стол на завтра?', a: 'Да. В приложении можно отправить заявку на сегодня или завтра и посмотреть свободные места на обе даты.' },
-          { q: 'Есть ли сайт на других языках?', a: 'Да. У английской, русской и вьетнамской версий отдельные страницы. Переключатель языка находится вверху.' },
+          { q: 'Где находится коворкинг в Нячанге?', a: 'Evil Space находится по адресу 60 Cao Văn Bé, район Vĩnh Phước, Нячанг. Ссылку на маршрут и настоящие фотографии можно найти на этой странице.' },
         ],
         ctaHeading: 'Ваш рабочий стол уже близко.',
         ctaText: 'Посмотрите свободные места, выберите сегодня или завтра и отправьте заявку.',
@@ -245,7 +245,7 @@ export const languages = Object.freeze({
         title: 'Coworking Nha Trang | Không gian làm việc Evil Space',
         description: 'Evil Space là không gian coworking tại 60 Cao Văn Bé, Nha Trang. Có vé ngày, gói tháng, mở cửa 11:00–23:00 và nhận đặt bàn trực tuyến.',
         eyebrow: 'Nha Trang / Không gian làm việc / 11:00–23:00',
-        heading: 'Coworking tại Nha Trang để tập trung làm việc.',
+        heading: 'Không gian coworking tại Nha Trang cho một ngày hoặc một tháng.',
         lead: 'Evil Space là không gian làm việc chung tại Nha Trang dành cho những ai cần một chiếc bàn và thời gian để tập trung. Ghé làm việc một ngày hoặc chọn gói một tháng.',
         sections: [
           { heading: 'Chọn ngày phù hợp', paragraphs: [
@@ -262,7 +262,7 @@ export const languages = Object.freeze({
         ],
         faqs: [
           { q: 'Tôi có thể đặt bàn cho ngày mai không?', a: 'Có. Ứng dụng nhận yêu cầu cho hôm nay và ngày mai, đồng thời hiển thị số bàn còn trống của cả hai ngày.' },
-          { q: 'Trang này có những ngôn ngữ nào?', a: 'Evil Space có trang riêng bằng tiếng Việt, tiếng Anh và tiếng Nga. Bạn có thể chuyển ngôn ngữ ở đầu trang.' },
+          { q: 'Không gian coworking này nằm ở đâu tại Nha Trang?', a: 'Evil Space ở 60 Cao Văn Bé, phường Vĩnh Phước, Nha Trang. Bạn có thể xem vị trí trên Google Maps và tham khảo ảnh thật trước khi ghé.' },
         ],
         ctaHeading: 'Bàn làm việc của bạn đang chờ.',
         ctaText: 'Xem chỗ trống, chọn hôm nay hoặc ngày mai rồi gửi yêu cầu đặt bàn.',
