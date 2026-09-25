@@ -187,7 +187,7 @@ Future<void> _verifyCloudflareAccess() async {
         output.contains('not valid or is not authorized')) {
       _cloudflareAuthDie();
     }
-    _die('Cloudflare D1 preflight failed. Fix Wrangler access and run make again.');
+    _die('Cloudflare D1 preflight failed. Fix Wrangler access and retry the release.');
   }
 
   stdout.writeln('Cloudflare D1 access: OK');
@@ -246,7 +246,7 @@ Never _cloudflareAuthDie() {
     '  npx --yes $wrangler logout\n'
     '  npx --yes $wrangler login\n'
     '  npx --yes $wrangler whoami\n'
-    'Then run make again.',
+    'Then run make deploy-local again (or run the GitHub production workflow).',
   );
 }
 

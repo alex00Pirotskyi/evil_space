@@ -1,8 +1,11 @@
 .DEFAULT_GOAL := deploy
 
-.PHONY: deploy build verify test telegram-setup
+.PHONY: deploy deploy-local build verify test telegram-setup
 
 deploy:
+	bash tool/trigger_github_release.sh
+
+deploy-local:
 	dart run tool/release.dart
 
 build:

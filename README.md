@@ -58,7 +58,7 @@ The GitHub [production release workflow](.github/workflows/release.yml) offers
 a manual release from `main` after `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` are set as GitHub Actions secrets. It runs the same
 verified Flutter build, D1 migration, Wrangler deployment and health check as
-`make deploy`; it does not alter the Flutter app or its PWA install URL.
+`make deploy-local`; it does not alter the Flutter app or its PWA install URL.
 
 To configure that workflow from a terminal, install [GitHub CLI](https://cli.github.com/),
 then run:
@@ -75,8 +75,9 @@ use the **Edit Cloudflare Workers** template, add **Account > D1 > Edit/Write**,
 and scope it to the account that owns `evil-space` and the `evils.space` zone.
 Cloudflare requires an initial dashboard token before tokens can be created by
 API. Do not paste the token in a GitHub issue, chat, command argument or file.
-Setting the secrets does not start a release. When ready, run **Production
-release** from GitHub Actions on `main`.
+Setting the secrets does not start a release. When ready, run `make` (requires
+GitHub CLI signed in), or start **Production release** from GitHub Actions on
+`main`. Both use the stored Actions secrets; no local Cloudflare login is needed.
 
 ## Admin
 
@@ -178,7 +179,10 @@ Do not replace the pinned version with an unversioned `wrangler@latest` in relea
 make
 ```
 
-The release script performs, in order:
+`make` dispatches the production release on GitHub's `main` branch. It returns
+when GitHub accepts the workflow; follow the run URL shown by GitHub CLI for
+its result. You do not need a local Flutter build or Cloudflare login. The
+GitHub workflow performs, in order:
 
 1. Flutter version verification
 2. Cloudflare account and remote D1 access preflight
@@ -194,6 +198,10 @@ The release script performs, in order:
 12. production `/api/health` verification
 
 The dry run and clean local migration rehearsal happen before remote D1 changes, reducing the chance of discovering a packaging or schema problem only after production migration.
+
+If you specifically need to deploy from your own computer, `make deploy-local`
+runs the same release script and requires a local Flutter 3.47.2+ installation
+and authenticated Wrangler access to the Cloudflare account.
 
 Other useful commands:
 
