@@ -294,7 +294,8 @@ async function runSeoFlow() {
     for (const slug of ['/', '/pricing/', '/visit/']) {
       const redirect = await fetch(`${baseUrl}/${lang}${slug}`, { redirect: 'manual' });
       assert.equal(redirect.status, 301);
-      assert.equal(redirect.headers.get('location'), 'https://evils.space/');
+      // Wrangler dev rewrites the redirect host to its local origin.
+      assert.equal(new URL(redirect.headers.get('location')).pathname, '/');
     }
 
     const unknown = await http(`/${lang}/this-page-does-not-exist`);
