@@ -28,10 +28,15 @@
 
 ## Google Search Console
 
-The `evils.space` Domain property is verified. On September 25, 2026, URL
-Inspection reported that the root is indexed and that the live page is eligible
-for indexing. The sitemap submission succeeded; its historical count of nine
-discovered pages can remain until Google rereads the new root-only sitemap.
+The `evils.space` Domain property is verified. On September 26, 2026, URL
+Inspection reported that the root is indexed, selected by Google as its own
+canonical, and eligible for indexing in the live test. The sitemap is successful
+and reports **one discovered page**. The Googlebot smartphone live test loaded
+all resources and the rendered HTML contains Flutter's semantic app content;
+its screenshot preview was blank, so recheck rendered content if a later crawl
+loses it. Search Console's Web performance showed **31 impressions, 1 click**
+and **3 impressions** for `coworking nha trang` with only September 23–24 data.
+This is too small a sample to infer a reliable generic-query rank.
 Indexing requests do not guarantee ranking, and repeating them does not speed
 up the queue.
 
@@ -63,6 +68,12 @@ up the queue.
 3. Review **Website clicks**, **Calls** and **Directions** separately from
    organic website impressions and clicks. The April–September 2026 baseline
    supplied by the owner was **1,982 profile views** and **595 interactions**.
+4. On September 26, 2026, the profile description was updated with the real
+   coworking offer and short English, Russian and Vietnamese wording. Weekend
+   hours were corrected from closed to 11:00–23:00 to match the published site;
+   the Instagram profile was added. The day-pass and monthly-desk services were
+   submitted and were pending Google review. Check the published services and
+   verify holiday hours and any future schedule changes against the operation.
 
 ## Editorial growth
 
