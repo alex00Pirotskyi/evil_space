@@ -68,8 +68,8 @@ void main() {
 
       expect(find.text('01  /  COWORKING'), findsOneWidget);
       expect(find.text('02  /  CAFÉ'), findsOneWidget);
-      await tester.ensureVisible(find.text('VIEW MENU ↗'));
-      await tester.tap(find.text('VIEW MENU ↗'));
+      await tester.ensureVisible(find.text('VIEW MENU'));
+      await tester.tap(find.text('VIEW MENU'));
       await tester.pumpAndSettle();
 
       expect(find.byType(MenuScreen), findsOneWidget);
@@ -89,13 +89,13 @@ void main() {
       localization.setLanguage(AppLanguage.ru);
       expect(localization.t('price_month'), 'ОДИН МЕСЯЦ');
       expect(localization.t('price_locker'), 'ЛИЧНЫЙ ШКАФЧИК');
-      expect(localization.t('amenity_menu'), 'ОТКРЫТЬ МЕНЮ ↗');
+      expect(localization.t('amenity_menu'), 'ОТКРЫТЬ МЕНЮ');
       expect(localization.t('opening_studio'), 'ПОДКАСТ / СТУДИЯ');
 
       localization.setLanguage(AppLanguage.vi);
       expect(localization.t('prices_title'), 'BẢNG GIÁ');
       expect(localization.t('price_locker'), 'TỦ CÁ NHÂN');
-      expect(localization.t('amenity_menu'), 'XEM THỰC ĐƠN ↗');
+      expect(localization.t('amenity_menu'), 'XEM THỰC ĐƠN');
       expect(localization.t('opening_lecture'), 'PHÒNG HỘI THẢO');
       expect(localization.t('contact_map'), 'ẢNH & ĐÁNH GIÁ');
 
