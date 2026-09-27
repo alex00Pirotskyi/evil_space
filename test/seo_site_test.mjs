@@ -28,7 +28,11 @@ test('Flutter app stays indexable at the only canonical public URL', async () =>
   assert.ok(index.includes('id="evil-space-boot"'));
   assert.ok(!/href="\/(en|ru|vi)\//.test(index));
   const json = index.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
-  assert.equal(JSON.parse(json).url, 'https://evils.space/');
+  const business = JSON.parse(json);
+  assert.equal(business.url, 'https://evils.space/');
+  assert.ok(business.amenityFeature.every((feature) =>
+    feature['@type'] === 'LocationFeatureSpecification' && feature.value === true));
+  assert.ok(business.amenityFeature.some((feature) => feature.name === 'Coffee bar'));
 });
 
 test('sitemap lists only the root and the build removes old localized pages', async () => {
