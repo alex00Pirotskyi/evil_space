@@ -793,13 +793,17 @@ class _DailyScreenState extends State<DailyScreen>
   }
 
   Widget _amenities() {
-    const amenities = <(IconData, String, String)>[
-      (Icons.chair_alt_outlined, 'amenity_chairs', 'amenity_chairs_detail'),
-      (Icons.wifi_outlined, 'amenity_wifi', 'amenity_wifi_detail'),
-      (Icons.table_restaurant_outlined, 'amenity_desks', 'amenity_desks_detail'),
-      (Icons.ac_unit_outlined, 'amenity_air', 'amenity_air_detail'),
-      (Icons.coffee_outlined, 'amenity_coffee', 'amenity_coffee_detail'),
-      (Icons.view_week_outlined, 'amenity_panels', 'amenity_panels_detail'),
+    const work = <(IconData, String, String, bool)>[
+      (Icons.chair_alt_outlined, 'amenity_chairs', 'amenity_chairs_detail', false),
+      (Icons.wifi_outlined, 'amenity_wifi', 'amenity_wifi_detail', false),
+      (Icons.table_restaurant_outlined, 'amenity_desks', 'amenity_desks_detail', false),
+      (Icons.ac_unit_outlined, 'amenity_air', 'amenity_air_detail', false),
+      (Icons.view_week_outlined, 'amenity_panels', 'amenity_panels_detail', false),
+      (Icons.lock_outline, 'amenity_locker', 'amenity_locker_detail', false),
+    ];
+    const cafe = <(IconData, String, String, bool)>[
+      (Icons.coffee_outlined, 'amenity_coffee', 'amenity_coffee_detail', false),
+      (Icons.restaurant_menu, 'amenity_menu', 'amenity_menu_detail', true),
     ];
 
     return _Section(
@@ -808,27 +812,78 @@ class _DailyScreenState extends State<DailyScreen>
         padding: const EdgeInsets.only(top: 20),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 620
-                ? 6
-                : constraints.maxWidth < 260
-                ? 2
-                : 3;
-            final cellWidth = constraints.maxWidth / columns;
-
-            return Wrap(
+            if (constraints.maxWidth >= 650) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: _amenityGroup('01', 'amenity_work_zone', work, 3),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: _amenityGroup('02', 'amenity_cafe_zone', cafe, 2),
+                  ),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < amenities.length; i++)
-                  SizedBox(
-                    width: cellWidth,
-                    child: Semantics(
-                      label: widget.localization.t(amenities[i].$3),
-                      child: ExcludeSemantics(
-                        child: Tooltip(
-                          message: widget.localization.t(amenities[i].$3),
-                          decoration: const BoxDecoration(
-                            color: BrandPalette.ink,
-                          ),
-                          textStyle: _mono(10, color: BrandPalette.paperLift),
+                _amenityGroup(
+                  '01',
+                  'amenity_work_zone',
+                  work,
+                  constraints.maxWidth < 270 ? 2 : 3,
+                ),
+                const SizedBox(height: 28),
+                _amenityGroup('02', 'amenity_cafe_zone', cafe, 2),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _amenityGroup(
+    String number,
+    String zoneKey,
+    List<(IconData, String, String, bool)> amenities,
+    int columns,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            '$number  /  ${widget.localization.t(zoneKey)}',
+            style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7),
+          ),
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) => Wrap(
+            children: [
+              for (var i = 0; i < amenities.length; i++)
+                SizedBox(
+                  width: constraints.maxWidth / columns,
+                  child: Semantics(
+                    label: widget.localization.t(amenities[i].$3),
+                    button: amenities[i].$4,
+                    onTap: amenities[i].$4
+                        ? () => widget.onNavigate(AppRoute.menu)
+                        : null,
+                    child: ExcludeSemantics(
+                      child: Tooltip(
+                        message: widget.localization.t(amenities[i].$3),
+                        decoration: const BoxDecoration(color: BrandPalette.ink),
+                        textStyle: _mono(10, color: BrandPalette.paperLift),
+                        child: InkWell(
+                          onTap: amenities[i].$4
+                              ? () => widget.onNavigate(AppRoute.menu)
+                              : null,
                           child: Container(
                             height: 106,
                             padding: EdgeInsets.fromLTRB(
@@ -852,11 +907,7 @@ class _DailyScreenState extends State<DailyScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Icon(
-                                  amenities[i].$1,
-                                  size: 26,
-                                  color: BrandPalette.ink,
-                                ),
+                                Icon(amenities[i].$1, size: 26, color: BrandPalette.ink),
                                 Text(
                                   widget.localization.t(amenities[i].$2),
                                   maxLines: 2,
@@ -870,11 +921,11 @@ class _DailyScreenState extends State<DailyScreen>
                       ),
                     ),
                   ),
-              ],
-            );
-          },
+                ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 

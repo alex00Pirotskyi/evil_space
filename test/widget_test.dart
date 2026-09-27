@@ -7,6 +7,7 @@ import 'package:evil_space/app_router.dart';
 import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/main.dart';
+import 'package:evil_space/menu_screen.dart';
 
 void main() {
   group('routing', () {
@@ -60,6 +61,20 @@ void main() {
       expect(find.byType(SelectionArea), findsOneWidget);
       expect(find.byType(Overlay), findsWidgets);
     });
+
+    testWidgets('the café amenity opens the existing menu', (tester) async {
+      await tester.pumpWidget(const EvilSpaceApp());
+      await tester.pumpAndSettle();
+
+      expect(find.text('01  /  COWORKING'), findsOneWidget);
+      expect(find.text('02  /  CAFÉ'), findsOneWidget);
+      await tester.ensureVisible(find.text('VIEW MENU ↗'));
+      await tester.tap(find.text('VIEW MENU ↗'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MenuScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('localization', () {
@@ -68,16 +83,19 @@ void main() {
       expect(localization.t('brand_daily'), 'EVIL SPACE / DAILY');
       expect(localization.t('prices_title'), 'SIMPLE PRICES');
       expect(localization.t('price_locker'), 'PERSONAL LOCKER');
+      expect(localization.t('amenity_cafe_zone'), 'CAFÉ');
       expect(localization.t('visit_title'), 'FIND EVIL SPACE');
 
       localization.setLanguage(AppLanguage.ru);
       expect(localization.t('price_month'), 'ОДИН МЕСЯЦ');
       expect(localization.t('price_locker'), 'ЛИЧНЫЙ ШКАФЧИК');
+      expect(localization.t('amenity_menu'), 'ОТКРЫТЬ МЕНЮ ↗');
       expect(localization.t('opening_studio'), 'ПОДКАСТ / СТУДИЯ');
 
       localization.setLanguage(AppLanguage.vi);
       expect(localization.t('prices_title'), 'BẢNG GIÁ');
       expect(localization.t('price_locker'), 'TỦ CÁ NHÂN');
+      expect(localization.t('amenity_menu'), 'XEM THỰC ĐƠN ↗');
       expect(localization.t('opening_lecture'), 'PHÒNG HỘI THẢO');
       expect(localization.t('contact_map'), 'ẢNH & ĐÁNH GIÁ');
 
