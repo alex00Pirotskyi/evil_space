@@ -93,7 +93,7 @@ export async function grantSignupPromos(env, customerId, now = nowSeconds()) {
   if (statements.length) await env.evil_space.batch(statements);
 }
 
-export async function resolvePromoForCart(env, customerId, grantId, lines, now = nowSeconds()) {
+export async function resolvePromoForCart(env, customerId, grantId, lines, now = nowSeconds(), options = {}) {
   const cid = toPositiveInt(customerId);
   const gid = toPositiveInt(grantId);
   if (!cid || !gid) return { error: 'Promo is not available.' };
@@ -121,7 +121,26 @@ export async function resolvePromoForCart(env, customerId, grantId, lines, now =
   if (grant.expires_at != null && Number(grant.expires_at) <= now) {
     return { error: 'Promo has expired.' };
   }
-  const remaining = Number(grant.granted_uses) - Number(grant.used_uses) - Number(grant.reserved_uses);
+  const ignoreMenuOrderId = toPositiveInt(options?.ignoreMenuOrderId);
+  let ownReservation = 0;
+  if (ignoreMenuOrderId) {
+    const own = await env.evil_space
+      .prepare(`
+        SELECT 1 AS reserved
+        FROM promo_redemptions
+        WHERE order_type = 'menu' AND order_id = ?
+          AND customer_promo_id = ? AND status = 'reserved'
+        LIMIT 1
+      `)
+      .bind(ignoreMenuOrderId, gid)
+      .first();
+    ownReservation = own ? 1 : 0;
+  }
+  const remaining =
+    Number(grant.granted_uses) -
+    Number(grant.used_uses) -
+    Number(grant.reserved_uses) +
+    ownReservation;
   if (remaining < 1) return { error: 'Promo has no uses remaining.' };
 
   const originalAmountVnd = lines.reduce((sum, line) => sum + Number(line.lineTotalVnd || 0), 0);
@@ -133,16 +152,29 @@ export async function resolvePromoForCart(env, customerId, grantId, lines, now =
   }
 
   if (grant.max_total_uses != null) {
-    const used = await env.evil_space
-      .prepare(`
-        SELECT COUNT(*) AS count
-        FROM promo_redemptions
-        WHERE customer_promo_id IN (
-          SELECT id FROM customer_promo_grants WHERE promotion_id = ?
-        ) AND status IN ('reserved', 'consumed')
-      `)
-      .bind(Number(grant.promotion_id))
-      .first();
+    const used = ignoreMenuOrderId
+      ? await env.evil_space
+          .prepare(`
+            SELECT COUNT(*) AS count
+            FROM promo_redemptions
+            WHERE customer_promo_id IN (
+              SELECT id FROM customer_promo_grants WHERE promotion_id = ?
+            )
+              AND status IN ('reserved', 'consumed')
+              AND NOT (order_type = 'menu' AND order_id = ?)
+          `)
+          .bind(Number(grant.promotion_id), ignoreMenuOrderId)
+          .first()
+      : await env.evil_space
+          .prepare(`
+            SELECT COUNT(*) AS count
+            FROM promo_redemptions
+            WHERE customer_promo_id IN (
+              SELECT id FROM customer_promo_grants WHERE promotion_id = ?
+            ) AND status IN ('reserved', 'consumed')
+          `)
+          .bind(Number(grant.promotion_id))
+          .first();
     if (Number(used?.count ?? 0) >= Number(grant.max_total_uses)) {
       return { error: 'Promo campaign has reached its usage limit.' };
     }
