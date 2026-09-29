@@ -726,19 +726,29 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
                       : () => setState(() => _selected[option.id] = value),
                   borderRadius: BorderRadius.circular(30),
                   child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: Icon(
-                      value <= selected
-                          ? Icons.circle
-                          : Icons.circle_outlined,
-                      size: 24,
-                      color: value < option.min
-                          ? BrandPalette.rule
-                          : BrandPalette.ink,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: value <= selected
+                            ? BrandPalette.ink
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: value < option.min
+                              ? BrandPalette.rule
+                              : BrandPalette.ink,
+                          width: 1.4,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 3),
+                const SizedBox(width: 8),
               ],
             ],
           ),
