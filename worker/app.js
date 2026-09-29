@@ -83,6 +83,10 @@ export default {
 };
 
 async function cachedPublicStatus(request, env, ctx) {
+  if (env.EVIL_SPACE_DISABLE_STATUS_CACHE === '1') {
+    return featureWorker.fetch(request, env, ctx);
+  }
+
   const requestUrl = new URL(request.url);
   if (
     requestUrl.hostname === 'localhost' ||
