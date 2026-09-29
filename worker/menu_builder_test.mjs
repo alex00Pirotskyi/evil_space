@@ -95,3 +95,51 @@ test('menu builder rejects incomplete translations and invalid prices', () => {
   price.groups[0].items[0].priceVnd = -1;
   assert.match(validateDraftMenu(price).error, /Invalid price/i);
 });
+
+
+test('menu builder preserves configurable item options', () => {
+  const menu = structuredClone(valid);
+  menu.groups[0].items[0].options = [
+    {
+      id: 'strength',
+      type: 'dots',
+      name: { en: 'Strength', ru: 'Крепость', vi: 'Độ đậm' },
+      min: 1,
+      max: 3,
+      default: 1,
+      pricePerStepVnd: 20000,
+    },
+    {
+      id: 'extras',
+      type: 'multiple',
+      name: { en: 'Extras', ru: 'Добавки', vi: 'Thêm' },
+      values: [
+        {
+          id: 'milk',
+          name: { en: 'Milk', ru: 'Молоко', vi: 'Sữa' },
+          priceDeltaVnd: 5000,
+        },
+      ],
+    },
+  ];
+  const result = validateDraftMenu(menu);
+  assert.equal(result.error, undefined);
+  assert.equal(result.menu.groups[0].items[0].options.length, 2);
+  assert.equal(result.menu.groups[0].items[0].options[0].pricePerStepVnd, 20000);
+});
+
+test('menu builder rejects invalid option ranges', () => {
+  const menu = structuredClone(valid);
+  menu.groups[0].items[0].options = [
+    {
+      id: 'strength',
+      type: 'dots',
+      name: { en: 'Strength', ru: 'Крепость', vi: 'Độ đậm' },
+      min: 3,
+      max: 1,
+      default: 1,
+      pricePerStepVnd: 20000,
+    },
+  ];
+  assert.match(validateDraftMenu(menu).error, /Invalid options|dots range/i);
+});

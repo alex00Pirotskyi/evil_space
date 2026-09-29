@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -24,7 +25,7 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   final _api = MenuApi();
-  final Map<String, int> _cart = {};
+  final List<_CartLine> _cart = [];
   MenuCatalog? _menu;
   String? _error;
   bool _loading = true;
@@ -70,38 +71,117 @@ class _MenuScreenState extends State<MenuScreen> {
         for (final group in menu.groups)
           for (final item in group.items.where((item) => item.enabled)) item.id,
       };
-      _cart.removeWhere((id, _) => !available.contains(id));
+      _cart.removeWhere((line) => !available.contains(line.item.id));
       setState(() { _menu = menu; _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _error = _copy('load_error'); });
     }
   }
 
-  void _changeQuantity(MenuItem item, int delta) {
+  Future<void> _addItem(MenuItem item) async {
     if (_checkingOut) return;
-    final next = ((_cart[item.id] ?? 0) + delta).clamp(0, 20);
+    if (!item.hasOptions) {
+      final existing = _cart.indexWhere(
+        (line) => line.item.id == item.id && line.options.isEmpty,
+      );
+      setState(() {
+        if (existing >= 0) {
+          final line = _cart[existing];
+          if (line.quantity < 20) {
+            _cart[existing] = line.copyWith(quantity: line.quantity + 1);
+          }
+        } else {
+          _cart.add(
+            _CartLine(
+              item: item,
+              quantity: 1,
+              unitPriceVnd: item.priceVnd,
+              options: const {},
+            ),
+          );
+        }
+      });
+      return;
+    }
+
+    final configured = await showDialog<_ConfiguredItem>(
+      context: context,
+      builder: (_) => _ItemOptionsDialog(
+        item: item,
+        languageCode: widget.localization.language.code,
+        addLabel: _copy('add_to_cart'),
+        cancelLabel: _copy('cancel'),
+        totalLabel: _copy('total'),
+      ),
+    );
+    if (configured == null || !mounted) return;
+
+    final key = _selectionKey(item.id, configured.options);
+    final existing = _cart.indexWhere((line) => line.key == key);
     setState(() {
-      if (next == 0) _cart.remove(item.id); else _cart[item.id] = next;
+      if (existing >= 0) {
+        final line = _cart[existing];
+        if (line.quantity < 20) {
+          _cart[existing] = line.copyWith(quantity: line.quantity + 1);
+        }
+      } else {
+        _cart.add(
+          _CartLine(
+            item: item,
+            quantity: 1,
+            unitPriceVnd: configured.unitPriceVnd,
+            options: configured.options,
+          ),
+        );
+      }
     });
   }
 
-  List<_CartLine> get _cartLines {
-    final menu = _menu;
-    if (menu == null) return const [];
-    final byId = <String, MenuItem>{
-      for (final group in menu.groups)
-        for (final item in group.items) item.id: item,
-    };
-    return _cart.entries
-        .map((entry) => byId[entry.key] == null
-            ? null
-            : _CartLine(item: byId[entry.key]!, quantity: entry.value))
-        .whereType<_CartLine>()
-        .toList(growable: false);
+  void _changeLineQuantity(_CartLine line, int delta) {
+    if (_checkingOut) return;
+    final index = _cart.indexWhere((entry) => entry.key == line.key);
+    if (index < 0) return;
+    final next = (_cart[index].quantity + delta).clamp(0, 20);
+    setState(() {
+      if (next == 0) {
+        _cart.removeAt(index);
+      } else {
+        _cart[index] = _cart[index].copyWith(quantity: next);
+      }
+    });
   }
 
-  int get _cartCount => _cart.values.fold(0, (sum, value) => sum + value);
-  int get _cartTotal => _cartLines.fold(0, (sum, line) => sum + line.total);
+  void _removeOneConfigured(MenuItem item) {
+    if (_checkingOut) return;
+    for (var index = _cart.length - 1; index >= 0; index--) {
+      final line = _cart[index];
+      if (line.item.id != item.id) continue;
+      setState(() {
+        if (line.quantity <= 1) {
+          _cart.removeAt(index);
+        } else {
+          _cart[index] = line.copyWith(quantity: line.quantity - 1);
+        }
+      });
+      return;
+    }
+  }
+
+  _CartLine? _simpleLine(MenuItem item) {
+    for (final line in _cart) {
+      if (line.item.id == item.id && line.options.isEmpty) return line;
+    }
+    return null;
+  }
+
+  int _configuredCount(MenuItem item) => _cart
+      .where((line) => line.item.id == item.id)
+      .fold(0, (sum, line) => sum + line.quantity);
+
+  List<_CartLine> get _cartLines => List.unmodifiable(_cart);
+
+  int get _cartCount => _cart.fold(0, (sum, line) => sum + line.quantity);
+  int get _cartTotal => _cart.fold(0, (sum, line) => sum + line.total);
 
   Future<void> _checkout() async {
     if (_checkingOut || _cart.isEmpty) return;
@@ -112,7 +192,9 @@ class _MenuScreenState extends State<MenuScreen> {
     try {
       List<PromoPreview> promos = const [];
       try {
-        promos = await _api.eligiblePromos(Map<String, int>.from(_cart)).timeout(
+        promos = await _api.eligiblePromos(
+          lines.map((line) => line.request).toList(growable: false),
+        ).timeout(
           const Duration(seconds: 8),
         );
       } catch (_) {
@@ -141,7 +223,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
       final order = await _api
           .createCartOrder(
-            Map<String, int>.from(_cart),
+            lines.map((line) => line.request).toList(growable: false),
             promoGrantId: choice.promoGrantId,
           )
           .timeout(const Duration(seconds: 12));
@@ -258,17 +340,16 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _item(MenuItem item) {
-    final quantity = _cart[item.id] ?? 0;
+    final simpleLine = _simpleLine(item);
+    final configuredCount = _configuredCount(item);
+    final language = widget.localization.language.code;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BrandPalette.rule))),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(
-            item.nameFor(widget.localization.language.code),
-            style: _serif(25),
-          ),
-          if (item.descriptionFor(widget.localization.language.code) case final description?) ...[
+          Text(item.nameFor(language), style: _serif(25)),
+          if (item.descriptionFor(language) case final description?) ...[
             const SizedBox(height: 5),
             Text(
               description,
@@ -276,12 +357,56 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ],
           const SizedBox(height: 8),
-          Text(_money(item.priceVnd), style: _mono(12)),
+          Text(
+            item.hasVariablePrice
+                ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
+                : _money(item.priceVnd),
+            style: _mono(12),
+          ),
         ])),
         const SizedBox(width: 16),
-        if (quantity == 0)
+        if (item.hasOptions && configuredCount == 0)
           FilledButton(
-            onPressed: _checkingOut ? null : () => _changeQuantity(item, 1),
+            onPressed: _checkingOut ? null : () => _addItem(item),
+            style: _filledButtonStyle(minWidth: 120),
+            child: Text(
+              _copy('customize'),
+              style: _mono(9.5, color: BrandPalette.paperLift),
+            ),
+          )
+        else if (item.hasOptions)
+          Container(
+            decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: _checkingOut
+                      ? null
+                      : () => _removeOneConfigured(item),
+                  icon: const Icon(Icons.remove, size: 18),
+                ),
+                SizedBox(
+                  width: 34,
+                  child: Text(
+                    '$configuredCount',
+                    textAlign: TextAlign.center,
+                    style: _mono(12),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _checkingOut
+                      ? null
+                      : () => _addItem(item),
+                  tooltip: _copy('customize'),
+                  icon: const Icon(Icons.tune, size: 18),
+                ),
+              ],
+            ),
+          )
+        else if (simpleLine == null)
+          FilledButton(
+            onPressed: _checkingOut ? null : () => _addItem(item),
             style: _filledButtonStyle(),
             child: Text(_copy('add'), style: _mono(10, color: BrandPalette.paperLift)),
           )
@@ -289,9 +414,24 @@ class _MenuScreenState extends State<MenuScreen> {
           Container(
             decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(onPressed: _checkingOut ? null : () => _changeQuantity(item, -1), icon: const Icon(Icons.remove, size: 18)),
-              SizedBox(width: 34, child: Text('$quantity', textAlign: TextAlign.center, style: _mono(12))),
-              IconButton(onPressed: _checkingOut || quantity >= 20 ? null : () => _changeQuantity(item, 1), icon: const Icon(Icons.add, size: 18)),
+              IconButton(
+                onPressed: _checkingOut ? null : () => _changeLineQuantity(simpleLine, -1),
+                icon: const Icon(Icons.remove, size: 18),
+              ),
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '${simpleLine.quantity}',
+                  textAlign: TextAlign.center,
+                  style: _mono(12),
+                ),
+              ),
+              IconButton(
+                onPressed: _checkingOut || simpleLine.quantity >= 20
+                    ? null
+                    : () => _changeLineQuantity(simpleLine, 1),
+                icon: const Icon(Icons.add, size: 18),
+              ),
             ]),
           ),
       ]),
@@ -346,11 +486,412 @@ class _MenuScreenState extends State<MenuScreen> {
       );
 }
 
+class _ConfiguredItem {
+  const _ConfiguredItem({
+    required this.options,
+    required this.unitPriceVnd,
+  });
+
+  final Map<String, dynamic> options;
+  final int unitPriceVnd;
+}
+
+class _ItemOptionsDialog extends StatefulWidget {
+  const _ItemOptionsDialog({
+    required this.item,
+    required this.languageCode,
+    required this.addLabel,
+    required this.cancelLabel,
+    required this.totalLabel,
+  });
+
+  final MenuItem item;
+  final String languageCode;
+  final String addLabel;
+  final String cancelLabel;
+  final String totalLabel;
+
+  @override
+  State<_ItemOptionsDialog> createState() => _ItemOptionsDialogState();
+}
+
+class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
+  late final Map<String, dynamic> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = <String, dynamic>{};
+    for (final option in widget.item.options) {
+      if (option.isDots) {
+        _selected[option.id] = option.defaultDots;
+      } else if (option.isSingle && option.defaultChoice != null) {
+        _selected[option.id] = option.defaultChoice;
+      } else if (option.isMultiple) {
+        _selected[option.id] = <String>[];
+      }
+    }
+  }
+
+  bool get _valid {
+    for (final option in widget.item.options) {
+      if (option.isSingle && option.required) {
+        final value = _selected[option.id]?.toString() ?? '';
+        if (value.isEmpty) return false;
+      }
+    }
+    return true;
+  }
+
+  int get _unitPrice {
+    var total = widget.item.priceVnd;
+    for (final option in widget.item.options) {
+      if (option.isDots) {
+        final value = _selected[option.id] is int
+            ? _selected[option.id] as int
+            : option.defaultDots;
+        total += (value - option.min) * option.pricePerStepVnd;
+        continue;
+      }
+      if (option.isSingle) {
+        final selected = _selected[option.id]?.toString();
+        if (selected == null) continue;
+        for (final value in option.values) {
+          if (value.id == selected) {
+            total += value.priceDeltaVnd;
+            break;
+          }
+        }
+        continue;
+      }
+      final selected = _selected[option.id];
+      if (selected is List) {
+        for (final raw in selected) {
+          for (final value in option.values) {
+            if (value.id == raw.toString()) {
+              total += value.priceDeltaVnd;
+              break;
+            }
+          }
+        }
+      }
+    }
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.item.nameFor(widget.languageCode).toUpperCase(),
+                style: _mono(12),
+              ),
+              const SizedBox(height: 6),
+              Text(_money(widget.item.priceVnd), style: _serif(25)),
+              const SizedBox(height: 18),
+              for (final option in widget.item.options) ...[
+                _option(option),
+                const SizedBox(height: 18),
+              ],
+              const Divider(color: BrandPalette.ink),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.totalLabel.toUpperCase(),
+                      style: _mono(10),
+                    ),
+                  ),
+                  Text(_money(_unitPrice), style: _serif(24)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BrandPalette.ink,
+                        side: const BorderSide(color: BrandPalette.ink),
+                        minimumSize: const Size.fromHeight(48),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Text(
+                        widget.cancelLabel.toUpperCase(),
+                        style: _mono(9),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: !_valid
+                          ? null
+                          : () => Navigator.pop(
+                                context,
+                                _ConfiguredItem(
+                                  options: _normalizedSelection(),
+                                  unitPriceVnd: _unitPrice,
+                                ),
+                              ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BrandPalette.ink,
+                        foregroundColor: BrandPalette.paperLift,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Text(
+                        widget.addLabel.toUpperCase(),
+                        style: _mono(9, color: BrandPalette.paperLift),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _normalizedSelection() {
+    final result = <String, dynamic>{};
+    for (final option in widget.item.options) {
+      final value = _selected[option.id];
+      if (option.isMultiple) {
+        final selected = value is List
+            ? value.map((entry) => entry.toString()).toList(growable: false)
+            : const <String>[];
+        result[option.id] = selected;
+      } else if (value != null) {
+        result[option.id] = value;
+      }
+    }
+    return result;
+  }
+
+  Widget _option(MenuOptionGroup option) {
+    final title = option.name.resolve(widget.languageCode).toUpperCase();
+    if (option.isDots) {
+      final selected = _selected[option.id] is int
+          ? _selected[option.id] as int
+          : option.defaultDots;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title, style: _mono(10))),
+              if (option.pricePerStepVnd > 0)
+                Text(
+                  '+${_money(option.pricePerStepVnd)} / ●',
+                  style: _mono(8.5, color: BrandPalette.inkMuted),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              if (option.min == 0)
+                TextButton(
+                  onPressed: () => setState(() => _selected[option.id] = 0),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(42, 42),
+                    shape: const RoundedRectangleBorder(),
+                    side: BorderSide(
+                      color: selected == 0
+                          ? BrandPalette.ink
+                          : BrandPalette.rule,
+                    ),
+                  ),
+                  child: Text('0', style: _mono(10)),
+                ),
+              if (option.min == 0) const SizedBox(width: 10),
+              for (var value = 1; value <= option.max; value++) ...[
+                InkWell(
+                  onTap: value < option.min
+                      ? null
+                      : () => setState(() => _selected[option.id] = value),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      value <= selected
+                          ? Icons.circle
+                          : Icons.circle_outlined,
+                      size: 24,
+                      color: value < option.min
+                          ? BrandPalette.rule
+                          : BrandPalette.ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 3),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (option.isSingle) {
+      final selected = _selected[option.id]?.toString();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: _mono(10)),
+          const SizedBox(height: 5),
+          for (final value in option.values)
+            RadioListTile<String>(
+              value: value.id,
+              groupValue: selected,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value.name.resolve(widget.languageCode),
+                      style: _serif(17),
+                    ),
+                  ),
+                  if (value.priceDeltaVnd > 0)
+                    Text(
+                      '+${_money(value.priceDeltaVnd)}',
+                      style: _mono(9),
+                    ),
+                ],
+              ),
+              onChanged: (next) =>
+                  setState(() => _selected[option.id] = next),
+            ),
+        ],
+      );
+    }
+
+    final selected = (_selected[option.id] as List?)?.cast<String>() ??
+        <String>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: _mono(10)),
+        const SizedBox(height: 5),
+        for (final value in option.values)
+          CheckboxListTile(
+            value: selected.contains(value.id),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value.name.resolve(widget.languageCode),
+                    style: _serif(17),
+                  ),
+                ),
+                if (value.priceDeltaVnd > 0)
+                  Text('+${_money(value.priceDeltaVnd)}', style: _mono(9)),
+              ],
+            ),
+            onChanged: (checked) {
+              final next = [...selected];
+              if (checked == true) {
+                if (!next.contains(value.id)) next.add(value.id);
+              } else {
+                next.remove(value.id);
+              }
+              setState(() => _selected[option.id] = next);
+            },
+          ),
+      ],
+    );
+  }
+}
+
 class _CartLine {
-  const _CartLine({required this.item, required this.quantity});
+  const _CartLine({
+    required this.item,
+    required this.quantity,
+    required this.unitPriceVnd,
+    required this.options,
+  });
+
   final MenuItem item;
   final int quantity;
-  int get total => item.priceVnd * quantity;
+  final int unitPriceVnd;
+  final Map<String, dynamic> options;
+
+  String get key => _selectionKey(item.id, options);
+  int get total => unitPriceVnd * quantity;
+  MenuCartRequestLine get request => MenuCartRequestLine(
+        itemId: item.id,
+        quantity: quantity,
+        options: options,
+      );
+
+  _CartLine copyWith({int? quantity}) => _CartLine(
+        item: item,
+        quantity: quantity ?? this.quantity,
+        unitPriceVnd: unitPriceVnd,
+        options: options,
+      );
+
+  String label(String languageCode) {
+    final parts = <String>[];
+    for (final option in item.options) {
+      final selected = options[option.id];
+      if (option.isDots) {
+        final value = selected is int ? selected : option.defaultDots;
+        parts.add('${option.name.resolve(languageCode)} $value/${option.max}');
+      } else if (option.isSingle) {
+        final id = selected?.toString();
+        if (id == null) continue;
+        final value = option.values.where((entry) => entry.id == id).firstOrNull;
+        if (value != null) parts.add(value.name.resolve(languageCode));
+      } else if (option.isMultiple && selected is List) {
+        for (final raw in selected) {
+          final value = option.values.where((entry) => entry.id == raw.toString()).firstOrNull;
+          if (value != null) parts.add(value.name.resolve(languageCode));
+        }
+      }
+    }
+    final base = item.nameFor(languageCode);
+    return parts.isEmpty ? base : '$base · ${parts.join(' · ')}';
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
+  }
+}
+
+String _selectionKey(String itemId, Map<String, dynamic> options) {
+  dynamic canonical(Object? value) {
+    if (value is Map) {
+      final keys = value.keys.map((key) => key.toString()).toList()..sort();
+      return {for (final key in keys) key: canonical(value[key])};
+    }
+    if (value is List) {
+      return value.map(canonical).toList(growable: false);
+    }
+    return value;
+  }
+
+  return '$itemId:${jsonEncode(canonical(options))}';
 }
 
 class _CheckoutChoice {
@@ -420,7 +961,7 @@ class _CheckoutDialogState extends State<_CheckoutDialog> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      line.item.nameFor(widget.languageCode),
+                      line.label(widget.languageCode),
                       style: _serif(18),
                     ),
                   ),
@@ -558,7 +1099,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
-                  '${line.quantity} × ${line.item.nameFor(widget.languageCode)} · ${_money(line.total)}',
+                  '${line.quantity} × ${line.label(widget.languageCode)} · ${_money(line.total)}',
                   style: _serif(17),
                 ),
               ),
@@ -719,6 +1260,7 @@ const _menuCopy = <String, Map<String, String>>{
     'title': 'MENU',
     'subtitle': 'Add anything you want, choose quantities, then pay for the whole cart with one QR or cash.',
     'back': 'BACK', 'add': 'ADD', 'cart': 'CART', 'checkout': 'CHECKOUT',
+    'customize': 'SETTINGS', 'add_to_cart': 'ADD TO CART', 'from': 'from',
     'total': 'Total', 'pay': 'Create payment', 'cancel': 'Cancel',
     'your_promos': 'Your promos', 'use_promo': 'Use promo', 'without_promo': 'Pay without promo',
     'empty': 'The menu is being prepared.', 'load_error': 'Could not load the menu.',
@@ -745,6 +1287,7 @@ const _menuCopy = <String, Map<String, String>>{
     'title': 'МЕНЮ',
     'subtitle': 'Добавьте нужные товары, выберите количество и оплатите всю корзину одним QR или наличными.',
     'back': 'НАЗАД', 'add': 'ДОБАВИТЬ', 'cart': 'КОРЗИНА', 'checkout': 'ОФОРМИТЬ',
+    'customize': 'НАСТРОИТЬ', 'add_to_cart': 'В КОРЗИНУ', 'from': 'от',
     'total': 'Итого', 'pay': 'Создать оплату', 'cancel': 'Отмена',
     'your_promos': 'Ваши промо', 'use_promo': 'Использовать', 'without_promo': 'Без промо',
     'empty': 'Меню готовится.', 'load_error': 'Не удалось загрузить меню.',
@@ -771,6 +1314,7 @@ const _menuCopy = <String, Map<String, String>>{
     'title': 'THỰC ĐƠN',
     'subtitle': 'Thêm món, chọn số lượng rồi thanh toán toàn bộ giỏ hàng bằng một mã QR hoặc tiền mặt.',
     'back': 'QUAY LẠI', 'add': 'THÊM', 'cart': 'GIỎ HÀNG', 'checkout': 'THANH TOÁN',
+    'customize': 'TÙY CHỈNH', 'add_to_cart': 'THÊM VÀO GIỎ', 'from': 'từ',
     'total': 'Tổng', 'pay': 'Tạo thanh toán', 'cancel': 'Hủy',
     'your_promos': 'Khuyến mãi của bạn', 'use_promo': 'Dùng khuyến mãi', 'without_promo': 'Không dùng khuyến mãi',
     'empty': 'Thực đơn đang được chuẩn bị.', 'load_error': 'Không thể tải thực đơn.',

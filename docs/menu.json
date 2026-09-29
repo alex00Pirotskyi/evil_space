@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "groups": [
     {
       "id": "coworking",
@@ -85,92 +85,437 @@
       },
       "items": [
         {
-          "id": "espresso-020",
+          "id": "espresso",
           "name": {
-            "en": "Espresso · 0.2 L",
-            "ru": "Espresso · 0.2 L",
-            "vi": "Espresso · 0.2 L"
+            "en": "Espresso",
+            "ru": "Эспрессо",
+            "vi": "Espresso"
           },
           "priceVnd": 45000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "size",
+              "type": "single",
+              "name": {
+                "en": "Size",
+                "ru": "Размер",
+                "vi": "Kích cỡ"
+              },
+              "required": true,
+              "default": "020",
+              "values": [
+                {
+                  "id": "020",
+                  "name": {
+                    "en": "0.2 L",
+                    "ru": "0.2 л",
+                    "vi": "0.2 L"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "030",
+                  "name": {
+                    "en": "0.3 L",
+                    "ru": "0.3 л",
+                    "vi": "0.3 L"
+                  },
+                  "priceDeltaVnd": 15000
+                }
+              ]
+            },
+            {
+              "id": "strength",
+              "type": "dots",
+              "name": {
+                "en": "Strength",
+                "ru": "Крепость",
+                "vi": "Độ đậm"
+              },
+              "min": 1,
+              "max": 3,
+              "default": 1,
+              "pricePerStepVnd": 20000
+            },
+            {
+              "id": "sugar",
+              "type": "dots",
+              "name": {
+                "en": "Sugar",
+                "ru": "Сахар",
+                "vi": "Đường"
+              },
+              "min": 0,
+              "max": 3,
+              "default": 0,
+              "pricePerStepVnd": 0
+            },
+            {
+              "id": "extras",
+              "type": "multiple",
+              "name": {
+                "en": "Extras",
+                "ru": "Добавки",
+                "vi": "Thêm"
+              },
+              "values": [
+                {
+                  "id": "milk",
+                  "name": {
+                    "en": "Milk",
+                    "ru": "Молоко",
+                    "vi": "Sữa"
+                  },
+                  "priceDeltaVnd": 5000
+                },
+                {
+                  "id": "syrup",
+                  "name": {
+                    "en": "Syrup",
+                    "ru": "Сироп",
+                    "vi": "Siro"
+                  },
+                  "priceDeltaVnd": 10000
+                }
+              ]
+            }
+          ]
         },
         {
-          "id": "espresso-030",
+          "id": "americano",
           "name": {
-            "en": "Espresso · 0.3 L",
-            "ru": "Espresso · 0.3 L",
-            "vi": "Espresso · 0.3 L"
-          },
-          "priceVnd": 60000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "americano-020",
-          "name": {
-            "en": "Americano · 0.2 L",
-            "ru": "Americano · 0.2 L",
-            "vi": "Americano · 0.2 L"
+            "en": "Americano",
+            "ru": "Американо",
+            "vi": "Americano"
           },
           "priceVnd": 45000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "size",
+              "type": "single",
+              "name": {
+                "en": "Size",
+                "ru": "Размер",
+                "vi": "Kích cỡ"
+              },
+              "required": true,
+              "default": "020",
+              "values": [
+                {
+                  "id": "020",
+                  "name": {
+                    "en": "0.2 L",
+                    "ru": "0.2 л",
+                    "vi": "0.2 L"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "030",
+                  "name": {
+                    "en": "0.3 L",
+                    "ru": "0.3 л",
+                    "vi": "0.3 L"
+                  },
+                  "priceDeltaVnd": 15000
+                }
+              ]
+            },
+            {
+              "id": "strength",
+              "type": "dots",
+              "name": {
+                "en": "Strength",
+                "ru": "Крепость",
+                "vi": "Độ đậm"
+              },
+              "min": 1,
+              "max": 3,
+              "default": 1,
+              "pricePerStepVnd": 20000
+            },
+            {
+              "id": "sugar",
+              "type": "dots",
+              "name": {
+                "en": "Sugar",
+                "ru": "Сахар",
+                "vi": "Đường"
+              },
+              "min": 0,
+              "max": 3,
+              "default": 0,
+              "pricePerStepVnd": 0
+            },
+            {
+              "id": "extras",
+              "type": "multiple",
+              "name": {
+                "en": "Extras",
+                "ru": "Добавки",
+                "vi": "Thêm"
+              },
+              "values": [
+                {
+                  "id": "milk",
+                  "name": {
+                    "en": "Milk",
+                    "ru": "Молоко",
+                    "vi": "Sữa"
+                  },
+                  "priceDeltaVnd": 5000
+                },
+                {
+                  "id": "syrup",
+                  "name": {
+                    "en": "Syrup",
+                    "ru": "Сироп",
+                    "vi": "Siro"
+                  },
+                  "priceDeltaVnd": 10000
+                }
+              ]
+            }
+          ]
         },
         {
-          "id": "americano-030",
+          "id": "cappuccino",
           "name": {
-            "en": "Americano · 0.3 L",
-            "ru": "Americano · 0.3 L",
-            "vi": "Americano · 0.3 L"
-          },
-          "priceVnd": 60000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "cappuccino-020",
-          "name": {
-            "en": "Cappuccino · 0.2 L",
-            "ru": "Cappuccino · 0.2 L",
-            "vi": "Cappuccino · 0.2 L"
+            "en": "Cappuccino",
+            "ru": "Капучино",
+            "vi": "Cappuccino"
           },
           "priceVnd": 55000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "size",
+              "type": "single",
+              "name": {
+                "en": "Size",
+                "ru": "Размер",
+                "vi": "Kích cỡ"
+              },
+              "required": true,
+              "default": "020",
+              "values": [
+                {
+                  "id": "020",
+                  "name": {
+                    "en": "0.2 L",
+                    "ru": "0.2 л",
+                    "vi": "0.2 L"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "030",
+                  "name": {
+                    "en": "0.3 L",
+                    "ru": "0.3 л",
+                    "vi": "0.3 L"
+                  },
+                  "priceDeltaVnd": 15000
+                }
+              ]
+            },
+            {
+              "id": "strength",
+              "type": "dots",
+              "name": {
+                "en": "Strength",
+                "ru": "Крепость",
+                "vi": "Độ đậm"
+              },
+              "min": 1,
+              "max": 3,
+              "default": 1,
+              "pricePerStepVnd": 20000
+            },
+            {
+              "id": "sugar",
+              "type": "dots",
+              "name": {
+                "en": "Sugar",
+                "ru": "Сахар",
+                "vi": "Đường"
+              },
+              "min": 0,
+              "max": 3,
+              "default": 0,
+              "pricePerStepVnd": 0
+            },
+            {
+              "id": "extras",
+              "type": "multiple",
+              "name": {
+                "en": "Extras",
+                "ru": "Добавки",
+                "vi": "Thêm"
+              },
+              "values": [
+                {
+                  "id": "milk",
+                  "name": {
+                    "en": "Milk",
+                    "ru": "Молоко",
+                    "vi": "Sữa"
+                  },
+                  "priceDeltaVnd": 5000
+                },
+                {
+                  "id": "syrup",
+                  "name": {
+                    "en": "Syrup",
+                    "ru": "Сироп",
+                    "vi": "Siro"
+                  },
+                  "priceDeltaVnd": 10000
+                }
+              ]
+            }
+          ]
         },
         {
-          "id": "cappuccino-030",
+          "id": "latte",
           "name": {
-            "en": "Cappuccino · 0.3 L",
-            "ru": "Cappuccino · 0.3 L",
-            "vi": "Cappuccino · 0.3 L"
-          },
-          "priceVnd": 70000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "latte-030",
-          "name": {
-            "en": "Latte · 0.3 L",
-            "ru": "Latte · 0.3 L",
-            "vi": "Latte · 0.3 L"
+            "en": "Latte",
+            "ru": "Латте",
+            "vi": "Latte"
           },
           "priceVnd": 55000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "strength",
+              "type": "dots",
+              "name": {
+                "en": "Strength",
+                "ru": "Крепость",
+                "vi": "Độ đậm"
+              },
+              "min": 1,
+              "max": 3,
+              "default": 1,
+              "pricePerStepVnd": 20000
+            },
+            {
+              "id": "sugar",
+              "type": "dots",
+              "name": {
+                "en": "Sugar",
+                "ru": "Сахар",
+                "vi": "Đường"
+              },
+              "min": 0,
+              "max": 3,
+              "default": 0,
+              "pricePerStepVnd": 0
+            },
+            {
+              "id": "extras",
+              "type": "multiple",
+              "name": {
+                "en": "Extras",
+                "ru": "Добавки",
+                "vi": "Thêm"
+              },
+              "values": [
+                {
+                  "id": "milk",
+                  "name": {
+                    "en": "Milk",
+                    "ru": "Молоко",
+                    "vi": "Sữa"
+                  },
+                  "priceDeltaVnd": 5000
+                },
+                {
+                  "id": "syrup",
+                  "name": {
+                    "en": "Syrup",
+                    "ru": "Сироп",
+                    "vi": "Siro"
+                  },
+                  "priceDeltaVnd": 10000
+                }
+              ]
+            }
+          ]
         },
         {
           "id": "flat-white",
           "name": {
             "en": "Flat White",
-            "ru": "Flat White",
+            "ru": "Флэт уайт",
             "vi": "Flat White"
           },
           "priceVnd": 70000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "strength",
+              "type": "dots",
+              "name": {
+                "en": "Strength",
+                "ru": "Крепость",
+                "vi": "Độ đậm"
+              },
+              "min": 1,
+              "max": 3,
+              "default": 1,
+              "pricePerStepVnd": 20000
+            },
+            {
+              "id": "sugar",
+              "type": "dots",
+              "name": {
+                "en": "Sugar",
+                "ru": "Сахар",
+                "vi": "Đường"
+              },
+              "min": 0,
+              "max": 3,
+              "default": 0,
+              "pricePerStepVnd": 0
+            },
+            {
+              "id": "extras",
+              "type": "multiple",
+              "name": {
+                "en": "Extras",
+                "ru": "Добавки",
+                "vi": "Thêm"
+              },
+              "values": [
+                {
+                  "id": "milk",
+                  "name": {
+                    "en": "Milk",
+                    "ru": "Молоко",
+                    "vi": "Sữa"
+                  },
+                  "priceDeltaVnd": 5000
+                },
+                {
+                  "id": "syrup",
+                  "name": {
+                    "en": "Syrup",
+                    "ru": "Сироп",
+                    "vi": "Siro"
+                  },
+                  "priceDeltaVnd": 10000
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -349,92 +694,126 @@
       },
       "items": [
         {
-          "id": "cola",
+          "id": "beverage",
           "name": {
-            "en": "Coca-Cola",
-            "ru": "Coca-Cola",
-            "vi": "Coca-Cola"
+            "en": "Beverage",
+            "ru": "Напиток",
+            "vi": "Nước giải khát"
           },
           "priceVnd": 25000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "drink",
+              "type": "single",
+              "name": {
+                "en": "Choose beverage",
+                "ru": "Выберите напиток",
+                "vi": "Chọn đồ uống"
+              },
+              "required": true,
+              "values": [
+                {
+                  "id": "cola",
+                  "name": {
+                    "en": "Coca-Cola",
+                    "ru": "Coca-Cola",
+                    "vi": "Coca-Cola"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "fanta",
+                  "name": {
+                    "en": "Fanta",
+                    "ru": "Fanta",
+                    "vi": "Fanta"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "sprite",
+                  "name": {
+                    "en": "Sprite",
+                    "ru": "Sprite",
+                    "vi": "Sprite"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "water",
+                  "name": {
+                    "en": "Water",
+                    "ru": "Вода",
+                    "vi": "Nước suối"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "schweppes",
+                  "name": {
+                    "en": "Schweppes",
+                    "ru": "Schweppes",
+                    "vi": "Schweppes"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "7up",
+                  "name": {
+                    "en": "7Up",
+                    "ru": "7Up",
+                    "vi": "7Up"
+                  },
+                  "priceDeltaVnd": 0
+                }
+              ]
+            }
+          ]
         },
         {
-          "id": "fanta",
+          "id": "energy-drink",
           "name": {
-            "en": "Fanta",
-            "ru": "Fanta",
-            "vi": "Fanta"
-          },
-          "priceVnd": 25000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "sprite",
-          "name": {
-            "en": "Sprite",
-            "ru": "Sprite",
-            "vi": "Sprite"
-          },
-          "priceVnd": 25000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "water",
-          "name": {
-            "en": "Water",
-            "ru": "Вода",
-            "vi": "Nước suối"
-          },
-          "priceVnd": 25000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "schweppes",
-          "name": {
-            "en": "Schweppes",
-            "ru": "Schweppes",
-            "vi": "Schweppes"
-          },
-          "priceVnd": 25000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "7up",
-          "name": {
-            "en": "7Up",
-            "ru": "7Up",
-            "vi": "7Up"
-          },
-          "priceVnd": 25000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "red-bull",
-          "name": {
-            "en": "Red Bull",
-            "ru": "Red Bull",
-            "vi": "Red Bull"
-          },
-          "priceVnd": 50000,
-          "description": null,
-          "enabled": true
-        },
-        {
-          "id": "monster",
-          "name": {
-            "en": "Monster",
-            "ru": "Monster",
-            "vi": "Monster"
+            "en": "Energy Drink",
+            "ru": "Энергетик",
+            "vi": "Nước tăng lực"
           },
           "priceVnd": 45000,
           "description": null,
-          "enabled": true
+          "enabled": true,
+          "options": [
+            {
+              "id": "brand",
+              "type": "single",
+              "name": {
+                "en": "Choose brand",
+                "ru": "Выберите бренд",
+                "vi": "Chọn loại"
+              },
+              "required": true,
+              "values": [
+                {
+                  "id": "monster",
+                  "name": {
+                    "en": "Monster",
+                    "ru": "Monster",
+                    "vi": "Monster"
+                  },
+                  "priceDeltaVnd": 0
+                },
+                {
+                  "id": "red-bull",
+                  "name": {
+                    "en": "Red Bull",
+                    "ru": "Red Bull",
+                    "vi": "Red Bull"
+                  },
+                  "priceDeltaVnd": 5000
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -465,27 +844,6 @@
             "vi": "KitKat"
           },
           "priceVnd": 50000,
-          "description": null,
-          "enabled": true
-        }
-      ]
-    },
-    {
-      "id": "extras",
-      "name": {
-        "en": "Extras",
-        "ru": "Добавки",
-        "vi": "Thêm"
-      },
-      "items": [
-        {
-          "id": "syrup",
-          "name": {
-            "en": "Syrup",
-            "ru": "Сироп",
-            "vi": "Siro"
-          },
-          "priceVnd": 10000,
           "description": null,
           "enabled": true
         }

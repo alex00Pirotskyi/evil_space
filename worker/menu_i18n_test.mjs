@@ -101,3 +101,39 @@ test('localized item name requires en ru and vi', () => {
     /localized name/,
   );
 });
+
+
+test('localized option labels survive English core normalization', () => {
+  const result = normalizeMenuGroupNames({
+    groups: [
+      {
+        id: 'coffee',
+        name: { en: 'Coffee', ru: 'Кофе', vi: 'Cà phê' },
+        items: [
+          {
+            id: 'americano',
+            name: { en: 'Americano', ru: 'Американо', vi: 'Americano' },
+            priceVnd: 45000,
+            options: [
+              {
+                id: 'strength',
+                type: 'dots',
+                name: { en: 'Strength', ru: 'Крепость', vi: 'Độ đậm' },
+                min: 1,
+                max: 3,
+                default: 1,
+                pricePerStepVnd: 20000,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(result.workerMenu.groups[0].items[0].name, 'Americano');
+  assert.deepEqual(result.workerMenu.groups[0].items[0].options[0].name, {
+    en: 'Strength',
+    ru: 'Крепость',
+    vi: 'Độ đậm',
+  });
+});

@@ -77,6 +77,57 @@ void main() {
     expect(item.descriptionFor('ru'), 'Cold');
   });
 
+  test('menu item parses configurable choices and dot settings', () {
+    final item = MenuItem.fromJson({
+      'id': 'americano',
+      'name': {
+        'en': 'Americano',
+        'ru': 'Американо',
+        'vi': 'Americano',
+      },
+      'priceVnd': 45000,
+      'enabled': true,
+      'options': [
+        {
+          'id': 'size',
+          'type': 'single',
+          'name': {'en': 'Size', 'ru': 'Размер', 'vi': 'Kích cỡ'},
+          'required': true,
+          'default': '020',
+          'values': [
+            {
+              'id': '020',
+              'name': {'en': '0.2 L', 'ru': '0.2 л', 'vi': '0.2 L'},
+              'priceDeltaVnd': 0,
+            },
+            {
+              'id': '030',
+              'name': {'en': '0.3 L', 'ru': '0.3 л', 'vi': '0.3 L'},
+              'priceDeltaVnd': 15000,
+            },
+          ],
+        },
+        {
+          'id': 'strength',
+          'type': 'dots',
+          'name': {'en': 'Strength', 'ru': 'Крепость', 'vi': 'Độ đậm'},
+          'min': 1,
+          'max': 3,
+          'default': 1,
+          'pricePerStepVnd': 20000,
+        },
+      ],
+    });
+
+    expect(item.hasOptions, isTrue);
+    expect(item.hasVariablePrice, isTrue);
+    expect(item.options.first.defaultChoice, '020');
+    expect(item.options.first.values.last.priceDeltaVnd, 15000);
+    expect(item.options.last.defaultDots, 1);
+    expect(item.options.last.pricePerStepVnd, 20000);
+    expect(item.toJson()['options'], isNotEmpty);
+  });
+
   test('order status exposes paid lifecycle', () {
     final status = MenuOrderStatus.fromJson({
       'orderCode': 'ABC234',

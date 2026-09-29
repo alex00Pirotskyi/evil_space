@@ -309,6 +309,7 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
     final descriptionRu = TextEditingController(text: current?.description?.ru ?? '');
     final descriptionVi = TextEditingController(text: current?.description?.vi ?? '');
     var enabled = current?.enabled ?? true;
+    final options = <MenuOptionGroup>[...?current?.options];
     final result = await showDialog<MenuItem>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -330,6 +331,49 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
                   _field(descriptionEn, 'DESCRIPTION · ENGLISH · OPTIONAL'),
                   _field(descriptionRu, 'DESCRIPTION · RUSSIAN · OPTIONAL'),
                   _field(descriptionVi, 'DESCRIPTION · VIETNAMESE · OPTIONAL'),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(child: Text('OPTIONS / SETTINGS', style: _mono(10))),
+                      TextButton.icon(
+                        onPressed: () async {
+                          final option = await _menuOptionDialog();
+                          if (option != null) setLocal(() => options.add(option));
+                        },
+                        icon: const Icon(Icons.add, size: 17),
+                        label: Text('ADD OPTION', style: _mono(8.5)),
+                      ),
+                    ],
+                  ),
+                  for (var oi = 0; oi < options.length; oi++)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${options[oi].name.en} · ${options[oi].type.toUpperCase()}',
+                              style: _serif(15),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final edited = await _menuOptionDialog(current: options[oi]);
+                              if (edited != null) setLocal(() => options[oi] = edited);
+                            },
+                            child: Text('EDIT', style: _mono(8)),
+                          ),
+                          TextButton(
+                            onPressed: () => setLocal(() => options.removeAt(oi)),
+                            child: Text('×', style: _mono(11)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 6),
                   CheckboxListTile(
                     value: enabled,
                     contentPadding: EdgeInsets.zero,
@@ -376,6 +420,7 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
                             vi: descriptionValues[2],
                           )
                         : null,
+                    options: List<MenuOptionGroup>.unmodifiable(options),
                   ),
                 );
               },
@@ -393,6 +438,337 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
     descriptionEn.dispose();
     descriptionRu.dispose();
     descriptionVi.dispose();
+    return result;
+  }
+
+  Future<MenuOptionValue?> _menuOptionValueDialog({
+    MenuOptionValue? current,
+  }) async {
+    final id = TextEditingController(text: current?.id ?? '');
+    final en = TextEditingController(text: current?.name.en ?? '');
+    final ru = TextEditingController(text: current?.name.ru ?? '');
+    final vi = TextEditingController(text: current?.name.vi ?? '');
+    final price = TextEditingController(
+      text: (current?.priceDeltaVnd ?? 0).toString(),
+    );
+
+    final result = await showDialog<MenuOptionValue>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BrandPalette.paper,
+        shape: const RoundedRectangleBorder(),
+        title: Text(
+          current == null ? 'NEW OPTION VALUE' : 'EDIT OPTION VALUE',
+          style: _serif(23),
+        ),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _field(id, 'STABLE ID', enabled: current == null),
+              _field(en, 'NAME · ENGLISH'),
+              _field(ru, 'NAME · RUSSIAN'),
+              _field(vi, 'NAME · VIETNAMESE'),
+              _field(
+                price,
+                'PRICE + VND',
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('CANCEL', style: _mono(9)),
+          ),
+          FilledButton(
+            style: _darkButton(),
+            onPressed: () {
+              final stableId = _slug(id.text);
+              final delta = int.tryParse(price.text.replaceAll(',', '').trim());
+              if (stableId.isEmpty ||
+                  en.text.trim().isEmpty ||
+                  ru.text.trim().isEmpty ||
+                  vi.text.trim().isEmpty ||
+                  delta == null ||
+                  delta < 0) {
+                return;
+              }
+              Navigator.pop(
+                context,
+                MenuOptionValue(
+                  id: stableId,
+                  name: MenuLocalizedText(
+                    en: en.text.trim(),
+                    ru: ru.text.trim(),
+                    vi: vi.text.trim(),
+                  ),
+                  priceDeltaVnd: delta,
+                ),
+              );
+            },
+            child: Text(
+              'SAVE',
+              style: _mono(9, color: BrandPalette.paperLift),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    id.dispose();
+    en.dispose();
+    ru.dispose();
+    vi.dispose();
+    price.dispose();
+    return result;
+  }
+
+  Future<MenuOptionGroup?> _menuOptionDialog({
+    MenuOptionGroup? current,
+  }) async {
+    final id = TextEditingController(text: current?.id ?? '');
+    final en = TextEditingController(text: current?.name.en ?? '');
+    final ru = TextEditingController(text: current?.name.ru ?? '');
+    final vi = TextEditingController(text: current?.name.vi ?? '');
+    final min = TextEditingController(text: (current?.min ?? 0).toString());
+    final max = TextEditingController(text: (current?.max ?? 3).toString());
+    final defaultDots = TextEditingController(
+      text: (current?.defaultDots ?? 0).toString(),
+    );
+    final stepPrice = TextEditingController(
+      text: (current?.pricePerStepVnd ?? 0).toString(),
+    );
+    var type = current?.type ?? 'single';
+    var required = current?.required ?? false;
+    String? defaultChoice = current?.defaultChoice;
+    final values = <MenuOptionValue>[...?current?.values];
+
+    final result = await showDialog<MenuOptionGroup>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          backgroundColor: BrandPalette.paper,
+          shape: const RoundedRectangleBorder(),
+          title: Text(
+            current == null ? 'NEW OPTION' : 'EDIT OPTION',
+            style: _serif(23),
+          ),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _field(id, 'STABLE ID', enabled: current == null),
+                  _field(en, 'NAME · ENGLISH'),
+                  _field(ru, 'NAME · RUSSIAN'),
+                  _field(vi, 'NAME · VIETNAMESE'),
+                  DropdownButtonFormField<String>(
+                    value: type,
+                    decoration: _inputDecoration('TYPE'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'single',
+                        child: Text('Single choice'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'multiple',
+                        child: Text('Multiple choice'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'dots',
+                        child: Text('Dots / level'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setLocal(() => type = value ?? 'single'),
+                  ),
+                  const SizedBox(height: 10),
+                  if (type == 'dots') ...[
+                    _field(min, 'MIN', keyboardType: TextInputType.number),
+                    _field(max, 'MAX', keyboardType: TextInputType.number),
+                    _field(
+                      defaultDots,
+                      'DEFAULT',
+                      keyboardType: TextInputType.number,
+                    ),
+                    _field(
+                      stepPrice,
+                      'PRICE + PER DOT VND',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ] else ...[
+                    CheckboxListTile(
+                      value: required,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('REQUIRED', style: _mono(9)),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (value) =>
+                          setLocal(() => required = value ?? false),
+                    ),
+                    if (type == 'single' && values.isNotEmpty)
+                      DropdownButtonFormField<String?>(
+                        value: defaultChoice,
+                        decoration: _inputDecoration('DEFAULT · OPTIONAL'),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('No default — customer chooses'),
+                          ),
+                          for (final value in values)
+                            DropdownMenuItem<String?>(
+                              value: value.id,
+                              child: Text(value.name.en),
+                            ),
+                        ],
+                        onChanged: (value) =>
+                            setLocal(() => defaultChoice = value),
+                      ),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        Expanded(child: Text('VALUES', style: _mono(9))),
+                        TextButton.icon(
+                          onPressed: () async {
+                            final value = await _menuOptionValueDialog();
+                            if (value != null) {
+                              setLocal(() => values.add(value));
+                            }
+                          },
+                          icon: const Icon(Icons.add, size: 16),
+                          label: Text('ADD VALUE', style: _mono(8)),
+                        ),
+                      ],
+                    ),
+                    for (var index = 0; index < values.length; index++)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${values[index].name.en} · +${_money(values[index].priceDeltaVnd)}',
+                              style: _serif(15),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final edited = await _menuOptionValueDialog(
+                                current: values[index],
+                              );
+                              if (edited != null) {
+                                setLocal(() => values[index] = edited);
+                              }
+                            },
+                            child: Text('EDIT', style: _mono(8)),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              final removed = values[index].id;
+                              setLocal(() {
+                                values.removeAt(index);
+                                if (defaultChoice == removed) {
+                                  defaultChoice = null;
+                                }
+                              });
+                            },
+                            child: Text('×', style: _mono(11)),
+                          ),
+                        ],
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text('CANCEL', style: _mono(9)),
+            ),
+            FilledButton(
+              style: _darkButton(),
+              onPressed: () {
+                final stableId = _slug(id.text);
+                final name = MenuLocalizedText(
+                  en: en.text.trim(),
+                  ru: ru.text.trim(),
+                  vi: vi.text.trim(),
+                );
+                if (stableId.isEmpty ||
+                    name.en.isEmpty ||
+                    name.ru.isEmpty ||
+                    name.vi.isEmpty) {
+                  return;
+                }
+
+                if (type == 'dots') {
+                  final minValue = int.tryParse(min.text.trim());
+                  final maxValue = int.tryParse(max.text.trim());
+                  final defaultValue = int.tryParse(defaultDots.text.trim());
+                  final step = int.tryParse(
+                    stepPrice.text.replaceAll(',', '').trim(),
+                  );
+                  if (minValue == null ||
+                      maxValue == null ||
+                      defaultValue == null ||
+                      step == null ||
+                      minValue < 0 ||
+                      maxValue < minValue ||
+                      maxValue > 8 ||
+                      defaultValue < minValue ||
+                      defaultValue > maxValue ||
+                      step < 0) {
+                    return;
+                  }
+                  Navigator.pop(
+                    dialogContext,
+                    MenuOptionGroup(
+                      id: stableId,
+                      type: 'dots',
+                      name: name,
+                      min: minValue,
+                      max: maxValue,
+                      defaultDots: defaultValue,
+                      pricePerStepVnd: step,
+                    ),
+                  );
+                  return;
+                }
+
+                if (values.isEmpty) return;
+                Navigator.pop(
+                  dialogContext,
+                  MenuOptionGroup(
+                    id: stableId,
+                    type: type,
+                    name: name,
+                    required: required,
+                    defaultChoice:
+                        type == 'single' ? defaultChoice : null,
+                    values: List<MenuOptionValue>.unmodifiable(values),
+                  ),
+                );
+              },
+              child: Text(
+                'SAVE',
+                style: _mono(9, color: BrandPalette.paperLift),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    id.dispose();
+    en.dispose();
+    ru.dispose();
+    vi.dispose();
+    min.dispose();
+    max.dispose();
+    defaultDots.dispose();
+    stepPrice.dispose();
     return result;
   }
 

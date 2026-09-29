@@ -13,11 +13,13 @@ class MenuApi {
   }
 
   Future<MenuOrderPayment> createOrder(String itemId) {
-    return createCartOrder({itemId: 1});
+    return createCartOrder([
+      MenuCartRequestLine(itemId: itemId, quantity: 1),
+    ]);
   }
 
   Future<MenuOrderPayment> createCartOrder(
-    Map<String, int> cart, {
+    List<MenuCartRequestLine> cart, {
     int? promoGrantId,
   }) async {
     final items = _cartItems(cart);
@@ -32,7 +34,7 @@ class MenuApi {
     return MenuOrderPayment.fromJson(_map(data['order']));
   }
 
-  Future<List<PromoPreview>> eligiblePromos(Map<String, int> cart) async {
+  Future<List<PromoPreview>> eligiblePromos(List<MenuCartRequestLine> cart) async {
     final data = await _request(
       'POST',
       '/api/public/menu/promos',
@@ -213,9 +215,9 @@ class MenuApi {
     return AdminMenuSnapshot.fromJson(_map(data['snapshot']));
   }
 
-  List<Map<String, dynamic>> _cartItems(Map<String, int> cart) => cart.entries
-      .where((entry) => entry.value > 0)
-      .map((entry) => <String, dynamic>{'itemId': entry.key, 'quantity': entry.value})
+  List<Map<String, dynamic>> _cartItems(List<MenuCartRequestLine> cart) => cart
+      .where((line) => line.quantity > 0)
+      .map((line) => line.toJson())
       .toList(growable: false);
 
   Future<Map<String, dynamic>> _request(

@@ -346,6 +346,54 @@ async function runFlow() {
               priceVnd: 30000,
               description: null,
             },
+            {
+              id: 'americano',
+              name: 'Americano',
+              priceVnd: 45000,
+              description: null,
+              options: [
+                {
+                  id: 'size',
+                  type: 'single',
+                  name: { en: 'Size', ru: 'Размер', vi: 'Kích cỡ' },
+                  required: true,
+                  default: 'small',
+                  values: [
+                    {
+                      id: 'small',
+                      name: { en: '0.2 L', ru: '0.2 л', vi: '0.2 L' },
+                      priceDeltaVnd: 0,
+                    },
+                    {
+                      id: 'large',
+                      name: { en: '0.3 L', ru: '0.3 л', vi: '0.3 L' },
+                      priceDeltaVnd: 15000,
+                    },
+                  ],
+                },
+                {
+                  id: 'strength',
+                  type: 'dots',
+                  name: { en: 'Strength', ru: 'Крепость', vi: 'Độ đậm' },
+                  min: 1,
+                  max: 3,
+                  default: 1,
+                  pricePerStepVnd: 20000,
+                },
+                {
+                  id: 'extras',
+                  type: 'multiple',
+                  name: { en: 'Extras', ru: 'Добавки', vi: 'Thêm' },
+                  values: [
+                    {
+                      id: 'milk',
+                      name: { en: 'Milk', ru: 'Молоко', vi: 'Sữa' },
+                      priceDeltaVnd: 5000,
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
@@ -363,6 +411,31 @@ async function runFlow() {
   payload = await response.json();
   assert.equal(payload.menu.groups[0].items[0].id, 'cola');
   assert.equal(payload.menu.groups[0].items[0].priceVnd, 30000);
+
+  const americano = payload.menu.groups[0].items.find((item) => item.id === 'americano');
+  assert.ok(americano);
+  assert.equal(americano.options.length, 3);
+  assert.equal(americano.options[0].name.ru, 'Размер');
+
+  response = await jsonRequest('/api/public/menu/order', {
+    items: [
+      {
+        itemId: 'americano',
+        quantity: 1,
+        options: {
+          size: 'large',
+          strength: 2,
+          extras: ['milk'],
+        },
+      },
+    ],
+  });
+  assert.equal(response.status, 201);
+  const configuredOrder = (await response.json()).order;
+  assert.equal(configuredOrder.amountVnd, 85000);
+  assert.match(configuredOrder.itemName, /Americano/);
+  assert.match(configuredOrder.itemName, /0\.3 L/);
+  assert.match(configuredOrder.itemName, /Milk/);
 
   response = await jsonRequest('/api/public/menu/order', {
     itemId: 'cola',
