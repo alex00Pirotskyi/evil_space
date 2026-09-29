@@ -240,6 +240,8 @@ function startDev() {
       String(port),
       '--var',
       `VIETQR_ACCOUNT_NUMBER:${testPaymentAccount}`,
+      '--var',
+      'EVIL_SPACE_DISABLE_STATUS_CACHE:1',
       '--log-level',
       'warn',
     ]),
