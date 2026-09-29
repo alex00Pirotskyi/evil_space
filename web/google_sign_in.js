@@ -3,28 +3,37 @@
   let initializedKey = '';
   let active = null;
   let overlay = null;
+  let googleLoadPromise = null;
 
   function googleApi() {
     return window.google?.accounts?.id ?? null;
   }
 
   function waitForGoogle() {
-    const started = Date.now();
-    return new Promise((resolve, reject) => {
-      const check = () => {
+    const ready = googleApi();
+    if (ready) return Promise.resolve(ready);
+    if (googleLoadPromise) return googleLoadPromise;
+
+    googleLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
         const api = googleApi();
         if (api) {
           resolve(api);
           return;
         }
-        if (Date.now() - started >= 10000) {
-          reject(new Error('Google Identity Services did not load.'));
-          return;
-        }
-        window.setTimeout(check, 80);
+        reject(new Error('Google Identity Services did not initialize.'));
       };
-      check();
+      script.onerror = () => {
+        googleLoadPromise = null;
+        reject(new Error('Google Identity Services did not load.'));
+      };
+      document.head.append(script);
     });
+    return googleLoadPromise;
   }
 
   function isIos() {
