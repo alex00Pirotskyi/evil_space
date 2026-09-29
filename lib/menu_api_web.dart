@@ -34,6 +34,31 @@ class MenuApi {
     return MenuOrderPayment.fromJson(_map(data['order']));
   }
 
+  Future<MenuOrderPayment> updateCartOrder(
+    String token,
+    List<MenuCartRequestLine> cart, {
+    int? promoGrantId,
+  }) async {
+    final data = await _request(
+      'POST',
+      '/api/public/menu/order/update',
+      body: {
+        'token': token,
+        'items': _cartItems(cart),
+        if (promoGrantId != null) 'promoGrantId': promoGrantId,
+      },
+    );
+    return MenuOrderPayment.fromJson(_map(data['order']));
+  }
+
+  Future<void> cancelCartOrder(String token) async {
+    await _request(
+      'POST',
+      '/api/public/menu/order/cancel',
+      body: {'token': token},
+    );
+  }
+
   Future<List<PromoPreview>> eligiblePromos(List<MenuCartRequestLine> cart) async {
     final data = await _request(
       'POST',
