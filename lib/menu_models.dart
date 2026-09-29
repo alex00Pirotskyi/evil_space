@@ -97,27 +97,37 @@ class MenuItem {
     this.description,
   });
   final String id;
-  final String name;
+  final MenuLocalizedText name;
   final int priceVnd;
   final bool enabled;
-  final String? description;
+  final MenuLocalizedText? description;
+
+  String nameFor(String languageCode) => name.resolve(languageCode);
+  String? descriptionFor(String languageCode) {
+    final value = description?.resolve(languageCode).trim();
+    return value == null || value.isEmpty ? null : value;
+  }
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
-    final description = json['description']?.toString().trim();
+    final descriptionValue = json['description'];
+    final hasDescription = descriptionValue != null &&
+        (descriptionValue is! String || descriptionValue.trim().isNotEmpty);
     return MenuItem(
       id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
+      name: MenuLocalizedText.fromJson(json['name']),
       priceVnd: _asInt(json['priceVnd']) ?? 0,
       enabled: json['enabled'] != false,
-      description: description == null || description.isEmpty ? null : description,
+      description: hasDescription
+          ? MenuLocalizedText.fromJson(descriptionValue)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'name': name,
+        'name': name.toJson(),
         'priceVnd': priceVnd,
-        'description': description,
+        'description': description?.toJson(),
         'enabled': enabled,
       };
 }
