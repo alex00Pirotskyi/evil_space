@@ -31,8 +31,12 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
     widget.localization.addListener(_languageChanged);
     unawaited(_load());
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => unawaited(_load(silent: true)),
+      const Duration(seconds: 60),
+      (_) {
+        if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+          unawaited(_load(silent: true));
+        }
+      },
     );
   }
 
@@ -63,7 +67,7 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (_busy && !silent) return;
+    if (_busy) return;
     try {
       final snapshot = await _api.snapshot().timeout(const Duration(seconds: 8));
       if (!mounted) return;
@@ -71,8 +75,11 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
       if (_phoneInlineController.text.trim().isEmpty && phone != null) {
         _phoneInlineController.text = phone;
       }
+      final changed = !_sameAccountSnapshot(_snapshot, snapshot);
+      final clearError = !silent && _error != null;
+      if (!changed && !clearError) return;
       setState(() {
-        _snapshot = snapshot;
+        if (changed) _snapshot = snapshot;
         if (!silent) _error = null;
       });
     } catch (_) {
@@ -80,6 +87,43 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
       setState(() => _error = _copy('load_error'));
     }
   }
+
+  bool _sameAccountSnapshot(
+    CustomerAccountSnapshot? current,
+    CustomerAccountSnapshot next,
+  ) {
+    if (current == null) return false;
+    return _accountSnapshotKey(current) == _accountSnapshotKey(next);
+  }
+
+  String _accountSnapshotKey(CustomerAccountSnapshot snapshot) {
+    final customer = snapshot.customer;
+    final identities = customer?.identities
+            .map(
+              (identity) =>
+                  '${identity.provider}:${identity.displayValue}:${identity.verifiedAt}',
+            )
+            .join(',') ??
+        '';
+    return [
+      snapshot.authenticated,
+      snapshot.adminAuthenticated,
+      snapshot.registrationDiscountPercent,
+      snapshot.providers.phone,
+      snapshot.providers.telegram,
+      snapshot.providers.telegramBotUsername,
+      snapshot.providers.google,
+      snapshot.providers.googleClientId ?? '',
+      customer?.id ?? 0,
+      customer?.name ?? '',
+      customer?.phone ?? '',
+      customer?.email ?? '',
+      customer?.telegram ?? '',
+      customer?.deviceCount ?? 0,
+      identities,
+    ].join('|');
+  }
+
 
   Future<void> _phone({String? initialPhone}) async {
     final snapshot = _snapshot;
