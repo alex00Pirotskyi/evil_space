@@ -5,6 +5,7 @@ import {
   reservePromoForMenuOrder,
   resolvePromoForCart,
 } from './promo_engine.js';
+import { parseMenuOptions, resolveMenuSelection, selectionSignature } from './menu_options.js';
 
 const CUSTOMER_SESSION_COOKIE = '__Host-evil_customer_session';
 const ORDER_TTL_SECONDS = 30 * 60;
@@ -33,11 +34,12 @@ async function handleCreateCartOrder(request, env, ctx) {
   if (!accountNumber) return jsonError('Payment QR is not configured yet.', 503);
   const bankBin = cleanBankBin(env.VIETQR_BANK_BIN) || VIETCOMBANK_BIN;
 
-  const requestedKeys = normalized.items.map((line) => line.itemId);
+  const requestedKeys = [...new Set(normalized.items.map((line) => line.itemId))];
   const placeholders = requestedKeys.map(() => '?').join(', ');
   const rows = await env.evil_space
     .prepare(`
-      SELECT mi.id, mi.catalog_id, mi.item_key, mi.group_key, mi.name, mi.price_vnd
+      SELECT mi.id, mi.catalog_id, mi.item_key, mi.group_key, mi.name, mi.price_vnd,
+             mi.options_json
       FROM menu_items mi
       JOIN menu_catalogs mc ON mc.id = mi.catalog_id
       WHERE mc.active = 1
@@ -52,20 +54,31 @@ async function handleCreateCartOrder(request, env, ctx) {
     return jsonError('One or more menu items are unavailable. Refresh the menu and try again.', 409);
   }
 
-  const lines = normalized.items.map((requested) => {
+  const lines = [];
+  for (const requested of normalized.items) {
     const item = byKey.get(requested.itemId);
-    const unitPriceVnd = Number(item.price_vnd);
-    return {
+    const resolved = resolveMenuSelection({
+      itemName: String(item.name),
+      basePriceVnd: Number(item.price_vnd),
+      options: parseMenuOptions(item.options_json),
+      selection: requested.options,
+    });
+    if (resolved.error) return jsonError(resolved.error, 400);
+    lines.push({
       itemId: Number(item.id),
       catalogId: Number(item.catalog_id),
       itemKey: String(item.item_key),
       groupKey: String(item.group_key),
-      itemName: String(item.name),
-      unitPriceVnd,
+      itemName: resolved.displayName,
+      baseItemName: String(item.name),
+      unitPriceVnd: resolved.unitPriceVnd,
       quantity: requested.quantity,
-      lineTotalVnd: unitPriceVnd * requested.quantity,
-    };
-  });
+      lineTotalVnd: resolved.unitPriceVnd * requested.quantity,
+      selection: resolved.selection,
+      selectionJson: resolved.selectionJson,
+      selectionSummary: resolved.selectionSummary,
+    });
+  }
 
   const catalogId = lines[0].catalogId;
   if (lines.some((line) => line.catalogId !== catalogId)) {
@@ -160,8 +173,9 @@ async function handleCreateCartOrder(request, env, ctx) {
           .prepare(`
             INSERT INTO menu_order_items
               (order_id, item_id, item_key, item_name, unit_price_vnd,
-               quantity, line_total_vnd, created_at, group_key)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               quantity, line_total_vnd, created_at, group_key,
+               selection_json, selection_summary)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
           .bind(
             order.id,
@@ -173,6 +187,8 @@ async function handleCreateCartOrder(request, env, ctx) {
             line.lineTotalVnd,
             now,
             line.groupKey,
+            line.selectionJson,
+            line.selectionSummary || null,
           ),
       ),
     );
@@ -253,35 +269,39 @@ export function normalizeCartInput(body) {
   const rawLines = Array.isArray(body.items)
     ? body.items
     : body.itemId != null
-      ? [{ itemId: body.itemId, quantity: 1 }]
+      ? [{ itemId: body.itemId, quantity: 1, options: body.options ?? {} }]
       : [];
   if (rawLines.length < 1) return { error: 'Your cart is empty.' };
   if (rawLines.length > MAX_LINES) return { error: `Cart is limited to ${MAX_LINES} different items.` };
 
-  const quantities = new Map();
+  const combined = new Map();
   let totalQuantity = 0;
   for (const raw of rawLines) {
     const itemId = cleanId(raw?.itemId);
     const quantity = Number(raw?.quantity ?? 1);
+    const options = raw?.options && typeof raw.options === 'object' && !Array.isArray(raw.options)
+      ? raw.options
+      : {};
     if (!itemId) return { error: 'Cart contains an invalid item.' };
     if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
       return { error: `Each item quantity must be between 1 and ${MAX_QUANTITY}.` };
     }
-    const next = (quantities.get(itemId) ?? 0) + quantity;
+
+    const signature = selectionSignature(itemId, options);
+    const current = combined.get(signature);
+    const next = (current?.quantity ?? 0) + quantity;
     if (next > MAX_QUANTITY) {
       return { error: `Each item quantity must be between 1 and ${MAX_QUANTITY}.` };
     }
-    quantities.set(itemId, next);
+    combined.set(signature, { itemId, quantity: next, options });
     totalQuantity += quantity;
   }
 
-  if (quantities.size > MAX_LINES || totalQuantity > MAX_TOTAL_QUANTITY) {
+  if (combined.size > MAX_LINES || totalQuantity > MAX_TOTAL_QUANTITY) {
     return { error: `Cart is limited to ${MAX_TOTAL_QUANTITY} total items.` };
   }
 
-  return {
-    items: [...quantities.entries()].map(([itemId, quantity]) => ({ itemId, quantity })),
-  };
+  return { items: [...combined.values()] };
 }
 
 function publicLine(line) {
@@ -289,6 +309,8 @@ function publicLine(line) {
     itemId: line.itemKey,
     groupId: line.groupKey,
     itemName: line.itemName,
+    selection: line.selection,
+    selectionSummary: line.selectionSummary,
     unitPriceVnd: line.unitPriceVnd,
     quantity: line.quantity,
     lineTotalVnd: line.lineTotalVnd,
