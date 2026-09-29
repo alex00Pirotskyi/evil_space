@@ -195,14 +195,14 @@ export function validateDraftMenu(value, { allowEmptyGroups = false } = {}) {
       itemCount += 1;
       if (itemCount > MAX_ITEMS) return { error: `Menu is limited to ${MAX_ITEMS} items.` };
       const itemId = cleanId(rawItem?.id);
-      const name = cleanText(rawItem?.name, MAX_NAME_LENGTH);
+      const name = normalizeLocalizedName(rawItem?.name);
       const priceVnd = Number(rawItem?.priceVnd);
       if (!itemId || !name || itemIds.has(itemId)) return { error: `Invalid or duplicate item in ${id}.` };
       if (!Number.isSafeInteger(priceVnd) || priceVnd <= 0 || priceVnd > 999999999) return { error: `Invalid price for item ${itemId}.` };
       itemIds.add(itemId);
       let description = null;
-      if (rawItem?.description != null && String(rawItem.description).trim() !== '') {
-        description = cleanText(rawItem.description, MAX_DESCRIPTION_LENGTH);
+      if (rawItem?.description != null && !localizedTextIsEmpty(rawItem.description)) {
+        description = normalizeLocalizedDescription(rawItem.description);
         if (!description) return { error: `Invalid description for item ${itemId}.` };
       }
       items.push({
@@ -256,6 +256,25 @@ function normalizeLocalizedName(value) {
   const ru = cleanText(value.ru, MAX_NAME_LENGTH);
   const vi = cleanText(value.vi, MAX_NAME_LENGTH);
   return en && ru && vi ? { en, ru, vi } : null;
+}
+
+function normalizeLocalizedDescription(value) {
+  if (typeof value === 'string') {
+    const text = cleanText(value, MAX_DESCRIPTION_LENGTH);
+    return text ? { en: text, ru: text, vi: text } : null;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const en = cleanText(value.en, MAX_DESCRIPTION_LENGTH);
+  const ru = cleanText(value.ru, MAX_DESCRIPTION_LENGTH);
+  const vi = cleanText(value.vi, MAX_DESCRIPTION_LENGTH);
+  return en && ru && vi ? { en, ru, vi } : null;
+}
+
+function localizedTextIsEmpty(value) {
+  if (value == null) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return ['en', 'ru', 'vi'].every((key) => String(value[key] ?? '').trim() === '');
 }
 
 function positiveVersion(value) {
