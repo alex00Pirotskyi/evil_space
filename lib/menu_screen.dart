@@ -151,6 +151,22 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
+  void _removeOneConfigured(MenuItem item) {
+    if (_checkingOut) return;
+    for (var index = _cart.length - 1; index >= 0; index--) {
+      final line = _cart[index];
+      if (line.item.id != item.id) continue;
+      setState(() {
+        if (line.quantity <= 1) {
+          _cart.removeAt(index);
+        } else {
+          _cart[index] = line.copyWith(quantity: line.quantity - 1);
+        }
+      });
+      return;
+    }
+  }
+
   _CartLine? _simpleLine(MenuItem item) {
     for (final line in _cart) {
       if (line.item.id == item.id && line.options.isEmpty) return line;
@@ -349,15 +365,43 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
         ])),
         const SizedBox(width: 16),
-        if (item.hasOptions)
+        if (item.hasOptions && configuredCount == 0)
           FilledButton(
             onPressed: _checkingOut ? null : () => _addItem(item),
             style: _filledButtonStyle(minWidth: 120),
             child: Text(
-              configuredCount > 0
-                  ? '${_copy('customize')} · $configuredCount'
-                  : _copy('customize'),
+              _copy('customize'),
               style: _mono(9.5, color: BrandPalette.paperLift),
+            ),
+          )
+        else if (item.hasOptions)
+          Container(
+            decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: _checkingOut
+                      ? null
+                      : () => _removeOneConfigured(item),
+                  icon: const Icon(Icons.remove, size: 18),
+                ),
+                SizedBox(
+                  width: 34,
+                  child: Text(
+                    '$configuredCount',
+                    textAlign: TextAlign.center,
+                    style: _mono(12),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _checkingOut
+                      ? null
+                      : () => _addItem(item),
+                  tooltip: _copy('customize'),
+                  icon: const Icon(Icons.tune, size: 18),
+                ),
+              ],
             ),
           )
         else if (simpleLine == null)
