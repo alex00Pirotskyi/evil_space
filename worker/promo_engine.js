@@ -5,6 +5,7 @@ const MAX_KEY_LENGTH = 64;
 const MAX_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 240;
 const MAX_CODE_LENGTH = 48;
+import { parseMenuOptions, resolveMenuSelection, selectionSignature } from './menu_options.js';
 
 export default {
   async fetch(request, env) {
@@ -878,23 +879,37 @@ function validatePromotionInput(body) {
 }
 
 function normalizeRequestedCart(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 20) return { error: 'Your cart is empty.' };
-  const quantities = new Map();
+  if (!Array.isArray(value) || value.length < 1 || value.length > 20) {
+    return { error: 'Your cart is empty.' };
+  }
+  const combined = new Map();
+  let totalQuantity = 0;
   for (const raw of value) {
     const itemId = cleanKey(raw?.itemId);
     const quantity = Number(raw?.quantity ?? 1);
-    if (!itemId || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 20) return { error: 'Invalid cart item.' };
-    quantities.set(itemId, Math.min(20, (quantities.get(itemId) ?? 0) + quantity));
+    const options = raw?.options && typeof raw.options === 'object' && !Array.isArray(raw.options)
+      ? raw.options
+      : {};
+    if (!itemId || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 20) {
+      return { error: 'Invalid cart item.' };
+    }
+    const signature = selectionSignature(itemId, options);
+    const current = combined.get(signature);
+    const nextQuantity = (current?.quantity ?? 0) + quantity;
+    if (nextQuantity > 20) return { error: 'Invalid cart item quantity.' };
+    combined.set(signature, { itemId, quantity: nextQuantity, options });
+    totalQuantity += quantity;
   }
-  return { items: [...quantities.entries()].map(([itemId, quantity]) => ({ itemId, quantity })) };
+  if (totalQuantity > 100) return { error: 'Cart is too large.' };
+  return { items: [...combined.values()] };
 }
 
 async function loadTrustedCartLines(env, requested) {
-  const keys = requested.map((line) => line.itemId);
+  const keys = [...new Set(requested.map((line) => line.itemId))];
   const placeholders = keys.map(() => '?').join(', ');
   const result = await env.evil_space
     .prepare(`
-      SELECT mi.id, mi.item_key, mi.group_key, mi.name, mi.price_vnd
+      SELECT mi.id, mi.item_key, mi.group_key, mi.name, mi.price_vnd, mi.options_json
       FROM menu_items mi
       JOIN menu_catalogs mc ON mc.id = mi.catalog_id
       WHERE mc.active = 1 AND mi.enabled = 1 AND mi.item_key IN (${placeholders})
@@ -903,21 +918,28 @@ async function loadTrustedCartLines(env, requested) {
     .all();
   const byKey = new Map((result.results ?? []).map((row) => [String(row.item_key), row]));
   if (byKey.size !== keys.length) return { error: 'One or more menu items are unavailable.' };
-  return {
-    lines: requested.map((line) => {
-      const row = byKey.get(line.itemId);
-      const unitPriceVnd = Number(row.price_vnd);
-      return {
-        itemId: Number(row.id),
-        itemKey: String(row.item_key),
-        groupKey: String(row.group_key),
-        itemName: String(row.name),
-        unitPriceVnd,
-        quantity: line.quantity,
-        lineTotalVnd: unitPriceVnd * line.quantity,
-      };
-    }),
-  };
+
+  const lines = [];
+  for (const line of requested) {
+    const row = byKey.get(line.itemId);
+    const resolved = resolveMenuSelection({
+      itemName: String(row.name),
+      basePriceVnd: Number(row.price_vnd),
+      options: parseMenuOptions(row.options_json),
+      selection: line.options,
+    });
+    if (resolved.error) return { error: resolved.error };
+    lines.push({
+      itemId: Number(row.id),
+      itemKey: String(row.item_key),
+      groupKey: String(row.group_key),
+      itemName: resolved.displayName,
+      unitPriceVnd: resolved.unitPriceVnd,
+      quantity: line.quantity,
+      lineTotalVnd: resolved.unitPriceVnd * line.quantity,
+    });
+  }
+  return { lines };
 }
 
 async function authenticatedCustomer(request, env) {
