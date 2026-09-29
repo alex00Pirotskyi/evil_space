@@ -684,73 +684,81 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
   Widget _option(MenuOptionGroup option) {
     final title = option.name.resolve(widget.languageCode).toUpperCase();
     if (option.isDots) {
-      final selected = _selected[option.id] is int
-          ? _selected[option.id] as int
-          : option.defaultDots;
+      final selected = (_selected[option.id] is int
+              ? _selected[option.id] as int
+              : option.defaultDots)
+          .clamp(option.min, option.max);
+      final steps = option.max - option.min;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(child: Text(title, style: _mono(10))),
-              if (option.pricePerStepVnd > 0)
+              Text('$selected', style: _mono(11)),
+              if (option.pricePerStepVnd > 0) ...[
+                const SizedBox(width: 8),
                 Text(
-                  '+${_money(option.pricePerStepVnd)} / ●',
+                  '· +${_money(option.pricePerStepVnd)} / +1',
                   style: _mono(8.5, color: BrandPalette.inkMuted),
                 ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              if (option.min == 0)
-                TextButton(
-                  onPressed: () => setState(() => _selected[option.id] = 0),
-                  style: TextButton.styleFrom(
-                    foregroundColor: BrandPalette.ink,
-                    minimumSize: const Size(42, 42),
-                    shape: const RoundedRectangleBorder(),
-                    side: BorderSide(
-                      color: selected == 0
-                          ? BrandPalette.ink
-                          : BrandPalette.rule,
-                    ),
-                  ),
-                  child: Text('0', style: _mono(10)),
-                ),
-              if (option.min == 0) const SizedBox(width: 10),
-              for (var value = 1; value <= option.max; value++) ...[
-                InkWell(
-                  onTap: value < option.min
-                      ? null
-                      : () => setState(() => _selected[option.id] = value),
-                  borderRadius: BorderRadius.circular(30),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 6,
-                    ),
-                    child: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: value <= selected
-                            ? BrandPalette.ink
-                            : Colors.transparent,
-                        border: Border.all(
-                          color: value < option.min
-                              ? BrandPalette.rule
-                              : BrandPalette.ink,
-                          width: 1.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
               ],
             ],
+          ),
+          const SizedBox(height: 8),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 5,
+              activeTrackColor: BrandPalette.ink,
+              inactiveTrackColor: BrandPalette.rule,
+              thumbColor: BrandPalette.ink,
+              overlayColor: BrandPalette.ink.withOpacity(0.08),
+              thumbShape: const RoundSliderThumbShape(
+                enabledThumbRadius: 11,
+              ),
+              overlayShape: const RoundSliderOverlayShape(
+                overlayRadius: 24,
+              ),
+              tickMarkShape: const RoundSliderTickMarkShape(
+                tickMarkRadius: 2.5,
+              ),
+              activeTickMarkColor: BrandPalette.paper,
+              inactiveTickMarkColor: BrandPalette.ink,
+              showValueIndicator: ShowValueIndicator.never,
+            ),
+            child: Slider(
+              value: selected.toDouble(),
+              min: option.min.toDouble(),
+              max: option.max.toDouble(),
+              divisions: steps > 0 ? steps : null,
+              onChanged: steps <= 0
+                  ? null
+                  : (next) => setState(
+                        () => _selected[option.id] = next.round(),
+                      ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                for (var value = option.min;
+                    value <= option.max;
+                    value++)
+                  Expanded(
+                    child: Text(
+                      '$value',
+                      textAlign: value == option.min
+                          ? TextAlign.left
+                          : value == option.max
+                              ? TextAlign.right
+                              : TextAlign.center,
+                      style: _mono(9, color: BrandPalette.inkMuted),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       );
