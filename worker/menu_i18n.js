@@ -2,6 +2,7 @@ import menuWorker from './menu.js';
 
 const MAX_MENU_BYTES = 256 * 1024;
 const MAX_NAME_LENGTH = 100;
+const MAX_DESCRIPTION_LENGTH = 240;
 
 export default {
   async fetch(request, env, ctx) {
@@ -65,21 +66,50 @@ async function handleLocalizedUpload(request, env, ctx) {
   const statements = [];
   for (const group of catalog.groups) {
     const names = normalized.namesByGroup.get(String(group.id));
-    if (!names) continue;
-    statements.push(
-      env.evil_space
-        .prepare(`
-          INSERT OR REPLACE INTO menu_group_translations
-            (catalog_id, group_key, name_en, name_ru, name_vi)
-          VALUES (?, ?, ?, ?, ?)
-        `)
-        .bind(catalogId, String(group.id), names.en, names.ru, names.vi),
-    );
+    if (names) {
+      statements.push(
+        env.evil_space
+          .prepare(`
+            INSERT OR REPLACE INTO menu_group_translations
+              (catalog_id, group_key, name_en, name_ru, name_vi)
+            VALUES (?, ?, ?, ?, ?)
+          `)
+          .bind(catalogId, String(group.id), names.en, names.ru, names.vi),
+      );
+    }
+
+    for (const item of group.items ?? []) {
+      const itemKey = String(item.id);
+      const itemNames = normalized.namesByItem.get(itemKey);
+      if (!itemNames) continue;
+      const descriptions = normalized.descriptionsByItem.get(itemKey) ?? null;
+      statements.push(
+        env.evil_space
+          .prepare(`
+            INSERT OR REPLACE INTO menu_item_translations
+              (catalog_id, item_key, name_en, name_ru, name_vi,
+               description_en, description_ru, description_vi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `)
+          .bind(
+            catalogId,
+            itemKey,
+            itemNames.en,
+            itemNames.ru,
+            itemNames.vi,
+            descriptions?.en ?? null,
+            descriptions?.ru ?? null,
+            descriptions?.vi ?? null,
+          ),
+      );
+    }
   }
 
   const localizedSource = localizedSourceJson(
     catalog.sourceJson,
     normalized.namesByGroup,
+    normalized.namesByItem,
+    normalized.descriptionsByItem,
   );
   statements.push(
     env.evil_space
@@ -88,7 +118,12 @@ async function handleLocalizedUpload(request, env, ctx) {
   );
   await env.evil_space.batch(statements);
 
-  applyTranslationsToGroups(catalog.groups, normalized.namesByGroup);
+  applyTranslationsToGroups(
+    catalog.groups,
+    normalized.namesByGroup,
+    normalized.namesByItem,
+    normalized.descriptionsByItem,
+  );
   catalog.sourceJson = localizedSource;
   return replaceJson(response, payload);
 }
@@ -105,7 +140,12 @@ async function localizePublicMenu(response, env) {
   if (!catalog?.id) return response;
 
   const translations = await loadTranslations(env, Number(catalog.id));
-  applyTranslationsToGroups(payload.menu.groups, translations);
+  applyTranslationsToGroups(
+    payload.menu.groups,
+    translations.namesByGroup,
+    translations.namesByItem,
+    translations.descriptionsByItem,
+  );
   return replaceJson(response, payload);
 }
 
@@ -115,34 +155,69 @@ async function localizeAdminMenu(response, env) {
   if (!catalog?.id || !Array.isArray(catalog.groups)) return response;
 
   const translations = await loadTranslations(env, Number(catalog.id));
-  applyTranslationsToGroups(catalog.groups, translations);
+  applyTranslationsToGroups(
+    catalog.groups,
+    translations.namesByGroup,
+    translations.namesByItem,
+    translations.descriptionsByItem,
+  );
   return replaceJson(response, payload);
 }
 
 async function loadTranslations(env, catalogId) {
-  const rows = await env.evil_space
-    .prepare(`
-      SELECT group_key, name_en, name_ru, name_vi
-      FROM menu_group_translations
-      WHERE catalog_id = ?
-    `)
-    .bind(catalogId)
-    .all();
+  const [groupRows, itemRows] = await Promise.all([
+    env.evil_space
+      .prepare(`
+        SELECT group_key, name_en, name_ru, name_vi
+        FROM menu_group_translations
+        WHERE catalog_id = ?
+      `)
+      .bind(catalogId)
+      .all(),
+    env.evil_space
+      .prepare(`
+        SELECT item_key, name_en, name_ru, name_vi,
+               description_en, description_ru, description_vi
+        FROM menu_item_translations
+        WHERE catalog_id = ?
+      `)
+      .bind(catalogId)
+      .all(),
+  ]);
 
-  const result = new Map();
-  for (const row of rows.results ?? []) {
-    result.set(String(row.group_key), {
+  const namesByGroup = new Map();
+  for (const row of groupRows.results ?? []) {
+    namesByGroup.set(String(row.group_key), {
       en: String(row.name_en),
       ru: String(row.name_ru),
       vi: String(row.name_vi),
     });
   }
-  return result;
+
+  const namesByItem = new Map();
+  const descriptionsByItem = new Map();
+  for (const row of itemRows.results ?? []) {
+    const key = String(row.item_key);
+    namesByItem.set(key, {
+      en: String(row.name_en),
+      ru: String(row.name_ru),
+      vi: String(row.name_vi),
+    });
+    if (row.description_en != null || row.description_ru != null || row.description_vi != null) {
+      descriptionsByItem.set(key, {
+        en: row.description_en == null ? '' : String(row.description_en),
+        ru: row.description_ru == null ? '' : String(row.description_ru),
+        vi: row.description_vi == null ? '' : String(row.description_vi),
+      });
+    }
+  }
+
+  return { namesByGroup, namesByItem, descriptionsByItem };
 }
 
-function applyTranslationsToGroups(groups, translations) {
+function applyTranslationsToGroups(groups, groupTranslations, itemTranslations, itemDescriptions) {
   for (const group of groups) {
-    const names = translations.get(String(group.id));
+    const names = groupTranslations.get(String(group.id));
     if (names) group.name = { ...names };
     else if (typeof group.name === 'string') {
       group.name = {
@@ -151,14 +226,38 @@ function applyTranslationsToGroups(groups, translations) {
         vi: group.name,
       };
     }
+
+    for (const item of group.items ?? []) {
+      const itemKey = String(item.id);
+      const itemNames = itemTranslations.get(itemKey);
+      if (itemNames) item.name = { ...itemNames };
+      else if (typeof item.name === 'string') {
+        item.name = { en: item.name, ru: item.name, vi: item.name };
+      }
+
+      const descriptions = itemDescriptions.get(itemKey);
+      if (descriptions) item.description = { ...descriptions };
+      else if (typeof item.description === 'string' && item.description.trim()) {
+        item.description = {
+          en: item.description,
+          ru: item.description,
+          vi: item.description,
+        };
+      }
+    }
   }
 }
 
-function localizedSourceJson(sourceJson, translations) {
+function localizedSourceJson(sourceJson, groupTranslations, itemTranslations, itemDescriptions) {
   try {
     const source = JSON.parse(String(sourceJson));
     if (Array.isArray(source?.groups)) {
-      applyTranslationsToGroups(source.groups, translations);
+      applyTranslationsToGroups(
+        source.groups,
+        groupTranslations,
+        itemTranslations,
+        itemDescriptions,
+      );
     }
     return JSON.stringify(source, null, 2);
   } catch {
@@ -175,37 +274,87 @@ export function normalizeMenuGroupNames(menu) {
   }
 
   const namesByGroup = new Map();
+  const namesByItem = new Map();
+  const descriptionsByItem = new Map();
+
   const groups = menu.groups.map((group) => {
     const id = normalizedId(group?.id);
-    const names = normalizeLocalizedText(group?.name);
+    const names = normalizeLocalizedText(group?.name, MAX_NAME_LENGTH);
     if (!id || !names) {
       throw new Error('Every group needs a valid id and localized name.');
     }
     namesByGroup.set(id, names);
+
+    const items = Array.isArray(group?.items)
+      ? group.items.map((item) => {
+          const itemId = normalizedId(item?.id);
+          const itemNames = normalizeLocalizedText(item?.name, MAX_NAME_LENGTH);
+          if (!itemId || !itemNames) {
+            throw new Error(`Every item in ${id} needs a valid id and localized name.`);
+          }
+          namesByItem.set(itemId, itemNames);
+
+          const description = normalizeOptionalLocalizedText(
+            item?.description,
+            MAX_DESCRIPTION_LENGTH,
+          );
+          if (description) descriptionsByItem.set(itemId, description);
+
+          return {
+            ...item,
+            id: itemId,
+            name: itemNames.en,
+            description: description?.en ?? null,
+          };
+        })
+      : group?.items;
+
     return {
       ...group,
       id,
       name: names.en,
+      items,
     };
   });
 
   return {
     workerMenu: { ...menu, groups },
     namesByGroup,
+    namesByItem,
+    descriptionsByItem,
   };
 }
 
-function normalizeLocalizedText(value) {
+function normalizeLocalizedText(value, maxLength) {
   if (typeof value === 'string') {
-    const text = cleanText(value);
+    const text = cleanText(value, maxLength);
     return text ? { en: text, ru: text, vi: text } : null;
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
-  const en = cleanText(value.en);
-  const ru = cleanText(value.ru);
-  const vi = cleanText(value.vi);
+  const en = cleanText(value.en, maxLength);
+  const ru = cleanText(value.ru, maxLength);
+  const vi = cleanText(value.vi, maxLength);
   if (!en || !ru || !vi) return null;
+  return { en, ru, vi };
+}
+
+function normalizeOptionalLocalizedText(value, maxLength) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'string') {
+    const text = cleanText(value, maxLength);
+    return text ? { en: text, ru: text, vi: text } : null;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const raw = [value.en, value.ru, value.vi];
+  if (raw.every((entry) => entry == null || String(entry).trim() === '')) return null;
+  const en = cleanText(value.en, maxLength);
+  const ru = cleanText(value.ru, maxLength);
+  const vi = cleanText(value.vi, maxLength);
+  if (!en || !ru || !vi) {
+    throw new Error('Localized item description requires en, ru and vi.');
+  }
   return { en, ru, vi };
 }
 
@@ -214,10 +363,10 @@ function normalizedId(value) {
   return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(text) ? text : '';
 }
 
-function cleanText(value) {
+function cleanText(value, maxLength) {
   if (typeof value !== 'string') return '';
   const text = value.trim().replace(/\s+/g, ' ');
-  return text && text.length <= MAX_NAME_LENGTH ? text : '';
+  return text && text.length <= maxLength ? text : '';
 }
 
 async function readJson(request, maxBytes) {
