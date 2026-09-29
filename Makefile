@@ -29,7 +29,8 @@ test:
 	node --check worker/telegram.js
 	node --check worker/menu.js
 	node --check worker/menu_i18n.js
-	node --check worker/menu_cart.js\n          node --check worker/menu_options.js\n\tnode --check worker/menu_options.js
+	node --check worker/menu_cart.js
+	node --check worker/menu_options.js
 	node --check worker/menu_telegram.js
 	node --check worker/customer_account.js
 	node --check worker/google_account.js
@@ -38,7 +39,8 @@ test:
 	node --check worker/pricing.js
 	node --check worker/integration_test.mjs
 	node --check worker/menu_i18n_test.mjs
-	node --check worker/menu_cart_test.mjs\n\tnode --check worker/menu_options_test.mjs
+	node --check worker/menu_cart_test.mjs
+	node --check worker/menu_options_test.mjs
 	node --check worker/customer_account_test.mjs
 	node --check worker/google_account_test.mjs
 	node --check worker/vietqr_test.mjs
