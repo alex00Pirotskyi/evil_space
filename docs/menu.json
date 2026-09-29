@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "groups": [
     {
       "id": "coworking",
@@ -11,9 +11,332 @@
       "items": [
         {
           "id": "coworking-day",
-          "name": "Coworking Table — Day",
+          "name": {
+            "en": "Day Pass",
+            "ru": "День",
+            "vi": "Vé ngày"
+          },
           "priceVnd": 200000,
-          "description": "Full day coworking access"
+          "description": {
+            "en": "Full-day coworking access",
+            "ru": "Доступ в коворкинг на весь день",
+            "vi": "Sử dụng coworking cả ngày"
+          },
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "membership",
+      "name": {
+        "en": "Monthly",
+        "ru": "Месяц",
+        "vi": "Gói tháng"
+      },
+      "items": [
+        {
+          "id": "coworking-month",
+          "name": {
+            "en": "Monthly Desk",
+            "ru": "Месяц",
+            "vi": "Bàn làm việc theo tháng"
+          },
+          "priceVnd": 2500000,
+          "description": {
+            "en": "One month coworking access",
+            "ru": "Доступ в коворкинг на один месяц",
+            "vi": "Sử dụng coworking trong một tháng"
+          },
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "storage-locker",
+      "name": {
+        "en": "Storage Locker",
+        "ru": "Камера хранения",
+        "vi": "Tủ cá nhân"
+      },
+      "items": [
+        {
+          "id": "storage-locker-month",
+          "name": {
+            "en": "Storage Locker · Month",
+            "ru": "Камера хранения · месяц",
+            "vi": "Tủ cá nhân · tháng"
+          },
+          "priceVnd": 1000000,
+          "description": {
+            "en": "Personal storage locker for one month",
+            "ru": "Личная камера хранения на один месяц",
+            "vi": "Tủ cá nhân trong một tháng"
+          },
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "classic-coffee",
+      "name": {
+        "en": "Classic Coffee",
+        "ru": "Классика",
+        "vi": "Cà phê cổ điển"
+      },
+      "items": [
+        {
+          "id": "espresso-020",
+          "name": {
+            "en": "Espresso · 0.2 L",
+            "ru": "Espresso · 0.2 L",
+            "vi": "Espresso · 0.2 L"
+          },
+          "priceVnd": 45000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "espresso-030",
+          "name": {
+            "en": "Espresso · 0.3 L",
+            "ru": "Espresso · 0.3 L",
+            "vi": "Espresso · 0.3 L"
+          },
+          "priceVnd": 60000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "americano-020",
+          "name": {
+            "en": "Americano · 0.2 L",
+            "ru": "Americano · 0.2 L",
+            "vi": "Americano · 0.2 L"
+          },
+          "priceVnd": 45000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "americano-030",
+          "name": {
+            "en": "Americano · 0.3 L",
+            "ru": "Americano · 0.3 L",
+            "vi": "Americano · 0.3 L"
+          },
+          "priceVnd": 60000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "cappuccino-020",
+          "name": {
+            "en": "Cappuccino · 0.2 L",
+            "ru": "Cappuccino · 0.2 L",
+            "vi": "Cappuccino · 0.2 L"
+          },
+          "priceVnd": 55000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "cappuccino-030",
+          "name": {
+            "en": "Cappuccino · 0.3 L",
+            "ru": "Cappuccino · 0.3 L",
+            "vi": "Cappuccino · 0.3 L"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "latte-030",
+          "name": {
+            "en": "Latte · 0.3 L",
+            "ru": "Latte · 0.3 L",
+            "vi": "Latte · 0.3 L"
+          },
+          "priceVnd": 55000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "flat-white",
+          "name": {
+            "en": "Flat White",
+            "ru": "Flat White",
+            "vi": "Flat White"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "signature-drinks",
+      "name": {
+        "en": "Signature Drinks",
+        "ru": "Авторские напитки",
+        "vi": "Đồ uống đặc trưng"
+      },
+      "items": [
+        {
+          "id": "espresso-tonic",
+          "name": {
+            "en": "Espresso Tonic",
+            "ru": "Espresso Tonic",
+            "vi": "Espresso Tonic"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "raspberry-raf",
+          "name": {
+            "en": "Raspberry Raf",
+            "ru": "Малиновый раф",
+            "vi": "Raf mâm xôi"
+          },
+          "priceVnd": 90000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "salted-caramel-raf",
+          "name": {
+            "en": "Salted Caramel Raf",
+            "ru": "Раф солёная карамель",
+            "vi": "Raf caramel muối"
+          },
+          "priceVnd": 90000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "bumble-orange",
+          "name": {
+            "en": "Bumble Orange",
+            "ru": "Бамбл апельсин",
+            "vi": "Bumble cam"
+          },
+          "priceVnd": 80000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "uzbek-iced-tea",
+          "name": {
+            "en": "Uzbek Iced Tea",
+            "ru": "Айс-ти узбекский",
+            "vi": "Trà đá Uzbek"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "bumble-pomegranate",
+          "name": {
+            "en": "Bumble Pomegranate",
+            "ru": "Бамбл гранат",
+            "vi": "Bumble lựu"
+          },
+          "priceVnd": 80000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "banana-iced-latte",
+          "name": {
+            "en": "Banana Iced Latte",
+            "ru": "Айс-латте банан",
+            "vi": "Latte đá chuối"
+          },
+          "priceVnd": 100000,
+          "description": {
+            "en": "real banana",
+            "ru": "натуральный банан",
+            "vi": "chuối thật"
+          },
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "fresh-juice",
+      "name": {
+        "en": "Fresh Juice",
+        "ru": "Фреши",
+        "vi": "Nước ép tươi"
+      },
+      "items": [
+        {
+          "id": "apple-juice",
+          "name": {
+            "en": "Apple",
+            "ru": "Яблочный",
+            "vi": "Nước ép táo"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "carrot-cream",
+          "name": {
+            "en": "Carrot & Cream",
+            "ru": "Морковь со сливками",
+            "vi": "Cà rốt & kem"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "orange-juice",
+          "name": {
+            "en": "Orange",
+            "ru": "Апельсиновый",
+            "vi": "Nước cam"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "matcha",
+      "name": {
+        "en": "Matcha",
+        "ru": "Matcha",
+        "vi": "Matcha"
+      },
+      "items": [
+        {
+          "id": "matcha-classic",
+          "name": {
+            "en": "Classic",
+            "ru": "Классическая",
+            "vi": "Cổ điển"
+          },
+          "priceVnd": 70000,
+          "description": null,
+          "enabled": true
+        },
+        {
+          "id": "matcha-raspberry",
+          "name": {
+            "en": "Raspberry",
+            "ru": "Малиновая",
+            "vi": "Mâm xôi"
+          },
+          "priceVnd": 80000,
+          "description": null,
+          "enabled": true
         }
       ]
     },
@@ -22,56 +345,96 @@
       "name": {
         "en": "Drinks",
         "ru": "Напитки",
-        "vi": "Đồ uống"
+        "vi": "Nước giải khát"
       },
       "items": [
         {
           "id": "cola",
-          "name": "Coca-Cola",
+          "name": {
+            "en": "Coca-Cola",
+            "ru": "Coca-Cola",
+            "vi": "Coca-Cola"
+          },
           "priceVnd": 25000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "fanta",
-          "name": "Fanta",
+          "name": {
+            "en": "Fanta",
+            "ru": "Fanta",
+            "vi": "Fanta"
+          },
           "priceVnd": 25000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "sprite",
-          "name": "Sprite",
+          "name": {
+            "en": "Sprite",
+            "ru": "Sprite",
+            "vi": "Sprite"
+          },
           "priceVnd": 25000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "water",
-          "name": "Water",
+          "name": {
+            "en": "Water",
+            "ru": "Вода",
+            "vi": "Nước suối"
+          },
           "priceVnd": 25000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "schweppes",
-          "name": "Schweppes",
+          "name": {
+            "en": "Schweppes",
+            "ru": "Schweppes",
+            "vi": "Schweppes"
+          },
           "priceVnd": 25000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "7up",
-          "name": "7Up",
+          "name": {
+            "en": "7Up",
+            "ru": "7Up",
+            "vi": "7Up"
+          },
           "priceVnd": 25000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "red-bull",
-          "name": "Red Bull",
+          "name": {
+            "en": "Red Bull",
+            "ru": "Red Bull",
+            "vi": "Red Bull"
+          },
           "priceVnd": 50000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
-          "id": "coconut",
-          "name": "Coconut",
-          "priceVnd": 50000,
-          "description": null
+          "id": "monster",
+          "name": {
+            "en": "Monster",
+            "ru": "Monster",
+            "vi": "Monster"
+          },
+          "priceVnd": 45000,
+          "description": null,
+          "enabled": true
         }
       ]
     },
@@ -85,15 +448,46 @@
       "items": [
         {
           "id": "snickers",
-          "name": "Snickers",
+          "name": {
+            "en": "Snickers",
+            "ru": "Snickers",
+            "vi": "Snickers"
+          },
           "priceVnd": 50000,
-          "description": null
+          "description": null,
+          "enabled": true
         },
         {
           "id": "kitkat",
-          "name": "KitKat",
+          "name": {
+            "en": "KitKat",
+            "ru": "KitKat",
+            "vi": "KitKat"
+          },
           "priceVnd": 50000,
-          "description": null
+          "description": null,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "extras",
+      "name": {
+        "en": "Extras",
+        "ru": "Добавки",
+        "vi": "Thêm"
+      },
+      "items": [
+        {
+          "id": "syrup",
+          "name": {
+            "en": "Syrup",
+            "ru": "Сироп",
+            "vi": "Siro"
+          },
+          "priceVnd": 10000,
+          "description": null,
+          "enabled": true
         }
       ]
     }

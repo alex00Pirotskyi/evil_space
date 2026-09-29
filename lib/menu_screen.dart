@@ -131,6 +131,7 @@ class _MenuScreenState extends State<MenuScreen> {
           noPromoLabel: _copy('without_promo'),
           payLabel: _copy('pay'),
           cancelLabel: _copy('cancel'),
+          languageCode: widget.localization.language.code,
         ),
       );
       if (choice == null || !mounted) {
@@ -263,10 +264,16 @@ class _MenuScreenState extends State<MenuScreen> {
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BrandPalette.rule))),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item.name, style: _serif(25)),
-          if (item.description != null) ...[
+          Text(
+            item.nameFor(widget.localization.language.code),
+            style: _serif(25),
+          ),
+          if (item.descriptionFor(widget.localization.language.code) case final description?) ...[
             const SizedBox(height: 5),
-            Text(item.description!, style: _serif(15, color: BrandPalette.inkMuted, height: 1.3)),
+            Text(
+              description,
+              style: _serif(15, color: BrandPalette.inkMuted, height: 1.3),
+            ),
           ],
           const SizedBox(height: 8),
           Text(_money(item.priceVnd), style: _mono(12)),
@@ -362,6 +369,7 @@ class _CheckoutDialog extends StatefulWidget {
     required this.noPromoLabel,
     required this.payLabel,
     required this.cancelLabel,
+    required this.languageCode,
   });
   final String title;
   final List<_CartLine> lines;
@@ -372,6 +380,7 @@ class _CheckoutDialog extends StatefulWidget {
   final String noPromoLabel;
   final String payLabel;
   final String cancelLabel;
+  final String languageCode;
 
   @override
   State<_CheckoutDialog> createState() => _CheckoutDialogState();
@@ -409,7 +418,12 @@ class _CheckoutDialogState extends State<_CheckoutDialog> {
                 child: Row(children: [
                   Text('${line.quantity} ×', style: _mono(10)),
                   const SizedBox(width: 9),
-                  Expanded(child: Text(line.item.name, style: _serif(18))),
+                  Expanded(
+                    child: Text(
+                      line.item.nameFor(widget.languageCode),
+                      style: _serif(18),
+                    ),
+                  ),
                   Text(_money(line.total), style: _mono(10)),
                 ]),
               ),
@@ -543,7 +557,10 @@ class _PaymentDialogState extends State<_PaymentDialog> {
             for (final line in widget.lines)
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
-                child: Text('${line.quantity} × ${line.item.name} · ${_money(line.total)}', style: _serif(17)),
+                child: Text(
+                  '${line.quantity} × ${line.item.nameFor(widget.languageCode)} · ${_money(line.total)}',
+                  style: _serif(17),
+                ),
               ),
             if (widget.order.hasPromo) ...[
               const Divider(color: BrandPalette.rule),

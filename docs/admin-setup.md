@@ -134,6 +134,8 @@ All three localized group names are required when `name` is an object. Legacy me
 
 The current Evil Space menu is kept in `docs/menu.json` and can be uploaded directly from `/admin/menu`.
 
+Menu groups, item names and optional item descriptions support English, Russian and Vietnamese in the same JSON object. The admin menu builder preserves all three languages when editing or publishing.
+
 The public menu is `/menu`. The main public page has a language-aware **MENU / МЕНЮ / THỰC ĐƠN** action. The menu page keeps the selected site language and lets the customer switch between EN, RU, and VI. Group headings update immediately without another API request.
 
 A customer presses **BUY**, scans the generated QR, and the page polls the order status. Linked Telegram admins receive the order with an **ITEM PAID** action. Only a linked approved admin can confirm it. The admin menu page also provides a manual **MARK PAID** fallback.

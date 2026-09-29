@@ -12,9 +12,17 @@ const valid = {
       items: [
         {
           id: 'coworking-day',
-          name: 'Coworking Day',
+          name: {
+            en: 'Coworking Day',
+            ru: 'День в коворкинге',
+            vi: 'Vé ngày coworking',
+          },
           priceVnd: 200000,
-          description: 'Full day access',
+          description: {
+            en: 'Full day access',
+            ru: 'Доступ на весь день',
+            vi: 'Sử dụng cả ngày',
+          },
           enabled: true,
         },
       ],
@@ -31,6 +39,16 @@ test('menu builder accepts localized groups and stable ids', () => {
     en: 'Coworking',
     ru: 'Коворкинг',
     vi: 'Coworking',
+  });
+  assert.deepEqual(result.menu.groups[0].items[0].name, {
+    en: 'Coworking Day',
+    ru: 'День в коворкинге',
+    vi: 'Vé ngày coworking',
+  });
+  assert.deepEqual(result.menu.groups[0].items[0].description, {
+    en: 'Full day access',
+    ru: 'Доступ на весь день',
+    vi: 'Sử dụng cả ngày',
   });
   assert.equal(result.menu.groups[0].items[0].priceVnd, 200000);
 });
@@ -55,7 +73,11 @@ test('menu builder rejects duplicate stable item ids', () => {
   menu.groups.push({
     id: 'drinks',
     name: { en: 'Drinks', ru: 'Напитки', vi: 'Đồ uống' },
-    items: [{ id: 'coworking-day', name: 'Cola', priceVnd: 25000 }],
+    items: [{
+      id: 'coworking-day',
+      name: { en: 'Cola', ru: 'Кола', vi: 'Cola' },
+      priceVnd: 25000,
+    }],
   });
   assert.match(validateDraftMenu(menu).error, /duplicate item/i);
 });
@@ -64,6 +86,10 @@ test('menu builder rejects incomplete translations and invalid prices', () => {
   const missing = structuredClone(valid);
   missing.groups[0].name.vi = '';
   assert.match(validateDraftMenu(missing).error, /localized name|English, Russian and Vietnamese/i);
+
+  const itemTranslation = structuredClone(valid);
+  itemTranslation.groups[0].items[0].name.vi = '';
+  assert.match(validateDraftMenu(itemTranslation).error, /duplicate item|localized name/i);
 
   const price = structuredClone(valid);
   price.groups[0].items[0].priceVnd = -1;

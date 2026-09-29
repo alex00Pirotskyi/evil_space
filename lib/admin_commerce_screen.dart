@@ -243,7 +243,7 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
   Future<void> _deleteItem(int groupIndex, int itemIndex) async {
     final group = _editableMenu.groups[groupIndex];
     final item = group.items[itemIndex];
-    final yes = await _confirm('DELETE ITEM?', 'Delete ${item.name} from this draft?', 'DELETE');
+    final yes = await _confirm('DELETE ITEM?', 'Delete ${item.name.en} from this draft?', 'DELETE');
     if (yes != true) return;
     final groups = [..._editableMenu.groups];
     final items = [...group.items]..removeAt(itemIndex);
@@ -301,9 +301,13 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
 
   Future<MenuItem?> _itemDialog({MenuItem? current}) async {
     final id = TextEditingController(text: current?.id ?? '');
-    final name = TextEditingController(text: current?.name ?? '');
+    final nameEn = TextEditingController(text: current?.name.en ?? '');
+    final nameRu = TextEditingController(text: current?.name.ru ?? '');
+    final nameVi = TextEditingController(text: current?.name.vi ?? '');
     final price = TextEditingController(text: current?.priceVnd.toString() ?? '');
-    final description = TextEditingController(text: current?.description ?? '');
+    final descriptionEn = TextEditingController(text: current?.description?.en ?? '');
+    final descriptionRu = TextEditingController(text: current?.description?.ru ?? '');
+    final descriptionVi = TextEditingController(text: current?.description?.vi ?? '');
     var enabled = current?.enabled ?? true;
     final result = await showDialog<MenuItem>(
       context: context,
@@ -313,22 +317,28 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
           shape: const RoundedRectangleBorder(),
           title: Text(current == null ? 'NEW ITEM' : 'EDIT ITEM', style: _serif(25)),
           content: SizedBox(
-            width: 520,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _field(id, 'STABLE ID', enabled: current == null),
-                _field(name, 'NAME'),
-                _field(price, 'PRICE VND', keyboardType: TextInputType.number),
-                _field(description, 'DESCRIPTION · OPTIONAL'),
-                CheckboxListTile(
-                  value: enabled,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('ACTIVE', style: _mono(10)),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (value) => setLocal(() => enabled = value ?? true),
-                ),
-              ],
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _field(id, 'STABLE ID', enabled: current == null),
+                  _field(nameEn, 'NAME · ENGLISH'),
+                  _field(nameRu, 'NAME · RUSSIAN'),
+                  _field(nameVi, 'NAME · VIETNAMESE'),
+                  _field(price, 'PRICE VND', keyboardType: TextInputType.number),
+                  _field(descriptionEn, 'DESCRIPTION · ENGLISH · OPTIONAL'),
+                  _field(descriptionRu, 'DESCRIPTION · RUSSIAN · OPTIONAL'),
+                  _field(descriptionVi, 'DESCRIPTION · VIETNAMESE · OPTIONAL'),
+                  CheckboxListTile(
+                    value: enabled,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('ACTIVE', style: _mono(10)),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (value) => setLocal(() => enabled = value ?? true),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -338,15 +348,34 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
               onPressed: () {
                 final stableId = _slug(id.text);
                 final value = int.tryParse(price.text.replaceAll(',', '').trim());
-                if (stableId.isEmpty || name.text.trim().isEmpty || value == null || value <= 0) return;
+                final en = nameEn.text.trim();
+                final ru = nameRu.text.trim();
+                final vi = nameVi.text.trim();
+                if (stableId.isEmpty || en.isEmpty || ru.isEmpty || vi.isEmpty || value == null || value <= 0) return;
+
+                final descriptionValues = [
+                  descriptionEn.text.trim(),
+                  descriptionRu.text.trim(),
+                  descriptionVi.text.trim(),
+                ];
+                final anyDescription = descriptionValues.any((value) => value.isNotEmpty);
+                final allDescriptions = descriptionValues.every((value) => value.isNotEmpty);
+                if (anyDescription && !allDescriptions) return;
+
                 Navigator.pop(
                   context,
                   MenuItem(
                     id: stableId,
-                    name: name.text.trim(),
+                    name: MenuLocalizedText(en: en, ru: ru, vi: vi),
                     priceVnd: value,
                     enabled: enabled,
-                    description: description.text.trim().isEmpty ? null : description.text.trim(),
+                    description: allDescriptions
+                        ? MenuLocalizedText(
+                            en: descriptionValues[0],
+                            ru: descriptionValues[1],
+                            vi: descriptionValues[2],
+                          )
+                        : null,
                   ),
                 );
               },
@@ -356,7 +385,14 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
         ),
       ),
     );
-    id.dispose(); name.dispose(); price.dispose(); description.dispose();
+    id.dispose();
+    nameEn.dispose();
+    nameRu.dispose();
+    nameVi.dispose();
+    price.dispose();
+    descriptionEn.dispose();
+    descriptionRu.dispose();
+    descriptionVi.dispose();
     return result;
   }
 
@@ -779,8 +815,17 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
               Expanded(child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 7),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${group.items[ii].name}${group.items[ii].enabled ? '' : ' · DISABLED'}', style: _serif(17, color: group.items[ii].enabled ? BrandPalette.ink : BrandPalette.inkMuted)),
-                  Text('${group.items[ii].id} · ${_money(group.items[ii].priceVnd)}', style: _mono(8.5, color: BrandPalette.inkMuted)),
+                  Text(
+                    '${group.items[ii].name.en}${group.items[ii].enabled ? '' : ' · DISABLED'}',
+                    style: _serif(
+                      17,
+                      color: group.items[ii].enabled ? BrandPalette.ink : BrandPalette.inkMuted,
+                    ),
+                  ),
+                  Text(
+                    '${group.items[ii].id} · ${_money(group.items[ii].priceVnd)} · ${group.items[ii].name.ru} · ${group.items[ii].name.vi}',
+                    style: _mono(8.5, color: BrandPalette.inkMuted),
+                  ),
                 ]),
               )),
               IconButton(onPressed: ii > 0 ? () => _moveItem(index, ii, -1) : null, icon: const Icon(Icons.arrow_upward, size: 16)),
