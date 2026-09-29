@@ -149,7 +149,12 @@ class _MenuScreenState extends State<MenuScreen> {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _PaymentDialog(api: _api, order: order, lines: lines),
+        builder: (_) => _PaymentDialog(
+          api: _api,
+          order: order,
+          lines: lines,
+          languageCode: widget.localization.language.code,
+        ),
       );
     } on MenuApiException catch (error) {
       if (mounted) setState(() { _checkingOut = false; _error = error.message; });
@@ -462,10 +467,17 @@ class _CheckoutDialogState extends State<_CheckoutDialog> {
 }
 
 class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({required this.api, required this.order, required this.lines});
+  const _PaymentDialog({
+    required this.api,
+    required this.order,
+    required this.lines,
+    required this.languageCode,
+  });
   final MenuApi api;
   final MenuOrderPayment order;
   final List<_CartLine> lines;
+  final String languageCode;
+
   @override
   State<_PaymentDialog> createState() => _PaymentDialogState();
 }
@@ -474,6 +486,10 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   Timer? _timer;
   String _status = 'pending';
   bool _polling = false;
+  bool _cashSelected = false;
+
+  String _copy(String key) =>
+      _menuCopy[widget.languageCode]?[key] ?? _menuCopy['en']![key]!;
 
   @override
   void initState() {
@@ -513,7 +529,16 @@ class _PaymentDialogState extends State<_PaymentDialog> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(paid ? '✓ PAYMENT CONFIRMED' : expired ? 'PAYMENT EXPIRED' : 'PAY HERE', style: _mono(12)),
+            Text(
+              paid
+                  ? _copy('payment_confirmed')
+                  : expired
+                  ? _copy('payment_expired')
+                  : _cashSelected
+                  ? _copy('cash_title')
+                  : _copy('payment_title'),
+              style: _mono(12),
+            ),
             const SizedBox(height: 14),
             for (final line in widget.lines)
               Padding(
@@ -522,46 +547,143 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               ),
             if (widget.order.hasPromo) ...[
               const Divider(color: BrandPalette.rule),
-              _summaryRow('SUBTOTAL', widget.order.originalAmountVnd),
-              _summaryRow(widget.order.promoName?.toUpperCase() ?? 'PROMO', -widget.order.promoDiscountVnd),
+              _summaryRow(_copy('subtotal').toUpperCase(), widget.order.originalAmountVnd),
+              _summaryRow(widget.order.promoName?.toUpperCase() ?? _copy('promo').toUpperCase(), -widget.order.promoDiscountVnd),
             ],
             const SizedBox(height: 6),
-            Text('TOTAL · ${_money(widget.order.amountVnd)}', style: _mono(14)),
+            Text('${_copy('total').toUpperCase()} · ${_money(widget.order.amountVnd)}', style: _mono(14)),
             const SizedBox(height: 22),
             if (!paid && !expired) ...[
-              Center(
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(12),
-                  child: QrImageView(
-                    data: widget.order.qrPayload,
-                    version: QrVersions.auto,
-                    size: 270,
-                    backgroundColor: Colors.white,
-                    eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
-                    dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink),
+              if (!_cashSelected) ...[
+                Center(
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(12),
+                    child: QrImageView(
+                      data: widget.order.qrPayload,
+                      version: QrVersions.auto,
+                      size: 270,
+                      backgroundColor: Colors.white,
+                      eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
+                      dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text('TRANSFER REFERENCE', style: _mono(9)),
-              const SizedBox(height: 6),
-              SelectableText(widget.order.paymentMessage, style: _mono(15)),
-              const SizedBox(height: 18),
-              Row(children: [
-                const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2, color: BrandPalette.ink)),
-                const SizedBox(width: 10),
-                Expanded(child: Text('Waiting for staff to confirm the bank payment…', style: _serif(15, color: BrandPalette.inkMuted))),
-              ]),
+                const SizedBox(height: 20),
+                Text(_copy('transfer_reference').toUpperCase(), style: _mono(9)),
+                const SizedBox(height: 6),
+                SelectableText(widget.order.paymentMessage, style: _mono(15)),
+                const SizedBox(height: 18),
+                Row(children: [
+                  const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: BrandPalette.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _copy('waiting_bank'),
+                      style: _serif(15, color: BrandPalette.inkMuted),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 18),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _cashSelected = true),
+                  icon: const Icon(Icons.payments_outlined, size: 18),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    side: const BorderSide(color: BrandPalette.ink),
+                    minimumSize: const Size.fromHeight(50),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  label: Text(
+                    _copy('pay_cash').toUpperCase(),
+                    style: _mono(10),
+                  ),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: BrandPalette.ink),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        _copy('cash_title').toUpperCase(),
+                        style: _mono(11),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        _copy('cash_instruction'),
+                        style: _serif(17, height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(children: [
+                  const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: BrandPalette.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _copy('waiting_cash'),
+                      style: _serif(15, color: BrandPalette.inkMuted),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 18),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _cashSelected = false),
+                  icon: const Icon(Icons.qr_code_2, size: 18),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    side: const BorderSide(color: BrandPalette.ink),
+                    minimumSize: const Size.fromHeight(50),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  label: Text(
+                    _copy('pay_qr').toUpperCase(),
+                    style: _mono(10),
+                  ),
+                ),
+              ],
             ] else if (paid)
-              Text('Thank you. Your whole order is confirmed${widget.order.hasPromo ? ' and your promo was used.' : '.'}', style: _serif(18, height: 1.35))
+              Text(
+                widget.order.hasPromo
+                    ? _copy('payment_thanks_promo')
+                    : _copy('payment_thanks'),
+                style: _serif(18, height: 1.35),
+              )
             else
-              Text('This payment request is no longer active. Any reserved promo has been returned to your account.', style: _serif(17, height: 1.35)),
+              Text(
+                _copy('payment_inactive'),
+                style: _serif(17, height: 1.35),
+              ),
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
-              style: OutlinedButton.styleFrom(foregroundColor: BrandPalette.ink, side: const BorderSide(color: BrandPalette.ink), minimumSize: const Size.fromHeight(48), shape: const RoundedRectangleBorder()),
-              child: Text(paid || expired ? 'CLOSE' : 'CANCEL VIEW', style: _mono(10)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BrandPalette.ink,
+                side: const BorderSide(color: BrandPalette.ink),
+                minimumSize: const Size.fromHeight(48),
+                shape: const RoundedRectangleBorder(),
+              ),
+              child: Text(
+                _copy(paid || expired ? 'close' : 'cancel_view').toUpperCase(),
+                style: _mono(10),
+              ),
             ),
           ]),
         ),
@@ -578,30 +700,81 @@ class _PaymentDialogState extends State<_PaymentDialog> {
 const _menuCopy = <String, Map<String, String>>{
   'en': {
     'title': 'MENU',
-    'subtitle': 'Add anything you want, choose quantities, then pay for the whole cart with one QR.',
+    'subtitle': 'Add anything you want, choose quantities, then pay for the whole cart with one QR or cash.',
     'back': 'BACK', 'add': 'ADD', 'cart': 'CART', 'checkout': 'CHECKOUT',
     'total': 'Total', 'pay': 'Create payment', 'cancel': 'Cancel',
     'your_promos': 'Your promos', 'use_promo': 'Use promo', 'without_promo': 'Pay without promo',
     'empty': 'The menu is being prepared.', 'load_error': 'Could not load the menu.',
     'payment_error': 'Could not create the payment.',
+    'payment_title': 'PAY HERE',
+    'payment_confirmed': '✓ PAYMENT CONFIRMED',
+    'payment_expired': 'PAYMENT EXPIRED',
+    'subtotal': 'Subtotal',
+    'promo': 'Promo',
+    'transfer_reference': 'Transfer reference',
+    'waiting_bank': 'Waiting for staff to confirm the bank payment…',
+    'pay_cash': 'Pay cash',
+    'cash_title': 'Pay cash at counter',
+    'cash_instruction': 'Please pay the total in cash at the counter. Staff will confirm your order here.',
+    'waiting_cash': 'Waiting for staff to confirm the cash payment…',
+    'pay_qr': 'Pay by QR instead',
+    'payment_thanks': 'Thank you. Your whole order is confirmed.',
+    'payment_thanks_promo': 'Thank you. Your whole order is confirmed and your promo was used.',
+    'payment_inactive': 'This payment request is no longer active. Any reserved promo has been returned to your account.',
+    'close': 'Close',
+    'cancel_view': 'Cancel view',
   },
   'ru': {
     'title': 'МЕНЮ',
-    'subtitle': 'Добавьте нужные товары, выберите количество и оплатите всю корзину одним QR.',
+    'subtitle': 'Добавьте нужные товары, выберите количество и оплатите всю корзину одним QR или наличными.',
     'back': 'НАЗАД', 'add': 'ДОБАВИТЬ', 'cart': 'КОРЗИНА', 'checkout': 'ОФОРМИТЬ',
     'total': 'Итого', 'pay': 'Создать оплату', 'cancel': 'Отмена',
     'your_promos': 'Ваши промо', 'use_promo': 'Использовать', 'without_promo': 'Без промо',
     'empty': 'Меню готовится.', 'load_error': 'Не удалось загрузить меню.',
     'payment_error': 'Не удалось создать платёж.',
+    'payment_title': 'ОПЛАТА',
+    'payment_confirmed': '✓ ОПЛАТА ПОДТВЕРЖДЕНА',
+    'payment_expired': 'ВРЕМЯ ОПЛАТЫ ИСТЕКЛО',
+    'subtotal': 'Сумма',
+    'promo': 'Промо',
+    'transfer_reference': 'Назначение перевода',
+    'waiting_bank': 'Ожидаем подтверждение банковского перевода сотрудником…',
+    'pay_cash': 'Оплатить наличными',
+    'cash_title': 'Оплата наличными',
+    'cash_instruction': 'Оплатите итоговую сумму наличными на стойке. Сотрудник подтвердит заказ здесь.',
+    'waiting_cash': 'Ожидаем подтверждение оплаты наличными сотрудником…',
+    'pay_qr': 'Оплатить по QR',
+    'payment_thanks': 'Спасибо. Ваш заказ подтверждён.',
+    'payment_thanks_promo': 'Спасибо. Ваш заказ подтверждён, промо использовано.',
+    'payment_inactive': 'Этот платёж больше не активен. Зарезервированное промо возвращено в ваш аккаунт.',
+    'close': 'Закрыть',
+    'cancel_view': 'Закрыть',
   },
   'vi': {
     'title': 'THỰC ĐƠN',
-    'subtitle': 'Thêm món, chọn số lượng rồi thanh toán toàn bộ giỏ hàng bằng một mã QR.',
+    'subtitle': 'Thêm món, chọn số lượng rồi thanh toán toàn bộ giỏ hàng bằng một mã QR hoặc tiền mặt.',
     'back': 'QUAY LẠI', 'add': 'THÊM', 'cart': 'GIỎ HÀNG', 'checkout': 'THANH TOÁN',
     'total': 'Tổng', 'pay': 'Tạo thanh toán', 'cancel': 'Hủy',
     'your_promos': 'Khuyến mãi của bạn', 'use_promo': 'Dùng khuyến mãi', 'without_promo': 'Không dùng khuyến mãi',
     'empty': 'Thực đơn đang được chuẩn bị.', 'load_error': 'Không thể tải thực đơn.',
     'payment_error': 'Không thể tạo thanh toán.',
+    'payment_title': 'THANH TOÁN',
+    'payment_confirmed': '✓ ĐÃ XÁC NHẬN THANH TOÁN',
+    'payment_expired': 'YÊU CẦU THANH TOÁN ĐÃ HẾT HẠN',
+    'subtotal': 'Tạm tính',
+    'promo': 'Khuyến mãi',
+    'transfer_reference': 'Nội dung chuyển khoản',
+    'waiting_bank': 'Đang chờ nhân viên xác nhận chuyển khoản…',
+    'pay_cash': 'Thanh toán tiền mặt',
+    'cash_title': 'Trả tiền mặt tại quầy',
+    'cash_instruction': 'Vui lòng thanh toán tổng số tiền bằng tiền mặt tại quầy. Nhân viên sẽ xác nhận đơn hàng tại đây.',
+    'waiting_cash': 'Đang chờ nhân viên xác nhận thanh toán tiền mặt…',
+    'pay_qr': 'Thanh toán bằng QR',
+    'payment_thanks': 'Cảm ơn bạn. Đơn hàng đã được xác nhận.',
+    'payment_thanks_promo': 'Cảm ơn bạn. Đơn hàng đã được xác nhận và khuyến mãi đã được sử dụng.',
+    'payment_inactive': 'Yêu cầu thanh toán này không còn hiệu lực. Khuyến mãi đã giữ chỗ được trả lại vào tài khoản của bạn.',
+    'close': 'Đóng',
+    'cancel_view': 'Đóng',
   },
 };
 
