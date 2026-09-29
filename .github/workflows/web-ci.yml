@@ -55,7 +55,7 @@ jobs:
           node --check worker/telegram.js
           node --check worker/menu.js
           node --check worker/menu_i18n.js
-          node --check worker/menu_cart.js
+          node --check worker/menu_cart.js\n          node --check worker/menu_options.js\n\tnode --check worker/menu_options.js
           node --check worker/menu_builder.js
           node --check worker/promo_engine.js
           node --check worker/menu_telegram.js
@@ -66,7 +66,7 @@ jobs:
           node --check worker/pricing.js
           node --check worker/integration_test.mjs
           node --check worker/menu_i18n_test.mjs
-          node --check worker/menu_cart_test.mjs
+          node --check worker/menu_cart_test.mjs\n\tnode --check worker/menu_options_test.mjs
           node --check worker/menu_builder_test.mjs
           node --check worker/promo_engine_test.mjs
           node --check worker/customer_account_test.mjs
@@ -75,7 +75,7 @@ jobs:
           node --check web/google_sign_in.js
 
       - name: Test Worker helpers
-        run: node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/menu_builder_test.mjs worker/promo_engine_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs
+        run: node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/menu_options_test.mjs worker/menu_builder_test.mjs worker/promo_engine_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs
 
       - name: Test Worker against local D1 with an old web build
         run: |
