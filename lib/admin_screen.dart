@@ -50,8 +50,12 @@ class _AdminScreenState extends State<AdminScreen> {
     super.initState();
     _load();
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 20),
-      (_) => _load(silent: true),
+      const Duration(seconds: 30),
+      (_) {
+        if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+          _load(silent: true);
+        }
+      },
     );
   }
 

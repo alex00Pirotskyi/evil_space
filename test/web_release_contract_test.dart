@@ -7,10 +7,13 @@ void main() {
     final index = File('web/index.html').readAsStringSync();
     final bootstrap = File('web/flutter_bootstrap.js').readAsStringSync();
     final headers = File('web/_headers').readAsStringSync();
+    final googleSignIn = File('web/google_sign_in.js').readAsStringSync();
 
     expect(index, contains('id="evil-space-boot"'));
     expect(index, contains('flutter_bootstrap.js'));
     expect(index, contains('openingHoursSpecification'));
+    expect(index, isNot(contains('https://accounts.google.com/gsi/client')));
+    expect(googleSignIn, contains('https://accounts.google.com/gsi/client'));
     expect(bootstrap, contains('{{flutter_js}}'));
     expect(bootstrap, contains('{{flutter_build_config}}'));
     expect(bootstrap, contains('/api/public/status'));
@@ -28,6 +31,8 @@ void main() {
     final main = File('lib/main.dart').readAsStringSync();
 
     expect(router, contains("deferred as admin_portal"));
+    expect(router, contains("deferred as menu_screen"));
+    expect(router, contains('menu_screen.loadLibrary()'));
     expect(router, contains('admin_portal.loadLibrary()'));
     expect(main, contains('MaterialApp.router('));
     expect(main, isNot(contains('_FirstVisitLanguageGate')));

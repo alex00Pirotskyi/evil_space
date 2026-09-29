@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/public_desk.dart';
+import 'package:evil_space/public_booking_signal.dart';
 
 class PublicTelegramConnector extends StatefulWidget {
   const PublicTelegramConnector({
@@ -24,7 +23,6 @@ class PublicTelegramConnector extends StatefulWidget {
 
 class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   final PublicDeskApi _deskApi = PublicDeskApi();
-  Timer? _timer;
   String? _telegramUrl;
   bool _opening = false;
 
@@ -32,8 +30,8 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   void initState() {
     super.initState();
     widget.localization.addListener(_handleLocalizationChanged);
+    publicBookingRevision.addListener(_handleBookingChanged);
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
   }
 
   @override
@@ -48,13 +46,15 @@ class _PublicTelegramConnectorState extends State<PublicTelegramConnector> {
   @override
   void dispose() {
     widget.localization.removeListener(_handleLocalizationChanged);
-    _timer?.cancel();
+    publicBookingRevision.removeListener(_handleBookingChanged);
     super.dispose();
   }
 
   void _handleLocalizationChanged() {
     if (mounted) setState(() {});
   }
+
+  void _handleBookingChanged() => _refresh();
 
   void _refresh() {
     String? next;

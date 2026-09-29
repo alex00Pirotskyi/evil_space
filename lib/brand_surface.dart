@@ -12,81 +12,24 @@ class BrandPalette {
   static const Color rule = Color(0xFFC9C6BC);
 }
 
-class BrandPaper extends StatefulWidget {
+class BrandPaper extends StatelessWidget {
   const BrandPaper({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<BrandPaper> createState() => _BrandPaperState();
-}
-
-class _BrandPaperState extends State<BrandPaper> {
-  final ValueNotifier<double> _scrollOffset = ValueNotifier<double>(0);
-
-  @override
-  void dispose() {
-    _scrollOffset.dispose();
-    super.dispose();
-  }
-
-  bool _handleScroll(ScrollNotification notification) {
-    if (notification.depth == 0 && notification.metrics.axis == Axis.vertical) {
-      final nextOffset = notification.metrics.pixels;
-      if (_scrollOffset.value != nextOffset) {
-        _scrollOffset.value = nextOffset;
-      }
-    }
-    return false;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return NotificationListener<ScrollNotification>(
-      onNotification: _handleScroll,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ClipRect(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth.isFinite
-                        ? constraints.maxWidth
-                        : MediaQuery.sizeOf(context).width;
-                    final viewportHeight = constraints.maxHeight.isFinite
-                        ? constraints.maxHeight
-                        : MediaQuery.sizeOf(context).height;
-                    final texture = RepaintBoundary(
-                      child: SizedBox(
-                        width: width,
-                        height: viewportHeight + BrandPaperPainter.tileHeight,
-                        child: const CustomPaint(
-                          painter: BrandPaperPainter(),
-                        ),
-                      ),
-                    );
-
-                    return ValueListenableBuilder<double>(
-                      valueListenable: _scrollOffset,
-                      child: texture,
-                      builder: (context, scrollOffset, child) {
-                        final phase =
-                            scrollOffset % BrandPaperPainter.tileHeight;
-                        return Transform.translate(
-                          offset: Offset(0, -phase),
-                          child: child,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: IgnorePointer(
+            child: RepaintBoundary(
+              child: CustomPaint(painter: BrandPaperPainter()),
             ),
           ),
-          widget.child,
-        ],
-      ),
+        ),
+        child,
+      ],
     );
   }
 }

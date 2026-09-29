@@ -29,7 +29,11 @@ class _PublicPromoWalletState extends State<PublicPromoWallet> {
     super.initState();
     widget.localization.addListener(_languageChanged);
     unawaited(_load());
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => unawaited(_load(silent: true)));
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(_load(silent: true));
+      }
+    });
   }
 
   @override
@@ -61,6 +65,9 @@ class _PublicPromoWalletState extends State<PublicPromoWallet> {
     try {
       final promos = await _api.customerPromos().timeout(const Duration(seconds: 8));
       if (!mounted) return;
+      final changed =
+          !_authenticated || _loading || !_samePromos(_promos, promos);
+      if (!changed) return;
       setState(() {
         _authenticated = true;
         _promos = promos;
@@ -83,6 +90,37 @@ class _PublicPromoWalletState extends State<PublicPromoWallet> {
       setState(() => _loading = false);
     }
   }
+
+  bool _samePromos(List<CustomerPromo> a, List<CustomerPromo> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (_promoKey(a[index]) != _promoKey(b[index])) return false;
+    }
+    return true;
+  }
+
+  String _promoKey(CustomerPromo promo) => [
+        promo.id,
+        promo.promotionId,
+        promo.promoKey,
+        promo.name,
+        promo.description,
+        promo.code ?? '',
+        promo.discountType,
+        promo.discountValue,
+        promo.maxDiscountVnd ?? 0,
+        promo.groupIds.join(','),
+        promo.source,
+        promo.status,
+        promo.grantedUses,
+        promo.usedUses,
+        promo.reservedUses,
+        promo.remainingUses,
+        promo.grantedAt,
+        promo.validFrom,
+        promo.expiresAt ?? 0,
+      ].join('|');
 
   Future<void> _claimCode() async {
     if (_claiming) return;
