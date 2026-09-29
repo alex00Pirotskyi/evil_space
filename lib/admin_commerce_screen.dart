@@ -34,7 +34,11 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
   void initState() {
     super.initState();
     _loadAll();
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _refreshOrders());
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        _refreshOrders();
+      }
+    });
   }
 
   @override
