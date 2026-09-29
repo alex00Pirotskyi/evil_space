@@ -440,4 +440,138 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      border: Bord
+                      border: Border.all(color: BrandPalette.ink),
+                    ),
+                    child: Text(_error!, style: _mono(9, height: 1.3)),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                OutlinedButton(
+                  onPressed: _syncing ? null : _close,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    side: const BorderSide(color: BrandPalette.ink),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: Text(
+                    _copy(_paid ? 'close' : 'cancel_view').toUpperCase(),
+                    style: _mono(10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cartLine(int index) {
+    final line = _lines[index];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  line.label(widget.languageCode),
+                  style: _serif(18),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(_money(line.total), style: _mono(10)),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: BrandPalette.ink),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed:
+                          _paid || _syncing ? null : () => _changeQuantity(index, -1),
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.remove, size: 17),
+                    ),
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        '${line.quantity}',
+                        textAlign: TextAlign.center,
+                        style: _mono(11),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _paid || _syncing || line.quantity >= 20
+                          ? null
+                          : () => _changeQuantity(index, 1),
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.add, size: 17),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed:
+                    _paid || _syncing ? null : () => _removeLine(index),
+                child: Text(_copy('remove').toUpperCase(), style: _mono(8.5)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _updatingView() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 38),
+        child: Column(
+          children: [
+            const SizedBox.square(
+              dimension: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: BrandPalette.ink,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _copy(_order == null ? 'preparing_payment' : 'updating_payment'),
+              textAlign: TextAlign.center,
+              style: _serif(15, color: BrandPalette.inkMuted),
+            ),
+          ],
+        ),
+      );
+
+  Widget _qrView(MenuOrderPayment order) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: QrImageView(
+                data: order.qrPayload,
+                version: QrVersions.auto,
+                size: 260,
+                backgroundColor: Colors.white,
+                eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
+                dataModuleStyle:
+                    const QrDataModuleStyle(color: BrandPalette.ink),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+  
