@@ -1,3 +1,5 @@
+import { parseMenuOptions, resolveMenuSelection, selectionSignature } from './menu_options.js';
+
 const CUSTOMER_SESSION_COOKIE = '__Host-evil_customer_session';
 const ADMIN_SESSION_COOKIE = '__Host-evil_admin_session';
 const MAX_BODY_BYTES = 64 * 1024;
@@ -5,8 +7,6 @@ const MAX_KEY_LENGTH = 64;
 const MAX_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 240;
 const MAX_CODE_LENGTH = 48;
-import { parseMenuOptions, resolveMenuSelection, selectionSignature } from './menu_options.js';
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
