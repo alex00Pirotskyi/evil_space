@@ -8,13 +8,13 @@ class MenuApi {
   }
 
   Future<MenuOrderPayment> createCartOrder(
-    Map<String, int> cart, {
+    List<MenuCartRequestLine> cart, {
     int? promoGrantId,
   }) {
     throw const MenuApiException('Menu ordering is available on web.');
   }
 
-  Future<List<PromoPreview>> eligiblePromos(Map<String, int> cart) async => const [];
+  Future<List<PromoPreview>> eligiblePromos(List<MenuCartRequestLine> cart) async => const [];
   Future<List<CustomerPromo>> customerPromos() async => const [];
   Future<List<CustomerPromo>> claimPromo(String code) async => const [];
 
