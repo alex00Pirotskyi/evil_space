@@ -30,13 +30,17 @@ void main(List<String> args) {
   ).readAsStringSync();
   final headers = File('${root.path}${Platform.pathSeparator}_headers')
       .readAsStringSync();
+  final googleSignIn = File(
+    '${root.path}${Platform.pathSeparator}google_sign_in.js',
+  ).readAsStringSync();
 
   if (!index.contains('id="evil-space-boot"')) {
     _fail('The instant startup shell is missing from index.html.');
   }
-  if (!index.contains('https://accounts.google.com/gsi/client') ||
-      !index.contains('google_sign_in.js')) {
-    _fail('Google Identity Services bootstrap is missing from index.html.');
+  if (!index.contains('google_sign_in.js') ||
+      index.contains('https://accounts.google.com/gsi/client') ||
+      !googleSignIn.contains('https://accounts.google.com/gsi/client')) {
+    _fail('Google Identity Services must be lazy-loaded by google_sign_in.js.');
   }
   if (bootstrap.contains('{{flutter_')) {
     _fail('flutter_bootstrap.js still contains unresolved Flutter tokens.');
