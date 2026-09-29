@@ -13,8 +13,8 @@ test('cart keeps multiple items and quantities', () => {
     }),
     {
       items: [
-        { itemId: 'cola', quantity: 2 },
-        { itemId: 'red-bull', quantity: 1 },
+        { itemId: 'cola', quantity: 2, options: {} },
+        { itemId: 'red-bull', quantity: 1, options: {} },
       ],
     },
   );
