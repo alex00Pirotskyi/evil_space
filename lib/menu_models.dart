@@ -69,6 +69,118 @@ class MenuLocalizedText {
   String toString() => en;
 }
 
+class MenuOptionValue {
+  const MenuOptionValue({
+    required this.id,
+    required this.name,
+    required this.priceDeltaVnd,
+  });
+
+  final String id;
+  final MenuLocalizedText name;
+  final int priceDeltaVnd;
+
+  factory MenuOptionValue.fromJson(Map<String, dynamic> json) => MenuOptionValue(
+        id: json['id']?.toString() ?? '',
+        name: MenuLocalizedText.fromJson(json['name']),
+        priceDeltaVnd: _asInt(json['priceDeltaVnd']) ?? 0,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name.toJson(),
+        'priceDeltaVnd': priceDeltaVnd,
+      };
+}
+
+class MenuOptionGroup {
+  const MenuOptionGroup({
+    required this.id,
+    required this.type,
+    required this.name,
+    this.required = false,
+    this.defaultChoice,
+    this.values = const [],
+    this.min = 0,
+    this.max = 0,
+    this.defaultDots = 0,
+    this.pricePerStepVnd = 0,
+  });
+
+  final String id;
+  final String type;
+  final MenuLocalizedText name;
+  final bool required;
+  final String? defaultChoice;
+  final List<MenuOptionValue> values;
+  final int min;
+  final int max;
+  final int defaultDots;
+  final int pricePerStepVnd;
+
+  bool get isDots => type == 'dots';
+  bool get isSingle => type == 'single';
+  bool get isMultiple => type == 'multiple';
+  bool get changesPrice =>
+      pricePerStepVnd > 0 || values.any((value) => value.priceDeltaVnd > 0);
+
+  factory MenuOptionGroup.fromJson(Map<String, dynamic> json) {
+    final type = json['type']?.toString() ?? '';
+    return MenuOptionGroup(
+      id: json['id']?.toString() ?? '',
+      type: type,
+      name: MenuLocalizedText.fromJson(json['name']),
+      required: json['required'] == true,
+      defaultChoice: type == 'single' ? _nullableText(json['default']) : null,
+      values: _listOf(json['values'], MenuOptionValue.fromJson),
+      min: _asInt(json['min']) ?? 0,
+      max: _asInt(json['max']) ?? 0,
+      defaultDots: type == 'dots' ? (_asInt(json['default']) ?? 0) : 0,
+      pricePerStepVnd: _asInt(json['pricePerStepVnd']) ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    if (isDots) {
+      return {
+        'id': id,
+        'type': type,
+        'name': name.toJson(),
+        'min': min,
+        'max': max,
+        'default': defaultDots,
+        'pricePerStepVnd': pricePerStepVnd,
+      };
+    }
+    return {
+      'id': id,
+      'type': type,
+      'name': name.toJson(),
+      'required': required,
+      'default': defaultChoice,
+      'values': values.map((value) => value.toJson()).toList(growable: false),
+    };
+  }
+}
+
+class MenuCartRequestLine {
+  const MenuCartRequestLine({
+    required this.itemId,
+    required this.quantity,
+    this.options = const <String, dynamic>{},
+  });
+
+  final String itemId;
+  final int quantity;
+  final Map<String, dynamic> options;
+
+  Map<String, dynamic> toJson() => {
+        'itemId': itemId,
+        'quantity': quantity,
+        if (options.isNotEmpty) 'options': options,
+      };
+}
+
 class MenuGroup {
   const MenuGroup({required this.id, required this.name, required this.items});
   final String id;
@@ -95,12 +207,17 @@ class MenuItem {
     required this.priceVnd,
     required this.enabled,
     this.description,
+    this.options = const [],
   });
   final String id;
   final MenuLocalizedText name;
   final int priceVnd;
   final bool enabled;
   final MenuLocalizedText? description;
+  final List<MenuOptionGroup> options;
+
+  bool get hasOptions => options.isNotEmpty;
+  bool get hasVariablePrice => options.any((option) => option.changesPrice);
 
   String nameFor(String languageCode) => name.resolve(languageCode);
   String? descriptionFor(String languageCode) {
@@ -120,6 +237,7 @@ class MenuItem {
       description: hasDescription
           ? MenuLocalizedText.fromJson(descriptionValue)
           : null,
+      options: _listOf(json['options'], MenuOptionGroup.fromJson),
     );
   }
 
@@ -129,6 +247,8 @@ class MenuItem {
         'priceVnd': priceVnd,
         'description': description?.toJson(),
         'enabled': enabled,
+        if (options.isNotEmpty)
+          'options': options.map((option) => option.toJson()).toList(growable: false),
       };
 }
 
