@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -24,7 +25,7 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   final _api = MenuApi();
-  final Map<String, int> _cart = {};
+  final List<_CartLine> _cart = [];
   MenuCatalog? _menu;
   String? _error;
   bool _loading = true;
@@ -70,38 +71,101 @@ class _MenuScreenState extends State<MenuScreen> {
         for (final group in menu.groups)
           for (final item in group.items.where((item) => item.enabled)) item.id,
       };
-      _cart.removeWhere((id, _) => !available.contains(id));
+      _cart.removeWhere((line) => !available.contains(line.item.id));
       setState(() { _menu = menu; _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _error = _copy('load_error'); });
     }
   }
 
-  void _changeQuantity(MenuItem item, int delta) {
+  Future<void> _addItem(MenuItem item) async {
     if (_checkingOut) return;
-    final next = ((_cart[item.id] ?? 0) + delta).clamp(0, 20);
+    if (!item.hasOptions) {
+      final existing = _cart.indexWhere(
+        (line) => line.item.id == item.id && line.options.isEmpty,
+      );
+      setState(() {
+        if (existing >= 0) {
+          final line = _cart[existing];
+          if (line.quantity < 20) {
+            _cart[existing] = line.copyWith(quantity: line.quantity + 1);
+          }
+        } else {
+          _cart.add(
+            _CartLine(
+              item: item,
+              quantity: 1,
+              unitPriceVnd: item.priceVnd,
+              options: const {},
+            ),
+          );
+        }
+      });
+      return;
+    }
+
+    final configured = await showDialog<_ConfiguredItem>(
+      context: context,
+      builder: (_) => _ItemOptionsDialog(
+        item: item,
+        languageCode: widget.localization.language.code,
+        addLabel: _copy('add_to_cart'),
+        cancelLabel: _copy('cancel'),
+        totalLabel: _copy('total'),
+      ),
+    );
+    if (configured == null || !mounted) return;
+
+    final key = _selectionKey(item.id, configured.options);
+    final existing = _cart.indexWhere((line) => line.key == key);
     setState(() {
-      if (next == 0) _cart.remove(item.id); else _cart[item.id] = next;
+      if (existing >= 0) {
+        final line = _cart[existing];
+        if (line.quantity < 20) {
+          _cart[existing] = line.copyWith(quantity: line.quantity + 1);
+        }
+      } else {
+        _cart.add(
+          _CartLine(
+            item: item,
+            quantity: 1,
+            unitPriceVnd: configured.unitPriceVnd,
+            options: configured.options,
+          ),
+        );
+      }
     });
   }
 
-  List<_CartLine> get _cartLines {
-    final menu = _menu;
-    if (menu == null) return const [];
-    final byId = <String, MenuItem>{
-      for (final group in menu.groups)
-        for (final item in group.items) item.id: item,
-    };
-    return _cart.entries
-        .map((entry) => byId[entry.key] == null
-            ? null
-            : _CartLine(item: byId[entry.key]!, quantity: entry.value))
-        .whereType<_CartLine>()
-        .toList(growable: false);
+  void _changeLineQuantity(_CartLine line, int delta) {
+    if (_checkingOut) return;
+    final index = _cart.indexWhere((entry) => entry.key == line.key);
+    if (index < 0) return;
+    final next = (_cart[index].quantity + delta).clamp(0, 20);
+    setState(() {
+      if (next == 0) {
+        _cart.removeAt(index);
+      } else {
+        _cart[index] = _cart[index].copyWith(quantity: next);
+      }
+    });
   }
 
-  int get _cartCount => _cart.values.fold(0, (sum, value) => sum + value);
-  int get _cartTotal => _cartLines.fold(0, (sum, line) => sum + line.total);
+  _CartLine? _simpleLine(MenuItem item) {
+    for (final line in _cart) {
+      if (line.item.id == item.id && line.options.isEmpty) return line;
+    }
+    return null;
+  }
+
+  int _configuredCount(MenuItem item) => _cart
+      .where((line) => line.item.id == item.id)
+      .fold(0, (sum, line) => sum + line.quantity);
+
+  List<_CartLine> get _cartLines => List.unmodifiable(_cart);
+
+  int get _cartCount => _cart.fold(0, (sum, line) => sum + line.quantity);
+  int get _cartTotal => _cart.fold(0, (sum, line) => sum + line.total);
 
   Future<void> _checkout() async {
     if (_checkingOut || _cart.isEmpty) return;
@@ -112,7 +176,9 @@ class _MenuScreenState extends State<MenuScreen> {
     try {
       List<PromoPreview> promos = const [];
       try {
-        promos = await _api.eligiblePromos(Map<String, int>.from(_cart)).timeout(
+        promos = await _api.eligiblePromos(
+          lines.map((line) => line.request).toList(growable: false),
+        ).timeout(
           const Duration(seconds: 8),
         );
       } catch (_) {
@@ -141,7 +207,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
       final order = await _api
           .createCartOrder(
-            Map<String, int>.from(_cart),
+            lines.map((line) => line.request).toList(growable: false),
             promoGrantId: choice.promoGrantId,
           )
           .timeout(const Duration(seconds: 12));
