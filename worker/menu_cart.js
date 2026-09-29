@@ -21,6 +21,14 @@ export default {
       if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
       return handleCreateCartOrder(request, env, ctx);
     }
+    if (request.method === 'POST' && url.pathname === '/api/public/menu/order/update') {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleUpdateCartOrder(request, env, ctx);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/public/menu/order/cancel') {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleCancelCartOrder(request, env);
+    }
     return localizedMenuWorker.fetch(request, env, ctx);
   },
 };
@@ -261,6 +269,328 @@ async function handleCreateCartOrder(request, env, ctx) {
   );
 }
 
+async function handleUpdateCartOrder(request, env, ctx) {
+  const body = await readJson(request, 32 * 1024);
+  const token = cleanPublicToken(body?.token);
+  if (!token) return jsonError('Payment session is required.', 400);
+
+  const normalized = normalizeCartInput(body);
+  if (normalized.error) return jsonError(normalized.error, 400);
+
+  const accountNumber = cleanAccountNumber(env.VIETQR_ACCOUNT_NUMBER);
+  if (!accountNumber) return jsonError('Payment QR is not configured yet.', 503);
+  const bankBin = cleanBankBin(env.VIETQR_BANK_BIN) || VIETCOMBANK_BIN;
+  const now = nowSeconds();
+  const tokenHash = await hashToken(token);
+
+  const order = await env.evil_space
+    .prepare(`
+      SELECT id, order_code, payment_message, status, expires_at,
+             created_at, customer_id, device_id
+      FROM menu_orders
+      WHERE public_token_hash = ?
+      LIMIT 1
+    `)
+    .bind(tokenHash)
+    .first();
+  if (!order) return jsonError('Payment session not found.', 404);
+  if (String(order.status) !== 'pending' || Number(order.expires_at) <= now) {
+    return jsonError('This payment session is no longer active.', 409);
+  }
+
+  const trusted = await loadTrustedCart(env, normalized.items);
+  if (trusted.error) return jsonError(trusted.error, trusted.status ?? 409);
+  const { lines, catalogId, originalAmountVnd } = trusted;
+
+  const customer = await authenticatedCustomer(request, env);
+  const currentCustomerId = Number(customer?.id ?? 0);
+  const orderCustomerId = Number(order.customer_id ?? 0);
+  if (orderCustomerId && currentCustomerId && orderCustomerId !== currentCustomerId) {
+    return jsonError('This payment session belongs to another account.', 403);
+  }
+
+  const requestedPromoGrantId = toPositiveInt(body?.promoGrantId);
+  if (body?.promoGrantId != null && !requestedPromoGrantId) {
+    return jsonError('Invalid promo selection.', 400);
+  }
+  const promoCustomerId = orderCustomerId || currentCustomerId;
+  if (requestedPromoGrantId && !promoCustomerId) {
+    return jsonError('Sign in to use this promo.', 401);
+  }
+
+  let promo = null;
+  if (requestedPromoGrantId) {
+    promo = await resolvePromoForCart(
+      env,
+      promoCustomerId,
+      requestedPromoGrantId,
+      lines,
+      now,
+      { ignoreMenuOrderId: Number(order.id) },
+    );
+    if (promo.error) return jsonError(promo.error, 409);
+  }
+
+  const currentReservation = await env.evil_space
+    .prepare(`
+      SELECT customer_promo_id
+      FROM promo_redemptions
+      WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved'
+      LIMIT 1
+    `)
+    .bind(Number(order.id))
+    .first();
+  const currentGrantId = Number(currentReservation?.customer_promo_id ?? 0);
+  const nextGrantId = Number(promo?.grantId ?? 0);
+  const sameReservation = currentGrantId > 0 && currentGrantId === nextGrantId;
+  const expiresAt = now + ORDER_TTL_SECONDS;
+  let newlyReserved = false;
+
+  if (currentGrantId && !sameReservation) {
+    await releasePromoForMenuOrder(env, Number(order.id), now);
+  }
+  if (promo && !sameReservation) {
+    const reserved = await reservePromoForMenuOrder(
+      env,
+      promoCustomerId,
+      promo.grantId,
+      Number(order.id),
+      promo,
+      expiresAt,
+      now,
+    );
+    if (reserved.error) return jsonError(reserved.error, 409);
+    newlyReserved = true;
+  }
+
+  const amountVnd = promo?.finalAmountVnd ?? originalAmountVnd;
+  const summary = cartSummary(lines);
+  const first = lines[0];
+  const deviceId = currentCustomerId
+    ? await latestDeviceId(env, currentCustomerId)
+    : order.device_id == null
+      ? null
+      : String(order.device_id);
+
+  const statements = [
+    env.evil_space
+      .prepare(`
+        UPDATE menu_orders
+        SET catalog_id = ?, item_id = ?, item_key = ?, item_name = ?,
+            amount_vnd = ?, original_amount_vnd = ?, promo_eligible_amount_vnd = ?,
+            promo_discount_vnd = ?, promo_grant_id = ?, expires_at = ?,
+            customer_id = COALESCE(customer_id, ?), device_id = COALESCE(?, device_id)
+        WHERE id = ? AND status = 'pending'
+      `)
+      .bind(
+        catalogId,
+        first.itemId,
+        lines.length === 1 ? first.itemKey : 'cart',
+        summary,
+        amountVnd,
+        originalAmountVnd,
+        promo?.eligibleAmountVnd ?? 0,
+        promo?.discountVnd ?? 0,
+        promo?.grantId ?? null,
+        expiresAt,
+        currentCustomerId || null,
+        deviceId,
+        Number(order.id),
+      ),
+    env.evil_space.prepare('DELETE FROM menu_order_items WHERE order_id = ?').bind(Number(order.id)),
+    ...lines.map((line) =>
+      env.evil_space
+        .prepare(`
+          INSERT INTO menu_order_items
+            (order_id, item_id, item_key, item_name, unit_price_vnd,
+             quantity, line_total_vnd, created_at, group_key,
+             selection_json, selection_summary)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+          Number(order.id),
+          line.itemId,
+          line.itemKey,
+          line.itemName,
+          line.unitPriceVnd,
+          line.quantity,
+          line.lineTotalVnd,
+          now,
+          line.groupKey,
+          line.selectionJson,
+          line.selectionSummary || null,
+        ),
+    ),
+  ];
+
+  if (promo && sameReservation) {
+    statements.push(
+      env.evil_space
+        .prepare(`
+          UPDATE promo_redemptions
+          SET original_amount_vnd = ?, eligible_amount_vnd = ?, discount_vnd = ?,
+              final_amount_vnd = ?, expires_at = ?
+          WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved'
+        `)
+        .bind(
+          promo.originalAmountVnd,
+          promo.eligibleAmountVnd,
+          promo.discountVnd,
+          promo.finalAmountVnd,
+          expiresAt,
+          Number(order.id),
+        ),
+    );
+  }
+
+  try {
+    await env.evil_space.batch(statements);
+  } catch (error) {
+    if (newlyReserved) {
+      await releasePromoForMenuOrder(env, Number(order.id), now).catch(() => null);
+    }
+    throw error;
+  }
+
+  const qrPayload = buildVietQrPayload({
+    bankBin,
+    accountNumber,
+    amountVnd,
+    description: String(order.payment_message),
+  });
+
+  const notification = notifyAdminsCartOrder(env, {
+    id: Number(order.id),
+    orderCode: String(order.order_code),
+    paymentMessage: String(order.payment_message),
+    amountVnd,
+    originalAmountVnd,
+    promoDiscountVnd: promo?.discountVnd ?? 0,
+    promoName: promo?.name ?? null,
+    lines,
+    updated: true,
+  });
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(notification);
+  else notification.catch((error) => console.error('Cart update notification failed', safeError(error)));
+
+  return json({
+    ok: true,
+    order: {
+      token,
+      orderCode: String(order.order_code),
+      itemId: lines.length === 1 ? first.itemKey : 'cart',
+      itemName: summary,
+      items: lines.map(publicLine),
+      originalAmountVnd,
+      promoEligibleAmountVnd: promo?.eligibleAmountVnd ?? 0,
+      promoDiscountVnd: promo?.discountVnd ?? 0,
+      promoGrantId: promo?.grantId ?? null,
+      promoName: promo?.name ?? null,
+      amountVnd,
+      paymentMessage: String(order.payment_message),
+      qrPayload,
+      status: 'pending',
+      createdAt: Number(order.created_at),
+      expiresAt,
+    },
+  });
+}
+
+async function handleCancelCartOrder(request, env) {
+  const body = await readJson(request, 8 * 1024);
+  const token = cleanPublicToken(body?.token);
+  if (!token) return jsonError('Payment session is required.', 400);
+  const tokenHash = await hashToken(token);
+  const order = await env.evil_space
+    .prepare(`
+      SELECT id, status
+      FROM menu_orders
+      WHERE public_token_hash = ?
+      LIMIT 1
+    `)
+    .bind(tokenHash)
+    .first();
+  if (!order) return json({ ok: true });
+  if (String(order.status) !== 'pending') return json({ ok: true });
+
+  const now = nowSeconds();
+  await env.evil_space
+    .prepare(`UPDATE menu_orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'`)
+    .bind(Number(order.id))
+    .run();
+  await releasePromoForMenuOrder(env, Number(order.id), now);
+  return json({ ok: true });
+}
+
+async function loadTrustedCart(env, requestedItems) {
+  const requestedKeys = [...new Set(requestedItems.map((line) => line.itemId))];
+  const placeholders = requestedKeys.map(() => '?').join(', ');
+  const rows = await env.evil_space
+    .prepare(`
+      SELECT mi.id, mi.catalog_id, mi.item_key, mi.group_key, mi.name, mi.price_vnd,
+             mi.options_json
+      FROM menu_items mi
+      JOIN menu_catalogs mc ON mc.id = mi.catalog_id
+      WHERE mc.active = 1
+        AND mi.enabled = 1
+        AND mi.item_key IN (${placeholders})
+    `)
+    .bind(...requestedKeys)
+    .all();
+
+  const byKey = new Map((rows.results ?? []).map((row) => [String(row.item_key), row]));
+  if (byKey.size !== requestedKeys.length) {
+    return {
+      error: 'One or more menu items are unavailable. Refresh the menu and try again.',
+      status: 409,
+    };
+  }
+
+  const lines = [];
+  for (const requested of requestedItems) {
+    const item = byKey.get(requested.itemId);
+    const resolved = resolveMenuSelection({
+      itemName: String(item.name),
+      basePriceVnd: Number(item.price_vnd),
+      options: parseMenuOptions(item.options_json),
+      selection: requested.options,
+    });
+    if (resolved.error) return { error: resolved.error, status: 400 };
+    lines.push({
+      itemId: Number(item.id),
+      catalogId: Number(item.catalog_id),
+      itemKey: String(item.item_key),
+      groupKey: String(item.group_key),
+      itemName: resolved.displayName,
+      baseItemName: String(item.name),
+      unitPriceVnd: resolved.unitPriceVnd,
+      quantity: requested.quantity,
+      lineTotalVnd: resolved.unitPriceVnd * requested.quantity,
+      selection: resolved.selection,
+      selectionJson: resolved.selectionJson,
+      selectionSummary: resolved.selectionSummary,
+    });
+  }
+
+  const catalogId = lines[0].catalogId;
+  if (lines.some((line) => line.catalogId !== catalogId)) {
+    return {
+      error: 'Menu changed while checking out. Refresh and try again.',
+      status: 409,
+    };
+  }
+
+  const originalAmountVnd = lines.reduce((total, line) => total + line.lineTotalVnd, 0);
+  if (
+    !Number.isSafeInteger(originalAmountVnd) ||
+    originalAmountVnd <= 0 ||
+    originalAmountVnd > 999999999
+  ) {
+    return { error: 'Invalid cart total.', status: 400 };
+  }
+  return { lines, catalogId, originalAmountVnd };
+}
+
 export function normalizeCartInput(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return { error: 'Invalid cart.' };
@@ -396,18 +726,18 @@ function cartOrderCopy(language, order) {
     : '';
   if (language === 'ru') {
     return {
-      text: `🛒 <b>НОВЫЙ ЗАКАЗ</b>\n\nЗаказ: <b>${code}</b>\n${lines}${promo}\n\n<b>ИТОГО: ${total}</b>\nПеревод: <code>${reference}</code>\n\nПроверьте оплату в банке.`,
+      text: `🛒 <b>${order.updated ? 'ЗАКАЗ ОБНОВЛЁН' : 'НОВЫЙ ЗАКАЗ'}</b>\n\nЗаказ: <b>${code}</b>\n${lines}${promo}\n\n<b>ИТОГО: ${total}</b>\nПеревод: <code>${reference}</code>\n\nПроверьте оплату в банке.`,
       button: '✅ ЗАКАЗ ОПЛАЧЕН',
     };
   }
   if (language === 'vi') {
     return {
-      text: `🛒 <b>ĐƠN HÀNG MỚI</b>\n\nĐơn: <b>${code}</b>\n${lines}${promo}\n\n<b>TỔNG: ${total}</b>\nNội dung CK: <code>${reference}</code>\n\nHãy kiểm tra thanh toán trong ngân hàng.`,
+      text: `🛒 <b>${order.updated ? 'ĐƠN HÀNG ĐÃ CẬP NHẬT' : 'ĐƠN HÀNG MỚI'}</b>\n\nĐơn: <b>${code}</b>\n${lines}${promo}\n\n<b>TỔNG: ${total}</b>\nNội dung CK: <code>${reference}</code>\n\nHãy kiểm tra thanh toán trong ngân hàng.`,
       button: '✅ ĐÃ THANH TOÁN',
     };
   }
   return {
-    text: `🛒 <b>NEW ORDER</b>\n\nOrder: <b>${code}</b>\n${lines}${promo}\n\n<b>TOTAL: ${total}</b>\nTransfer reference: <code>${reference}</code>\n\nCheck the bank payment, then confirm below.`,
+    text: `🛒 <b>${order.updated ? 'ORDER UPDATED' : 'NEW ORDER'}</b>\n\nOrder: <b>${code}</b>\n${lines}${promo}\n\n<b>TOTAL: ${total}</b>\nTransfer reference: <code>${reference}</code>\n\nCheck the bank payment, then confirm below.`,
     button: '✅ ORDER PAID',
   };
 }
@@ -423,6 +753,12 @@ async function telegramApi(env, method, payload) {
     throw new Error(`Telegram ${method} failed (${response.status}).`);
   }
   return data;
+}
+
+function cleanPublicToken(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text.length < 32 || text.length > 256 || !/^[A-Za-z0-9_-]+$/.test(text)) return '';
+  return text;
 }
 
 function cleanId(value) {
