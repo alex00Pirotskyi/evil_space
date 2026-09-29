@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "groups": [
     {
       "id": "coworking",
@@ -360,15 +360,6 @@
               },
               "values": [
                 {
-                  "id": "milk",
-                  "name": {
-                    "en": "Milk",
-                    "ru": "Молоко",
-                    "vi": "Sữa"
-                  },
-                  "priceDeltaVnd": 5000
-                },
-                {
                   "id": "syrup",
                   "name": {
                     "en": "Syrup",
@@ -428,15 +419,6 @@
               },
               "values": [
                 {
-                  "id": "milk",
-                  "name": {
-                    "en": "Milk",
-                    "ru": "Молоко",
-                    "vi": "Sữa"
-                  },
-                  "priceDeltaVnd": 5000
-                },
-                {
                   "id": "syrup",
                   "name": {
                     "en": "Syrup",
@@ -495,15 +477,6 @@
                 "vi": "Thêm"
               },
               "values": [
-                {
-                  "id": "milk",
-                  "name": {
-                    "en": "Milk",
-                    "ru": "Молоко",
-                    "vi": "Sữa"
-                  },
-                  "priceDeltaVnd": 5000
-                },
                 {
                   "id": "syrup",
                   "name": {
