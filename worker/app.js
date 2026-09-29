@@ -83,6 +83,15 @@ export default {
 };
 
 async function cachedPublicStatus(request, env, ctx) {
+  const requestUrl = new URL(request.url);
+  if (
+    requestUrl.hostname === 'localhost' ||
+    requestUrl.hostname === '127.0.0.1' ||
+    requestUrl.hostname === '::1'
+  ) {
+    return featureWorker.fetch(request, env, ctx);
+  }
+
   const cache =
     typeof caches !== 'undefined' && caches.default ? caches.default : null;
   if (!cache) return featureWorker.fetch(request, env, ctx);
