@@ -32,7 +32,7 @@ class DailyScreen extends StatefulWidget {
 }
 
 class _DailyScreenState extends State<DailyScreen>
-    with SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
   static const _instagramUrl = 'https://www.instagram.com/evil_space_coworking';
   static const _mapsUrl = 'https://maps.app.goo.gl/5AFFB2AzszcsFvSz5?g_st=ic';
   static const _directionsUrl =
@@ -47,7 +47,6 @@ class _DailyScreenState extends State<DailyScreen>
   final GlobalKey _visitKey = GlobalKey();
   final PublicDeskApi _deskApi = PublicDeskApi();
 
-  late final AnimationController _refreshController;
   Timer? _statusTimer;
   SiteContent _content = SiteContent.demo;
   SiteStatus? _liveStatus;
@@ -56,24 +55,22 @@ class _DailyScreenState extends State<DailyScreen>
   bool _qrScrollScheduled = false;
   bool _publicRefreshInFlight = false;
   bool _publicRefreshQueued = false;
+  bool _appActive = true;
+  int _statusPollTick = 0;
 
   @override
   void initState() {
     super.initState();
-    _refreshController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
+    WidgetsBinding.instance.addObserver(this);
     widget.localization.addListener(_handleLocalizationChanged);
     _bookings = _deskApi.savedBookings();
     unawaited(_loadContent());
     unawaited(_loadPublicState());
     _statusTimer = Timer.periodic(
       const Duration(seconds: 10),
-      (_) => unawaited(_loadPublicState()),
+      (_) => _pollPublicState(),
     );
     _scheduleQrScrollIfNeeded();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _triggerRefresh());
   }
 
   @override
@@ -91,11 +88,33 @@ class _DailyScreenState extends State<DailyScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.localization.removeListener(_handleLocalizationChanged);
     _statusTimer?.cancel();
-    _refreshController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool get _hasPendingBooking =>
+      _bookings.any((booking) => booking.pending);
+
+  void _pollPublicState() {
+    if (!_appActive) return;
+    _statusPollTick += 1;
+    if (_hasPendingBooking || _statusPollTick % 3 == 0) {
+      unawaited(_loadPublicState());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final active = state == AppLifecycleState.resumed;
+    if (active == _appActive) return;
+    _appActive = active;
+    if (active) {
+      _statusPollTick = 0;
+      unawaited(_loadPublicState());
+    }
   }
 
   Future<void> _loadContent() async {
@@ -338,14 +357,6 @@ class _DailyScreenState extends State<DailyScreen>
   void _handleLocalizationChanged() {
     if (!mounted) return;
     setState(() {});
-    _triggerRefresh();
-  }
-
-  void _triggerRefresh() {
-    if (!mounted || (MediaQuery.maybeOf(context)?.disableAnimations ?? false)) {
-      return;
-    }
-    _refreshController.forward(from: 0);
   }
 
   void _scheduleQrScrollIfNeeded() {
@@ -438,16 +449,6 @@ class _DailyScreenState extends State<DailyScreen>
                         );
                       },
                     ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _refreshController,
-                  builder: (context, _) => CustomPaint(
-                    painter: _EInkRefreshPainter(_refreshController.value),
                   ),
                 ),
               ),
@@ -1528,32 +1529,6 @@ class _LocationPlatePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LocationPlatePainter oldDelegate) => false;
-}
-
-class _EInkRefreshPainter extends CustomPainter {
-  const _EInkRefreshPainter(this.progress);
-
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (progress <= 0 || progress >= 1 || size.isEmpty) return;
-    final intensity = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
-    final wash = Paint()
-      ..color = BrandPalette.ink.withValues(alpha: 0.035 * intensity);
-    canvas.drawRect(Offset.zero & size, wash);
-
-    final lines = Paint()
-      ..color = BrandPalette.ink.withValues(alpha: 0.045 * intensity)
-      ..strokeWidth = 0.7;
-    for (var y = 0.0; y < size.height; y += 7) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), lines);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _EInkRefreshPainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }
 
 InputDecoration _bookingInput(String label) {
