@@ -442,6 +442,340 @@ class _MenuScreenState extends State<MenuScreen> {
       );
 }
 
+class _ConfiguredItem {
+  const _ConfiguredItem({
+    required this.options,
+    required this.unitPriceVnd,
+  });
+
+  final Map<String, dynamic> options;
+  final int unitPriceVnd;
+}
+
+class _ItemOptionsDialog extends StatefulWidget {
+  const _ItemOptionsDialog({
+    required this.item,
+    required this.languageCode,
+    required this.addLabel,
+    required this.cancelLabel,
+    required this.totalLabel,
+  });
+
+  final MenuItem item;
+  final String languageCode;
+  final String addLabel;
+  final String cancelLabel;
+  final String totalLabel;
+
+  @override
+  State<_ItemOptionsDialog> createState() => _ItemOptionsDialogState();
+}
+
+class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
+  late final Map<String, dynamic> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = <String, dynamic>{};
+    for (final option in widget.item.options) {
+      if (option.isDots) {
+        _selected[option.id] = option.defaultDots;
+      } else if (option.isSingle && option.defaultChoice != null) {
+        _selected[option.id] = option.defaultChoice;
+      } else if (option.isMultiple) {
+        _selected[option.id] = <String>[];
+      }
+    }
+  }
+
+  bool get _valid {
+    for (final option in widget.item.options) {
+      if (option.isSingle && option.required) {
+        final value = _selected[option.id]?.toString() ?? '';
+        if (value.isEmpty) return false;
+      }
+    }
+    return true;
+  }
+
+  int get _unitPrice {
+    var total = widget.item.priceVnd;
+    for (final option in widget.item.options) {
+      if (option.isDots) {
+        final value = _selected[option.id] is int
+            ? _selected[option.id] as int
+            : option.defaultDots;
+        total += (value - option.min) * option.pricePerStepVnd;
+        continue;
+      }
+      if (option.isSingle) {
+        final selected = _selected[option.id]?.toString();
+        if (selected == null) continue;
+        for (final value in option.values) {
+          if (value.id == selected) {
+            total += value.priceDeltaVnd;
+            break;
+          }
+        }
+        continue;
+      }
+      final selected = _selected[option.id];
+      if (selected is List) {
+        for (final raw in selected) {
+          for (final value in option.values) {
+            if (value.id == raw.toString()) {
+              total += value.priceDeltaVnd;
+              break;
+            }
+          }
+        }
+      }
+    }
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: BrandPalette.paper,
+      shape: const RoundedRectangleBorder(),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.item.nameFor(widget.languageCode).toUpperCase(),
+                style: _mono(12),
+              ),
+              const SizedBox(height: 6),
+              Text(_money(widget.item.priceVnd), style: _serif(25)),
+              const SizedBox(height: 18),
+              for (final option in widget.item.options) ...[
+                _option(option),
+                const SizedBox(height: 18),
+              ],
+              const Divider(color: BrandPalette.ink),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.totalLabel.toUpperCase(),
+                      style: _mono(10),
+                    ),
+                  ),
+                  Text(_money(_unitPrice), style: _serif(24)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BrandPalette.ink,
+                        side: const BorderSide(color: BrandPalette.ink),
+                        minimumSize: const Size.fromHeight(48),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Text(
+                        widget.cancelLabel.toUpperCase(),
+                        style: _mono(9),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: !_valid
+                          ? null
+                          : () => Navigator.pop(
+                                context,
+                                _ConfiguredItem(
+                                  options: _normalizedSelection(),
+                                  unitPriceVnd: _unitPrice,
+                                ),
+                              ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BrandPalette.ink,
+                        foregroundColor: BrandPalette.paperLift,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Text(
+                        widget.addLabel.toUpperCase(),
+                        style: _mono(9, color: BrandPalette.paperLift),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _normalizedSelection() {
+    final result = <String, dynamic>{};
+    for (final option in widget.item.options) {
+      final value = _selected[option.id];
+      if (option.isMultiple) {
+        final selected = value is List
+            ? value.map((entry) => entry.toString()).toList(growable: false)
+            : const <String>[];
+        result[option.id] = selected;
+      } else if (value != null) {
+        result[option.id] = value;
+      }
+    }
+    return result;
+  }
+
+  Widget _option(MenuOptionGroup option) {
+    final title = option.name.resolve(widget.languageCode).toUpperCase();
+    if (option.isDots) {
+      final selected = _selected[option.id] is int
+          ? _selected[option.id] as int
+          : option.defaultDots;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title, style: _mono(10))),
+              if (option.pricePerStepVnd > 0)
+                Text(
+                  '+${_money(option.pricePerStepVnd)} / ●',
+                  style: _mono(8.5, color: BrandPalette.inkMuted),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              if (option.min == 0)
+                TextButton(
+                  onPressed: () => setState(() => _selected[option.id] = 0),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(42, 42),
+                    shape: const RoundedRectangleBorder(),
+                    side: BorderSide(
+                      color: selected == 0
+                          ? BrandPalette.ink
+                          : BrandPalette.rule,
+                    ),
+                  ),
+                  child: Text('0', style: _mono(10)),
+                ),
+              if (option.min == 0) const SizedBox(width: 10),
+              for (var value = 1; value <= option.max; value++) ...[
+                InkWell(
+                  onTap: value < option.min
+                      ? null
+                      : () => setState(() => _selected[option.id] = value),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      value <= selected
+                          ? Icons.circle
+                          : Icons.circle_outlined,
+                      size: 24,
+                      color: value < option.min
+                          ? BrandPalette.rule
+                          : BrandPalette.ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 3),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (option.isSingle) {
+      final selected = _selected[option.id]?.toString();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: _mono(10)),
+          const SizedBox(height: 5),
+          for (final value in option.values)
+            RadioListTile<String>(
+              value: value.id,
+              groupValue: selected,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value.name.resolve(widget.languageCode),
+                      style: _serif(17),
+                    ),
+                  ),
+                  if (value.priceDeltaVnd > 0)
+                    Text(
+                      '+${_money(value.priceDeltaVnd)}',
+                      style: _mono(9),
+                    ),
+                ],
+              ),
+              onChanged: (next) =>
+                  setState(() => _selected[option.id] = next),
+            ),
+        ],
+      );
+    }
+
+    final selected = (_selected[option.id] as List?)?.cast<String>() ??
+        <String>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: _mono(10)),
+        const SizedBox(height: 5),
+        for (final value in option.values)
+          CheckboxListTile(
+            value: selected.contains(value.id),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value.name.resolve(widget.languageCode),
+                    style: _serif(17),
+                  ),
+                ),
+                if (value.priceDeltaVnd > 0)
+                  Text('+${_money(value.priceDeltaVnd)}', style: _mono(9)),
+              ],
+            ),
+            onChanged: (checked) {
+              final next = [...selected];
+              if (checked == true) {
+                if (!next.contains(value.id)) next.add(value.id);
+              } else {
+                next.remove(value.id);
+              }
+              setState(() => _selected[option.id] = next);
+            },
+          ),
+      ],
+    );
+  }
+}
+
 class _CartLine {
   const _CartLine({
     required this.item,
