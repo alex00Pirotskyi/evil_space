@@ -166,3 +166,175 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog> {
 
   void _scheduleSync({bool immediate = false}) {
     if (_paid || _lines.isEmpty) return;
+    _revision += 1;
+    _dirty = true;
+    _error = null;
+    _syncTimer?.cancel();
+    if (mounted) setState(() {});
+    _syncTimer = Timer(
+      immediate ? Duration.zero : const Duration(milliseconds: 420),
+      () => unawaited(_syncPayment()),
+    );
+  }
+
+  Future<void> _syncPayment() async {
+    if (_syncing || _lines.isEmpty || _paid) return;
+    _syncTimer?.cancel();
+    final revision = _revision;
+    final requests = _requests;
+    final promoGrantId = _selectedGrantId;
+    setState(() {
+      _syncing = true;
+      _error = null;
+    });
+
+    try {
+      final current = _order;
+      final next = current == null
+          ? await widget.api
+              .createCartOrder(requests, promoGrantId: promoGrantId)
+              .timeout(const Duration(seconds: 12))
+          : await widget.api
+              .updateCartOrder(
+                current.token,
+                requests,
+                promoGrantId: promoGrantId,
+              )
+              .timeout(const Duration(seconds: 12));
+      if (!mounted) return;
+      setState(() {
+        _order = next;
+        _status = next.status;
+        _syncing = false;
+        if (revision == _revision) _dirty = false;
+      });
+      unawaited(_refreshPromos());
+      if (_dirty) _scheduleSync(immediate: true);
+    } on MenuApiException catch (error) {
+      if (!mounted) return;
+      if (promoGrantId != null && error.statusCode == 409) {
+        setState(() {
+          _selectedGrantId = null;
+          _syncing = false;
+          _error = null;
+        });
+        _scheduleSync(immediate: true);
+        return;
+      }
+      setState(() {
+        _syncing = false;
+        _dirty = true;
+        _error = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _syncing = false;
+        _dirty = true;
+        _error = _copy('payment_error');
+      });
+    }
+  }
+
+  Future<void> _poll() async {
+    final order = _order;
+    if (order == null || _syncing || _dirty || _paid) return;
+    try {
+      final status = await widget.api
+          .orderStatus(order.token)
+          .timeout(const Duration(seconds: 6));
+      if (!mounted) return;
+      if (status.status == _status) return;
+      if (status.paid) {
+        setState(() => _status = 'paid');
+        _pollTimer?.cancel();
+        return;
+      }
+      if (!status.pending) {
+        setState(() {
+          _status = status.status;
+          _order = null;
+          _selectedGrantId = null;
+          _dirty = true;
+        });
+        await _refreshPromos();
+        if (mounted) _scheduleSync(immediate: true);
+      }
+    } catch (_) {}
+  }
+
+  void _changeQuantity(int index, int delta) {
+    if (_paid || _syncing) return;
+    final line = _lines[index];
+    final next = (line.quantity + delta).clamp(0, 20).toInt();
+    if (next == line.quantity) return;
+    setState(() {
+      if (next == 0) {
+        _lines.removeAt(index);
+      } else {
+        _lines[index] = line.copyWith(quantity: next);
+      }
+    });
+    if (_lines.isEmpty) {
+      unawaited(_cancelAndClose());
+      return;
+    }
+    _scheduleSync();
+  }
+
+  void _removeLine(int index) {
+    if (_paid || _syncing) return;
+    setState(() => _lines.removeAt(index));
+    if (_lines.isEmpty) {
+      unawaited(_cancelAndClose());
+      return;
+    }
+    _scheduleSync();
+  }
+
+  void _selectPromo(int? grantId) {
+    if (_paid || _syncing || grantId == _selectedGrantId) return;
+    setState(() => _selectedGrantId = grantId);
+    _scheduleSync(immediate: true);
+  }
+
+  Future<void> _cancelAndClose() async {
+    final order = _order;
+    if (order != null) {
+      try {
+        await widget.api.cancelCartOrder(order.token);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(
+      _LiveCheckoutResult(
+        lines: List.unmodifiable(_lines),
+        order: null,
+        paid: false,
+      ),
+    );
+  }
+
+  void _close() {
+    Navigator.of(context).pop(
+      _LiveCheckoutResult(
+        lines: List.unmodifiable(_lines),
+        order: _paid ? null : _order,
+        paid: _paid,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = _order;
+    final discount = _displayDiscount;
+    final total = _displayTotal;
+    final currentPromoMissing =
+        _selectedGrantId != null &&
+        !_promos.any((promo) => promo.grantId == _selectedGrantId) &&
+        order?.promoGrantId == _selectedGrantId &&
+        order?.hasPromo == true;
+
+    return PopScope(
+    
