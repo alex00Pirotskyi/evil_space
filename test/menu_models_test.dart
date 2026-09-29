@@ -18,9 +18,17 @@ void main() {
           'items': [
             {
               'id': 'cola',
-              'name': 'Cola',
+              'name': {
+                'en': 'Cola',
+                'ru': 'Кола',
+                'vi': 'Cola',
+              },
               'priceVnd': 30000,
-              'description': null,
+              'description': {
+                'en': 'Cold can',
+                'ru': 'Холодная банка',
+                'vi': 'Lon lạnh',
+              },
               'enabled': true,
             },
           ],
@@ -33,9 +41,13 @@ void main() {
     expect(menu.groups.single.name.resolve('en'), 'Drinks');
     expect(menu.groups.single.name.resolve('ru'), 'Напитки');
     expect(menu.groups.single.name.resolve('vi'), 'Đồ uống');
-    expect(menu.groups.single.items.single.name, 'Cola');
+    expect(menu.groups.single.items.single.nameFor('en'), 'Cola');
+    expect(menu.groups.single.items.single.nameFor('ru'), 'Кола');
+    expect(menu.groups.single.items.single.nameFor('vi'), 'Cola');
     expect(menu.groups.single.items.single.priceVnd, 30000);
-    expect(menu.groups.single.items.single.description, isNull);
+    expect(menu.groups.single.items.single.descriptionFor('en'), 'Cold can');
+    expect(menu.groups.single.items.single.descriptionFor('ru'), 'Холодная банка');
+    expect(menu.groups.single.items.single.descriptionFor('vi'), 'Lon lạnh');
   });
 
   test('legacy string group name remains compatible', () {
@@ -48,6 +60,21 @@ void main() {
     expect(group.name.resolve('en'), 'Snacks');
     expect(group.name.resolve('ru'), 'Snacks');
     expect(group.name.resolve('vi'), 'Snacks');
+  });
+
+  test('legacy string item text remains compatible', () {
+    final item = MenuItem.fromJson({
+      'id': 'water',
+      'name': 'Water',
+      'priceVnd': 25000,
+      'description': 'Cold',
+      'enabled': true,
+    });
+
+    expect(item.nameFor('en'), 'Water');
+    expect(item.nameFor('ru'), 'Water');
+    expect(item.nameFor('vi'), 'Water');
+    expect(item.descriptionFor('ru'), 'Cold');
   });
 
   test('order status exposes paid lifecycle', () {
