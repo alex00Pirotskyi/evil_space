@@ -3,6 +3,7 @@ import {
   consumePromoForMenuOrder,
   releasePromoForMenuOrder,
 } from './promo_engine.js';
+import { parseMenuOptions, validateMenuOptions } from './menu_options.js';
 
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const ORDER_TTL_SECONDS = 30 * 60;
@@ -261,8 +262,8 @@ async function handleUploadMenu(request, env) {
           .prepare(`
             INSERT INTO menu_items
               (catalog_id, group_key, group_name, group_order, item_key, name,
-               price_vnd, description, item_order, enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               price_vnd, description, item_order, enabled, options_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
           .bind(
             catalogId,
@@ -275,6 +276,7 @@ async function handleUploadMenu(request, env) {
             item.description,
             itemOrder,
             item.enabled ? 1 : 0,
+            item.options.length ? JSON.stringify(item.options) : null,
           ),
       );
     }
@@ -445,7 +447,7 @@ async function catalogGroups(env, catalogId, includeDisabled) {
   const rows = await env.evil_space
     .prepare(`
       SELECT group_key, group_name, group_order, item_key, name, price_vnd,
-             description, item_order, enabled
+             description, item_order, enabled, options_json
       FROM menu_items
       WHERE catalog_id = ? ${includeDisabled ? '' : 'AND enabled = 1'}
       ORDER BY group_order, item_order, id
@@ -469,6 +471,7 @@ async function catalogGroups(env, catalogId, includeDisabled) {
       priceVnd: Number(row.price_vnd),
       description: row.description == null ? null : String(row.description),
       enabled: Number(row.enabled) === 1,
+      options: parseMenuOptions(row.options_json),
     });
   }
   return groups;
@@ -520,12 +523,17 @@ function validateMenu(value, defaultVersion) {
         description = cleanText(rawItem.description, MAX_DESCRIPTION_LENGTH);
         if (!description) return { error: `Invalid description for item ${itemId}.` };
       }
+      const checkedOptions = validateMenuOptions(rawItem?.options);
+      if (checkedOptions.error) {
+        return { error: `Invalid options for ${itemId}: ${checkedOptions.error}` };
+      }
       items.push({
         id: itemId,
         name: itemName,
         priceVnd,
         description,
         enabled: rawItem?.enabled !== false,
+        options: checkedOptions.options,
       });
     }
     groups.push({ id, name, items });
