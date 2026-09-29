@@ -29,6 +29,10 @@ export default {
     const url = new URL(request.url);
     const route = `${request.method} ${url.pathname}`;
 
+    if (route === 'GET /api/public/status') {
+      return cachedPublicStatus(request, env, ctx);
+    }
+
     if (route === 'GET /api/admin/review') {
       return adminReview.review(url, env);
     }
@@ -77,6 +81,38 @@ export default {
     return jsonError('Not found.', 404);
   },
 };
+
+async function cachedPublicStatus(request, env, ctx) {
+  const cache =
+    typeof caches !== 'undefined' && caches.default ? caches.default : null;
+  if (!cache) return featureWorker.fetch(request, env, ctx);
+
+  const cacheUrl = new URL(request.url);
+  cacheUrl.search = '';
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const response = await featureWorker.fetch(request, env, ctx);
+  if (!response.ok) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'public, max-age=5, s-maxage=8');
+  headers.set('CDN-Cache-Control', 'max-age=8');
+  const cacheable = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+
+  const write = cache
+    .put(cacheKey, cacheable.clone())
+    .catch((error) => console.error('Public status cache failed', error));
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(write);
+  else await write;
+
+  return cacheable;
+}
 
 function jsonError(message, status) {
   return new Response(JSON.stringify({ ok: false, error: message }), {
