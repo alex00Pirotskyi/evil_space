@@ -337,4 +337,107 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog> {
         order?.hasPromo == true;
 
     return PopScope(
-    
+      canPop: false,
+      child: Dialog(
+        backgroundColor: BrandPalette.paper,
+        shape: const RoundedRectangleBorder(),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(_copy('your_cart').toUpperCase(), style: _mono(12)),
+                const SizedBox(height: 12),
+                for (var index = 0; index < _lines.length; index++)
+                  _cartLine(index),
+                const Divider(color: BrandPalette.ink, height: 28),
+                Text(_copy('your_promos').toUpperCase(), style: _mono(10)),
+                const SizedBox(height: 6),
+                RadioListTile<int?>(
+                  value: null,
+                  groupValue: _selectedGrantId,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(_copy('without_promo'), style: _serif(16)),
+                  onChanged: _syncing ? null : _selectPromo,
+                ),
+                if (currentPromoMissing)
+                  RadioListTile<int?>(
+                    value: _selectedGrantId,
+                    groupValue: _selectedGrantId,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(
+                      order?.promoName ?? _copy('promo'),
+                      style: _serif(17),
+                    ),
+                    subtitle: Text(
+                      '-${_money(order!.promoDiscountVnd)}',
+                      style: _mono(8.5, color: BrandPalette.inkMuted),
+                    ),
+                    onChanged: _syncing ? null : _selectPromo,
+                  ),
+                for (final promo in _promos)
+                  RadioListTile<int?>(
+                    value: promo.grantId,
+                    groupValue: _selectedGrantId,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(promo.name, style: _serif(17)),
+                    subtitle: Text(
+                      '-${_money(promo.discountVnd)} \u00B7 ${promo.remainingUses} USE${promo.remainingUses == 1 ? '' : 'S'}',
+                      style: _mono(8.5, color: BrandPalette.inkMuted),
+                    ),
+                    onChanged: _syncing ? null : _selectPromo,
+                  ),
+                if (_loadingPromos)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _copy('loading_promos'),
+                      style: _mono(8.5, color: BrandPalette.inkMuted),
+                    ),
+                  ),
+                const Divider(color: BrandPalette.ink),
+                _priceRow(_copy('subtotal').toUpperCase(), _subtotal),
+                if (discount > 0)
+                  _priceRow(
+                    (order?.promoName ?? _selectedPromo?.name ?? _copy('promo'))
+                        .toUpperCase(),
+                    -discount,
+                  ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(_copy('total').toUpperCase(), style: _mono(11)),
+                    ),
+                    Text(_money(total), style: _serif(24)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '${_copy('pay_now').toUpperCase()} ${_money(total)}',
+                  textAlign: TextAlign.center,
+                  style: _mono(13),
+                ),
+                const SizedBox(height: 16),
+                if (_paid)
+                  _paidView()
+                else if (_inactive)
+                  _inactiveView()
+                else if (!_paymentReady)
+                  _updatingView()
+                else if (_cashSelected)
+                  _cashView()
+                else
+                  _qrView(order!),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Bord
