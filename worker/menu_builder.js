@@ -1,4 +1,5 @@
 import localizedMenuWorker, { normalizeMenuGroupNames } from './menu_i18n.js';
+import { validateMenuOptions } from './menu_options.js';
 
 const ADMIN_SESSION_COOKIE = '__Host-evil_admin_session';
 const MAX_MENU_BYTES = 256 * 1024;
@@ -205,12 +206,17 @@ export function validateDraftMenu(value, { allowEmptyGroups = false } = {}) {
         description = normalizeLocalizedDescription(rawItem.description);
         if (!description) return { error: `Invalid description for item ${itemId}.` };
       }
+      const checkedOptions = validateMenuOptions(rawItem?.options);
+      if (checkedOptions.error) {
+        return { error: `Invalid options for ${itemId}: ${checkedOptions.error}` };
+      }
       items.push({
         id: itemId,
         name,
         priceVnd,
         description,
         enabled: rawItem?.enabled !== false,
+        options: checkedOptions.options,
       });
     }
     groups.push({ id, name: names, items });
