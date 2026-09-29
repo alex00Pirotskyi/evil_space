@@ -6,7 +6,7 @@ import 'package:evil_space/admin_portal.dart' deferred as admin_portal;
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_shell.dart';
 import 'package:evil_space/localization.dart';
-import 'package:evil_space/menu_screen.dart';
+import 'package:evil_space/menu_screen.dart' deferred as menu_screen;
 import 'package:evil_space/public_telegram_connector.dart';
 
 class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
@@ -70,7 +70,7 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
       activePage = MaterialPage<void>(
         key: const ValueKey('public-menu'),
         name: AppRoute.menu.path,
-        child: MenuScreen(
+        child: _DeferredMenuScreen(
           localization: localization,
           onBack: () => navigate(AppRoute.home),
         ),
@@ -243,6 +243,64 @@ class _AdminWithMenuButton extends StatelessWidget {
     );
   }
 }
+
+class _DeferredMenuScreen extends StatefulWidget {
+  const _DeferredMenuScreen({
+    required this.localization,
+    required this.onBack,
+  });
+
+  final LocalizationController localization;
+  final VoidCallback onBack;
+
+  @override
+  State<_DeferredMenuScreen> createState() => _DeferredMenuScreenState();
+}
+
+class _DeferredMenuScreenState extends State<_DeferredMenuScreen> {
+  late Future<void> _loader = menu_screen.loadLibrary();
+
+  void _retry() {
+    setState(() => _loader = menu_screen.loadLibrary());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _loader,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.error == null) {
+          return menu_screen.MenuScreen(
+            localization: widget.localization,
+            onBack: widget.onBack,
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: const Color(0xFFF2F0E8),
+            body: Center(
+              child: OutlinedButton(
+                onPressed: _retry,
+                child: const Text('RETRY MENU'),
+              ),
+            ),
+          );
+        }
+        return const Scaffold(
+          backgroundColor: Color(0xFFF2F0E8),
+          body: Center(
+            child: SizedBox.square(
+              dimension: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 
 class _DeferredAdminPortal extends StatefulWidget {
   const _DeferredAdminPortal({
