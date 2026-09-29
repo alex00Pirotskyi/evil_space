@@ -324,17 +324,16 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _item(MenuItem item) {
-    final quantity = _cart[item.id] ?? 0;
+    final simpleLine = _simpleLine(item);
+    final configuredCount = _configuredCount(item);
+    final language = widget.localization.language.code;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BrandPalette.rule))),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(
-            item.nameFor(widget.localization.language.code),
-            style: _serif(25),
-          ),
-          if (item.descriptionFor(widget.localization.language.code) case final description?) ...[
+          Text(item.nameFor(language), style: _serif(25)),
+          if (item.descriptionFor(language) case final description?) ...[
             const SizedBox(height: 5),
             Text(
               description,
@@ -342,12 +341,28 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ],
           const SizedBox(height: 8),
-          Text(_money(item.priceVnd), style: _mono(12)),
+          Text(
+            item.hasVariablePrice
+                ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
+                : _money(item.priceVnd),
+            style: _mono(12),
+          ),
         ])),
         const SizedBox(width: 16),
-        if (quantity == 0)
+        if (item.hasOptions)
           FilledButton(
-            onPressed: _checkingOut ? null : () => _changeQuantity(item, 1),
+            onPressed: _checkingOut ? null : () => _addItem(item),
+            style: _filledButtonStyle(minWidth: 120),
+            child: Text(
+              configuredCount > 0
+                  ? '${_copy('customize')} · $configuredCount'
+                  : _copy('customize'),
+              style: _mono(9.5, color: BrandPalette.paperLift),
+            ),
+          )
+        else if (simpleLine == null)
+          FilledButton(
+            onPressed: _checkingOut ? null : () => _addItem(item),
             style: _filledButtonStyle(),
             child: Text(_copy('add'), style: _mono(10, color: BrandPalette.paperLift)),
           )
@@ -355,9 +370,24 @@ class _MenuScreenState extends State<MenuScreen> {
           Container(
             decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(onPressed: _checkingOut ? null : () => _changeQuantity(item, -1), icon: const Icon(Icons.remove, size: 18)),
-              SizedBox(width: 34, child: Text('$quantity', textAlign: TextAlign.center, style: _mono(12))),
-              IconButton(onPressed: _checkingOut || quantity >= 20 ? null : () => _changeQuantity(item, 1), icon: const Icon(Icons.add, size: 18)),
+              IconButton(
+                onPressed: _checkingOut ? null : () => _changeLineQuantity(simpleLine, -1),
+                icon: const Icon(Icons.remove, size: 18),
+              ),
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '${simpleLine.quantity}',
+                  textAlign: TextAlign.center,
+                  style: _mono(12),
+                ),
+              ),
+              IconButton(
+                onPressed: _checkingOut || simpleLine.quantity >= 20
+                    ? null
+                    : () => _changeLineQuantity(simpleLine, 1),
+                icon: const Icon(Icons.add, size: 18),
+              ),
             ]),
           ),
       ]),
@@ -413,10 +443,77 @@ class _MenuScreenState extends State<MenuScreen> {
 }
 
 class _CartLine {
-  const _CartLine({required this.item, required this.quantity});
+  const _CartLine({
+    required this.item,
+    required this.quantity,
+    required this.unitPriceVnd,
+    required this.options,
+  });
+
   final MenuItem item;
   final int quantity;
-  int get total => item.priceVnd * quantity;
+  final int unitPriceVnd;
+  final Map<String, dynamic> options;
+
+  String get key => _selectionKey(item.id, options);
+  int get total => unitPriceVnd * quantity;
+  MenuCartRequestLine get request => MenuCartRequestLine(
+        itemId: item.id,
+        quantity: quantity,
+        options: options,
+      );
+
+  _CartLine copyWith({int? quantity}) => _CartLine(
+        item: item,
+        quantity: quantity ?? this.quantity,
+        unitPriceVnd: unitPriceVnd,
+        options: options,
+      );
+
+  String label(String languageCode) {
+    final parts = <String>[];
+    for (final option in item.options) {
+      final selected = options[option.id];
+      if (option.isDots) {
+        final value = selected is int ? selected : option.defaultDots;
+        parts.add('${option.name.resolve(languageCode)} $value/${option.max}');
+      } else if (option.isSingle) {
+        final id = selected?.toString();
+        if (id == null) continue;
+        final value = option.values.where((entry) => entry.id == id).firstOrNull;
+        if (value != null) parts.add(value.name.resolve(languageCode));
+      } else if (option.isMultiple && selected is List) {
+        for (final raw in selected) {
+          final value = option.values.where((entry) => entry.id == raw.toString()).firstOrNull;
+          if (value != null) parts.add(value.name.resolve(languageCode));
+        }
+      }
+    }
+    final base = item.nameFor(languageCode);
+    return parts.isEmpty ? base : '$base · ${parts.join(' · ')}';
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
+  }
+}
+
+String _selectionKey(String itemId, Map<String, dynamic> options) {
+  dynamic canonical(Object? value) {
+    if (value is Map) {
+      final keys = value.keys.map((key) => key.toString()).toList()..sort();
+      return {for (final key in keys) key: canonical(value[key])};
+    }
+    if (value is List) {
+      return value.map(canonical).toList(growable: false);
+    }
+    return value;
+  }
+
+  return '$itemId:${jsonEncode(canonical(options))}';
 }
 
 class _CheckoutChoice {
@@ -486,7 +583,7 @@ class _CheckoutDialogState extends State<_CheckoutDialog> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      line.item.nameFor(widget.languageCode),
+                      line.label(widget.languageCode),
                       style: _serif(18),
                     ),
                   ),
@@ -624,7 +721,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
-                  '${line.quantity} × ${line.item.nameFor(widget.languageCode)} · ${_money(line.total)}',
+                  '${line.quantity} × ${line.label(widget.languageCode)} · ${_money(line.total)}',
                   style: _serif(17),
                 ),
               ),
