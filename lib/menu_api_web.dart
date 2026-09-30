@@ -13,14 +13,13 @@ class MenuApi {
   }
 
   Future<MenuOrderPayment> createOrder(String itemId) {
-    return createCartOrder([
-      MenuCartRequestLine(itemId: itemId, quantity: 1),
-    ]);
+    return createCartOrder([MenuCartRequestLine(itemId: itemId, quantity: 1)]);
   }
 
   Future<MenuOrderPayment> createCartOrder(
     List<MenuCartRequestLine> cart, {
     int? promoGrantId,
+    String? paymentToken,
   }) async {
     final items = _cartItems(cart);
     final data = await _request(
@@ -28,7 +27,8 @@ class MenuApi {
       '/api/public/menu/order',
       body: {
         'items': items,
-        if (promoGrantId != null) 'promoGrantId': promoGrantId,
+        'promoGrantId': ?promoGrantId,
+        'token': ?paymentToken,
       },
     );
     return MenuOrderPayment.fromJson(_map(data['order']));
@@ -45,7 +45,7 @@ class MenuApi {
       body: {
         'token': token,
         'items': _cartItems(cart),
-        if (promoGrantId != null) 'promoGrantId': promoGrantId,
+        'promoGrantId': ?promoGrantId,
       },
     );
     return MenuOrderPayment.fromJson(_map(data['order']));
@@ -59,11 +59,17 @@ class MenuApi {
     );
   }
 
-  Future<List<PromoPreview>> eligiblePromos(List<MenuCartRequestLine> cart) async {
+  Future<List<PromoPreview>> eligiblePromos(
+    List<MenuCartRequestLine> cart, {
+    String? paymentToken,
+  }) async {
     final data = await _request(
       'POST',
       '/api/public/menu/promos',
-      body: {'items': _cartItems(cart)},
+      body: {
+        'items': _cartItems(cart),
+        'paymentToken': ?paymentToken,
+      },
     );
     return _list(data['promos'], PromoPreview.fromJson);
   }
@@ -137,13 +143,21 @@ class MenuApi {
     return _list(_map(data['snapshot'])['promos'], AdminPromotion.fromJson);
   }
 
-  Future<List<AdminPromotion>> createPromotion(Map<String, dynamic> promo) async {
+  Future<List<AdminPromotion>> createPromotion(
+    Map<String, dynamic> promo,
+  ) async {
     final data = await _request('POST', '/api/admin/promos', body: promo);
     return _list(_map(data['snapshot'])['promos'], AdminPromotion.fromJson);
   }
 
-  Future<List<AdminPromotion>> updatePromotion(Map<String, dynamic> promo) async {
-    final data = await _request('POST', '/api/admin/promos/update', body: promo);
+  Future<List<AdminPromotion>> updatePromotion(
+    Map<String, dynamic> promo,
+  ) async {
+    final data = await _request(
+      'POST',
+      '/api/admin/promos/update',
+      body: promo,
+    );
     return _list(_map(data['snapshot'])['promos'], AdminPromotion.fromJson);
   }
 
@@ -213,7 +227,9 @@ class MenuApi {
         if (decoded is Map<String, dynamic>) {
           if (!completer.isCompleted) completer.complete(decoded);
         } else if (decoded is Map) {
-          if (!completer.isCompleted) completer.complete(Map<String, dynamic>.from(decoded));
+          if (!completer.isCompleted) {
+            completer.complete(Map<String, dynamic>.from(decoded));
+          }
         } else {
           throw const FormatException('Menu JSON must contain an object.');
         }
@@ -223,7 +239,9 @@ class MenuApi {
     }
 
     late final JSFunction listener;
-    listener = ((web.Event _) { unawaited(readSelectedFile()); }).toJS;
+    listener = ((web.Event _) {
+      unawaited(readSelectedFile());
+    }).toJS;
     input.addEventListener('change', listener);
     input.click();
     return completer.future.whenComplete(
@@ -231,11 +249,11 @@ class MenuApi {
     );
   }
 
-  Future<AdminMenuSnapshot> markPaid(int id) async {
+  Future<AdminMenuSnapshot> markPaid(int id, {int? revision}) async {
     final data = await _request(
       'POST',
       '/api/admin/menu/order/paid',
-      body: {'id': id},
+      body: {'id': id, 'revision': ?revision},
     );
     return AdminMenuSnapshot.fromJson(_map(data['snapshot']));
   }
@@ -270,8 +288,8 @@ class MenuApi {
     final data = decoded is Map<String, dynamic>
         ? decoded
         : decoded is Map
-            ? Map<String, dynamic>.from(decoded)
-            : <String, dynamic>{};
+        ? Map<String, dynamic>.from(decoded)
+        : <String, dynamic>{};
 
     if (!response.ok) {
       throw MenuApiException(

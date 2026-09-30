@@ -10,6 +10,7 @@ class MenuApi {
   Future<MenuOrderPayment> createCartOrder(
     List<MenuCartRequestLine> cart, {
     int? promoGrantId,
+    String? paymentToken,
   }) {
     throw const MenuApiException('Menu ordering is available on web.');
   }
@@ -26,7 +27,10 @@ class MenuApi {
     throw const MenuApiException('Menu ordering is available on web.');
   }
 
-  Future<List<PromoPreview>> eligiblePromos(List<MenuCartRequestLine> cart) async => const [];
+  Future<List<PromoPreview>> eligiblePromos(
+    List<MenuCartRequestLine> cart, {
+    String? paymentToken,
+  }) async => const [];
   Future<List<CustomerPromo>> customerPromos() async => const [];
   Future<List<CustomerPromo>> claimPromo(String code) async => const [];
 
@@ -50,15 +54,23 @@ class MenuApi {
     throw const MenuApiException('Menu admin is available on web.');
   }
 
-  Future<(AdminMenuSnapshot, MenuDraftSnapshot)> publishMenuDraft(MenuCatalog menu) {
+  Future<(AdminMenuSnapshot, MenuDraftSnapshot)> publishMenuDraft(
+    MenuCatalog menu,
+  ) {
     throw const MenuApiException('Menu admin is available on web.');
   }
 
   Future<List<AdminPromotion>> adminPromotions() async => const [];
-  Future<List<AdminPromotion>> createPromotion(Map<String, dynamic> promo) async => const [];
-  Future<List<AdminPromotion>> updatePromotion(Map<String, dynamic> promo) async => const [];
+  Future<List<AdminPromotion>> createPromotion(
+    Map<String, dynamic> promo,
+  ) async => const [];
+  Future<List<AdminPromotion>> updatePromotion(
+    Map<String, dynamic> promo,
+  ) async => const [];
   Future<List<AdminPromotion>> disablePromotion(int id) async => const [];
-  Future<List<AdminCustomerSummary>> adminCustomers({String query = ''}) async => const [];
+  Future<List<AdminCustomerSummary>> adminCustomers({
+    String query = '',
+  }) async => const [];
 
   Future<AdminCustomerDetail> adminCustomer(int id) {
     throw const MenuApiException('Customer admin is available on web.');
@@ -78,7 +90,7 @@ class MenuApi {
 
   Future<Map<String, dynamic>?> pickMenuJson() async => null;
 
-  Future<AdminMenuSnapshot> markPaid(int id) {
+  Future<AdminMenuSnapshot> markPaid(int id, {int? revision}) {
     throw const MenuApiException('Menu admin is available on web.');
   }
 }

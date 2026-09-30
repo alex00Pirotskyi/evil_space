@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -9,22 +10,28 @@ import 'brand_surface.dart';
 import 'localization.dart';
 import 'menu_api.dart';
 
+part 'menu_live_checkout.dart';
+
 class MenuScreen extends StatefulWidget {
   const MenuScreen({
     super.key,
     required this.localization,
     required this.onBack,
+    this.api,
   });
 
   final LocalizationController localization;
   final VoidCallback onBack;
+  final MenuApi? api;
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  final _api = MenuApi();
+  late final MenuApi _api;
+  MenuOrderPayment? _pendingOrder;
+  String? _paymentToken;
   final List<_CartLine> _cart = [];
   MenuCatalog? _menu;
   String? _error;
@@ -34,6 +41,7 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   void initState() {
     super.initState();
+    _api = widget.api ?? MenuApi();
     widget.localization.addListener(_languageChanged);
     _load();
   }
@@ -63,7 +71,12 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() { _loading = true; _error = null; });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final menu = await _api.menu().timeout(const Duration(seconds: 10));
       if (!mounted) return;
@@ -72,9 +85,17 @@ class _MenuScreenState extends State<MenuScreen> {
           for (final item in group.items.where((item) => item.enabled)) item.id,
       };
       _cart.removeWhere((line) => !available.contains(line.item.id));
-      setState(() { _menu = menu; _loading = false; });
+      setState(() {
+        _menu = menu;
+        _loading = false;
+      });
     } catch (_) {
-      if (mounted) setState(() { _loading = false; _error = _copy('load_error'); });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = _copy('load_error');
+        });
+      }
     }
   }
 
@@ -142,6 +163,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final index = _cart.indexWhere((entry) => entry.key == line.key);
     if (index < 0) return;
     final next = (_cart[index].quantity + delta).clamp(0, 20);
+    final previous = List<_CartLine>.of(_cart);
     setState(() {
       if (next == 0) {
         _cart.removeAt(index);
@@ -149,6 +171,7 @@ class _MenuScreenState extends State<MenuScreen> {
         _cart[index] = _cart[index].copyWith(quantity: next);
       }
     });
+    unawaited(_cancelEmptyCartFromMenu(previous));
   }
 
   void _removeOneConfigured(MenuItem item) {
@@ -156,6 +179,7 @@ class _MenuScreenState extends State<MenuScreen> {
     for (var index = _cart.length - 1; index >= 0; index--) {
       final line = _cart[index];
       if (line.item.id != item.id) continue;
+      final previous = List<_CartLine>.of(_cart);
       setState(() {
         if (line.quantity <= 1) {
           _cart.removeAt(index);
@@ -163,7 +187,26 @@ class _MenuScreenState extends State<MenuScreen> {
           _cart[index] = line.copyWith(quantity: line.quantity - 1);
         }
       });
+      unawaited(_cancelEmptyCartFromMenu(previous));
       return;
+    }
+  }
+
+  Future<void> _cancelEmptyCartFromMenu(List<_CartLine> previous) async {
+    final token = _paymentToken;
+    if (_cart.isNotEmpty || token == null) return;
+    setState(() => _checkingOut = true);
+    try {
+      await _api.cancelCartOrder(token).timeout(const Duration(seconds: 8));
+      _pendingOrder = null;
+      _paymentToken = null;
+    } catch (_) {
+      if (mounted) setState(() {
+        _cart.addAll(previous);
+        _error = _copy('payment_error');
+      });
+    } finally {
+      if (mounted) setState(() => _checkingOut = false);
     }
   }
 
@@ -185,64 +228,35 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Future<void> _checkout() async {
     if (_checkingOut || _cart.isEmpty) return;
-    final lines = _cartLines;
-    if (lines.isEmpty) return;
-    setState(() { _checkingOut = true; _error = null; });
-
+    _paymentToken ??= _newPaymentToken();
+    setState(() {
+      _checkingOut = true;
+      _error = null;
+    });
     try {
-      List<PromoPreview> promos = const [];
-      try {
-        promos = await _api.eligiblePromos(
-          lines.map((line) => line.request).toList(growable: false),
-        ).timeout(
-          const Duration(seconds: 8),
-        );
-      } catch (_) {
-        // Guest checkout and transient promo lookup errors must not block payment.
-      }
-      if (!mounted) return;
-      final choice = await showDialog<_CheckoutChoice>(
-        context: context,
-        builder: (_) => _CheckoutDialog(
-          title: _copy('cart'),
-          lines: lines,
-          promos: promos,
-          totalLabel: _copy('total'),
-          promoLabel: _copy('your_promos'),
-          useLabel: _copy('use_promo'),
-          noPromoLabel: _copy('without_promo'),
-          payLabel: _copy('pay'),
-          cancelLabel: _copy('cancel'),
-          languageCode: widget.localization.language.code,
-        ),
-      );
-      if (choice == null || !mounted) {
-        setState(() => _checkingOut = false);
-        return;
-      }
-
-      final order = await _api
-          .createCartOrder(
-            lines.map((line) => line.request).toList(growable: false),
-            promoGrantId: choice.promoGrantId,
-          )
-          .timeout(const Duration(seconds: 12));
-      if (!mounted) return;
-      setState(() { _checkingOut = false; _cart.clear(); });
-      await showDialog<void>(
+      final result = await showDialog<_LiveCheckoutResult>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _PaymentDialog(
+        builder: (_) => _LiveCheckoutDialog(
           api: _api,
-          order: order,
-          lines: lines,
+          lines: _cartLines,
           languageCode: widget.localization.language.code,
+          initialOrder: _pendingOrder,
+          paymentToken: _paymentToken!,
         ),
       );
-    } on MenuApiException catch (error) {
-      if (mounted) setState(() { _checkingOut = false; _error = error.message; });
-    } catch (_) {
-      if (mounted) setState(() { _checkingOut = false; _error = _copy('payment_error'); });
+      if (!mounted || result == null) return;
+      setState(() {
+        _cart
+          ..clear()
+          ..addAll(result.paid ? const [] : result.lines);
+        _pendingOrder = result.paid ? null : result.order;
+        _paymentToken = result.paid || result.lines.isEmpty
+            ? null
+            : result.paymentToken;
+      });
+    } finally {
+      if (mounted) setState(() => _checkingOut = false);
     }
   }
 
@@ -267,13 +281,24 @@ class _MenuScreenState extends State<MenuScreen> {
                     children: [
                       Text(_copy('title'), style: _serif(44)),
                       const SizedBox(height: 6),
-                      Text(_copy('subtitle'), style: _serif(16, color: BrandPalette.inkMuted, height: 1.35)),
+                      Text(
+                        _copy('subtitle'),
+                        style: _serif(
+                          16,
+                          color: BrandPalette.inkMuted,
+                          height: 1.35,
+                        ),
+                      ),
                       const SizedBox(height: 22),
                       if (_error != null) _errorBox(_error!),
                       if (_loading && menu == null)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(child: CircularProgressIndicator(color: BrandPalette.ink)),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: BrandPalette.ink,
+                            ),
+                          ),
                         )
                       else if (menu == null || menu.groups.isEmpty)
                         _empty()
@@ -294,49 +319,73 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _header() => Container(
-        height: 68,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BrandPalette.ink))),
-        child: Row(children: [
-          const EvilCoworkingLogo(width: 108),
-          const Spacer(),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: AppLanguage.values.map((language) {
-              final selected = widget.localization.language == language;
-              return TextButton(
-                onPressed: () => widget.localization.setLanguage(language),
-                style: TextButton.styleFrom(
-                  foregroundColor: BrandPalette.ink,
-                  minimumSize: const Size(40, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  shape: const RoundedRectangleBorder(),
-                  side: selected ? const BorderSide(color: BrandPalette.ink) : BorderSide.none,
-                ),
-                child: Text(language.code.toUpperCase(), style: _mono(9)),
-              );
-            }).toList(growable: false),
-          ),
-          const SizedBox(width: 8),
-          TextButton.icon(
+    height: 68,
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: BrandPalette.ink)),
+    ),
+    child: Row(
+      children: [
+        const EvilCoworkingLogo(width: 108),
+        const Spacer(),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: AppLanguage.values
+              .map((language) {
+                final selected = widget.localization.language == language;
+                return TextButton(
+                  onPressed: () => widget.localization.setLanguage(language),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    minimumSize: const Size(40, 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    shape: const RoundedRectangleBorder(),
+                    side: selected
+                        ? const BorderSide(color: BrandPalette.ink)
+                        : BorderSide.none,
+                  ),
+                  child: Text(language.code.toUpperCase(), style: _mono(9)),
+                );
+              })
+              .toList(growable: false),
+        ),
+        const SizedBox(width: 8),
+        if (MediaQuery.sizeOf(context).width < 480)
+          IconButton(
+            tooltip: _copy('back'),
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back, size: 18),
-            label: Text(_copy('back'), style: _mono(10)),
-          ),
-        ]),
-      );
+          )
+        else TextButton.icon(
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back, size: 18),
+          label: Text(_copy('back'), style: _mono(10)),
+        ),
+      ],
+    ),
+  );
 
   Widget _group(MenuGroup group) {
-    final items = group.items.where((item) => item.enabled).toList(growable: false);
+    final items = group.items
+        .where((item) => item.enabled)
+        .toList(growable: false);
     if (items.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Container(
-        padding: const EdgeInsets.only(bottom: 8),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BrandPalette.ink))),
-        child: Text(group.name.resolve(widget.localization.language.code).toUpperCase(), style: _mono(12)),
-      ),
-      for (final item in items) _item(item),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.only(bottom: 8),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: BrandPalette.ink)),
+          ),
+          child: Text(
+            group.name.resolve(widget.localization.language.code).toUpperCase(),
+            style: _mono(12),
+          ),
+        ),
+        for (final item in items) _item(item),
+      ],
+    );
   }
 
   Widget _item(MenuItem item) {
@@ -345,127 +394,170 @@ class _MenuScreenState extends State<MenuScreen> {
     final language = widget.localization.language.code;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BrandPalette.rule))),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item.nameFor(language), style: _serif(25)),
-          if (item.descriptionFor(language) case final description?) ...[
-            const SizedBox(height: 5),
-            Text(
-              description,
-              style: _serif(15, color: BrandPalette.inkMuted, height: 1.3),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            item.hasVariablePrice
-                ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
-                : _money(item.priceVnd),
-            style: _mono(12),
-          ),
-        ])),
-        const SizedBox(width: 16),
-        if (item.hasOptions && configuredCount == 0)
-          FilledButton(
-            onPressed: _checkingOut ? null : () => _addItem(item),
-            style: _filledButtonStyle(minWidth: 120),
-            child: Text(
-              _copy('customize'),
-              style: _mono(9.5, color: BrandPalette.paperLift),
-            ),
-          )
-        else if (item.hasOptions)
-          Container(
-            decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: _checkingOut
-                      ? null
-                      : () => _removeOneConfigured(item),
-                  icon: const Icon(Icons.remove, size: 18),
-                ),
-                SizedBox(
-                  width: 34,
-                  child: Text(
-                    '$configuredCount',
-                    textAlign: TextAlign.center,
-                    style: _mono(12),
+                Text(item.nameFor(language), style: _serif(25)),
+                if (item.descriptionFor(language) case final description?) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    description,
+                    style: _serif(
+                      15,
+                      color: BrandPalette.inkMuted,
+                      height: 1.3,
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: _checkingOut
-                      ? null
-                      : () => _addItem(item),
-                  tooltip: _copy('customize'),
-                  icon: const Icon(Icons.tune, size: 18),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  item.hasVariablePrice
+                      ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
+                      : _money(item.priceVnd),
+                  style: _mono(12),
                 ),
               ],
             ),
-          )
-        else if (simpleLine == null)
-          FilledButton(
-            onPressed: _checkingOut ? null : () => _addItem(item),
-            style: _filledButtonStyle(),
-            child: Text(_copy('add'), style: _mono(10, color: BrandPalette.paperLift)),
-          )
-        else
-          Container(
-            decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                onPressed: _checkingOut ? null : () => _changeLineQuantity(simpleLine, -1),
-                icon: const Icon(Icons.remove, size: 18),
-              ),
-              SizedBox(
-                width: 34,
-                child: Text(
-                  '${simpleLine.quantity}',
-                  textAlign: TextAlign.center,
-                  style: _mono(12),
-                ),
-              ),
-              IconButton(
-                onPressed: _checkingOut || simpleLine.quantity >= 20
-                    ? null
-                    : () => _changeLineQuantity(simpleLine, 1),
-                icon: const Icon(Icons.add, size: 18),
-              ),
-            ]),
           ),
-      ]),
+          const SizedBox(width: 16),
+          if (item.hasOptions && configuredCount == 0)
+            FilledButton(
+              onPressed: _checkingOut ? null : () => _addItem(item),
+              style: _filledButtonStyle(minWidth: 120),
+              child: Text(
+                _copy('customize'),
+                style: _mono(9.5, color: BrandPalette.paperLift),
+              ),
+            )
+          else if (item.hasOptions)
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: BrandPalette.ink),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: _checkingOut
+                        ? null
+                        : () => _removeOneConfigured(item),
+                    icon: const Icon(Icons.remove, size: 18),
+                  ),
+                  SizedBox(
+                    width: 34,
+                    child: Text(
+                      '$configuredCount',
+                      textAlign: TextAlign.center,
+                      style: _mono(12),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _checkingOut ? null : () => _addItem(item),
+                    tooltip: _copy('customize'),
+                    icon: const Icon(Icons.tune, size: 18),
+                  ),
+                ],
+              ),
+            )
+          else if (simpleLine == null)
+            FilledButton(
+              onPressed: _checkingOut ? null : () => _addItem(item),
+              style: _filledButtonStyle(),
+              child: Text(
+                _copy('add'),
+                style: _mono(10, color: BrandPalette.paperLift),
+              ),
+            )
+          else
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: BrandPalette.ink),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: _checkingOut
+                        ? null
+                        : () => _changeLineQuantity(simpleLine, -1),
+                    icon: const Icon(Icons.remove, size: 18),
+                  ),
+                  SizedBox(
+                    width: 34,
+                    child: Text(
+                      '${simpleLine.quantity}',
+                      textAlign: TextAlign.center,
+                      style: _mono(12),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _checkingOut || simpleLine.quantity >= 20
+                        ? null
+                        : () => _changeLineQuantity(simpleLine, 1),
+                    icon: const Icon(Icons.add, size: 18),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _cartBar() => Material(
-        color: BrandPalette.paperLift,
-        elevation: 12,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: BrandPalette.ink))),
-            child: Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                Text('${_copy('cart')} · $_cartCount', style: _mono(10)),
-                const SizedBox(height: 3),
-                Text(_money(_cartTotal), style: _serif(21)),
-              ])),
-              FilledButton.icon(
-                onPressed: _checkingOut ? null : _checkout,
-                style: _filledButtonStyle(minWidth: 150),
-                icon: _checkingOut
-                    ? const SizedBox.square(dimension: 15, child: CircularProgressIndicator(strokeWidth: 2, color: BrandPalette.paperLift))
-                    : const Icon(Icons.shopping_cart_checkout, size: 18),
-                label: Text(_checkingOut ? '…' : _copy('checkout'), style: _mono(10, color: BrandPalette.paperLift)),
-              ),
-            ]),
-          ),
+    color: BrandPalette.paperLift,
+    elevation: 12,
+    child: SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: BrandPalette.ink)),
         ),
-      );
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${_copy('cart')} · $_cartCount', style: _mono(10)),
+                  const SizedBox(height: 3),
+                  Text(_money(_cartTotal), style: _serif(21)),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _checkingOut ? null : _checkout,
+              style: _filledButtonStyle(minWidth: 150),
+              icon: _checkingOut
+                  ? const SizedBox.square(
+                      dimension: 15,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: BrandPalette.paperLift,
+                      ),
+                    )
+                  : const Icon(Icons.shopping_cart_checkout, size: 18),
+              label: Text(
+                _checkingOut ? '…' : _copy('view_cart').toUpperCase(),
+                style: _mono(10, color: BrandPalette.paperLift),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 
-  ButtonStyle _filledButtonStyle({double minWidth = 96}) => FilledButton.styleFrom(
+  ButtonStyle _filledButtonStyle({double minWidth = 96}) =>
+      FilledButton.styleFrom(
         foregroundColor: BrandPalette.paperLift,
         backgroundColor: BrandPalette.ink,
         minimumSize: Size(minWidth, 48),
@@ -473,24 +565,21 @@ class _MenuScreenState extends State<MenuScreen> {
       );
 
   Widget _empty() => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-        child: Text(_copy('empty'), style: _serif(20)),
-      );
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
+    child: Text(_copy('empty'), style: _serif(20)),
+  );
 
   Widget _errorBox(String message) => Container(
-        margin: const EdgeInsets.only(bottom: 18),
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
-        child: Text(message, style: _mono(10.5, height: 1.35)),
-      );
+    margin: const EdgeInsets.only(bottom: 18),
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(border: Border.all(color: BrandPalette.ink)),
+    child: Text(message, style: _mono(10.5, height: 1.35)),
+  );
 }
 
 class _ConfiguredItem {
-  const _ConfiguredItem({
-    required this.options,
-    required this.unitPriceVnd,
-  });
+  const _ConfiguredItem({required this.options, required this.unitPriceVnd});
 
   final Map<String, dynamic> options;
   final int unitPriceVnd;
@@ -638,12 +727,12 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
                       onPressed: !_valid
                           ? null
                           : () => Navigator.pop(
-                                context,
-                                _ConfiguredItem(
-                                  options: _normalizedSelection(),
-                                  unitPriceVnd: _unitPrice,
-                                ),
+                              context,
+                              _ConfiguredItem(
+                                options: _normalizedSelection(),
+                                unitPriceVnd: _unitPrice,
                               ),
+                            ),
                       style: FilledButton.styleFrom(
                         backgroundColor: BrandPalette.ink,
                         foregroundColor: BrandPalette.paperLift,
@@ -684,10 +773,11 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
   Widget _option(MenuOptionGroup option) {
     final title = option.name.resolve(widget.languageCode).toUpperCase();
     if (option.isDots) {
-      final selected = (_selected[option.id] is int
-              ? _selected[option.id] as int
-              : option.defaultDots)
-          .clamp(option.min, option.max);
+      final selected =
+          (_selected[option.id] is int
+                  ? _selected[option.id] as int
+                  : option.defaultDots)
+              .clamp(option.min, option.max);
       final steps = option.max - option.min;
 
       return Column(
@@ -714,12 +804,8 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
               inactiveTrackColor: BrandPalette.rule,
               thumbColor: BrandPalette.ink,
               overlayColor: BrandPalette.ink.withOpacity(0.08),
-              thumbShape: const RoundSliderThumbShape(
-                enabledThumbRadius: 11,
-              ),
-              overlayShape: const RoundSliderOverlayShape(
-                overlayRadius: 24,
-              ),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 11),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
               tickMarkShape: const RoundSliderTickMarkShape(
                 tickMarkRadius: 2.5,
               ),
@@ -734,26 +820,23 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
               divisions: steps > 0 ? steps : null,
               onChanged: steps <= 0
                   ? null
-                  : (next) => setState(
-                        () => _selected[option.id] = next.round(),
-                      ),
+                  : (next) =>
+                        setState(() => _selected[option.id] = next.round()),
             ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               children: [
-                for (var value = option.min;
-                    value <= option.max;
-                    value++)
+                for (var value = option.min; value <= option.max; value++)
                   Expanded(
                     child: Text(
                       '$value',
                       textAlign: value == option.min
                           ? TextAlign.left
                           : value == option.max
-                              ? TextAlign.right
-                              : TextAlign.center,
+                          ? TextAlign.right
+                          : TextAlign.center,
                       style: _mono(9, color: BrandPalette.inkMuted),
                     ),
                   ),
@@ -786,21 +869,17 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
                     ),
                   ),
                   if (value.priceDeltaVnd > 0)
-                    Text(
-                      '+${_money(value.priceDeltaVnd)}',
-                      style: _mono(9),
-                    ),
+                    Text('+${_money(value.priceDeltaVnd)}', style: _mono(9)),
                 ],
               ),
-              onChanged: (next) =>
-                  setState(() => _selected[option.id] = next),
+              onChanged: (next) => setState(() => _selected[option.id] = next),
             ),
         ],
       );
     }
 
-    final selected = (_selected[option.id] as List?)?.cast<String>() ??
-        <String>[];
+    final selected =
+        (_selected[option.id] as List?)?.cast<String>() ?? <String>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -854,17 +933,17 @@ class _CartLine {
   String get key => _selectionKey(item.id, options);
   int get total => unitPriceVnd * quantity;
   MenuCartRequestLine get request => MenuCartRequestLine(
-        itemId: item.id,
-        quantity: quantity,
-        options: options,
-      );
+    itemId: item.id,
+    quantity: quantity,
+    options: options,
+  );
 
-  _CartLine copyWith({int? quantity}) => _CartLine(
-        item: item,
-        quantity: quantity ?? this.quantity,
-        unitPriceVnd: unitPriceVnd,
-        options: options,
-      );
+  _CartLine copyWith({int? quantity, int? unitPriceVnd}) => _CartLine(
+    item: item,
+    quantity: quantity ?? this.quantity,
+    unitPriceVnd: unitPriceVnd ?? this.unitPriceVnd,
+    options: options,
+  );
 
   String label(String languageCode) {
     final parts = <String>[];
@@ -876,11 +955,15 @@ class _CartLine {
       } else if (option.isSingle) {
         final id = selected?.toString();
         if (id == null) continue;
-        final value = option.values.where((entry) => entry.id == id).firstOrNull;
+        final value = option.values
+            .where((entry) => entry.id == id)
+            .firstOrNull;
         if (value != null) parts.add(value.name.resolve(languageCode));
       } else if (option.isMultiple && selected is List) {
         for (final raw in selected) {
-          final value = option.values.where((entry) => entry.id == raw.toString()).firstOrNull;
+          final value = option.values
+              .where((entry) => entry.id == raw.toString())
+              .firstOrNull;
           if (value != null) parts.add(value.name.resolve(languageCode));
         }
       }
@@ -912,376 +995,39 @@ String _selectionKey(String itemId, Map<String, dynamic> options) {
   return '$itemId:${jsonEncode(canonical(options))}';
 }
 
-class _CheckoutChoice {
-  const _CheckoutChoice(this.promoGrantId);
-  final int? promoGrantId;
-}
-
-class _CheckoutDialog extends StatefulWidget {
-  const _CheckoutDialog({
-    required this.title,
-    required this.lines,
-    required this.promos,
-    required this.totalLabel,
-    required this.promoLabel,
-    required this.useLabel,
-    required this.noPromoLabel,
-    required this.payLabel,
-    required this.cancelLabel,
-    required this.languageCode,
-  });
-  final String title;
-  final List<_CartLine> lines;
-  final List<PromoPreview> promos;
-  final String totalLabel;
-  final String promoLabel;
-  final String useLabel;
-  final String noPromoLabel;
-  final String payLabel;
-  final String cancelLabel;
-  final String languageCode;
-
-  @override
-  State<_CheckoutDialog> createState() => _CheckoutDialogState();
-}
-
-class _CheckoutDialogState extends State<_CheckoutDialog> {
-  int? _selectedGrantId;
-
-  PromoPreview? get _selected {
-    if (_selectedGrantId == null) return null;
-    for (final promo in widget.promos) {
-      if (promo.grantId == _selectedGrantId) return promo;
-    }
-    return null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final subtotal = widget.lines.fold(0, (sum, line) => sum + line.total);
-    final selected = _selected;
-    final total = selected?.finalAmountVnd ?? subtotal;
-    return Dialog(
-      backgroundColor: BrandPalette.paper,
-      shape: const RoundedRectangleBorder(),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(widget.title.toUpperCase(), style: _mono(12)),
-            const SizedBox(height: 14),
-            for (final line in widget.lines)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(children: [
-                  Text('${line.quantity} ×', style: _mono(10)),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      line.label(widget.languageCode),
-                      style: _serif(18),
-                    ),
-                  ),
-                  Text(_money(line.total), style: _mono(10)),
-                ]),
-              ),
-            if (widget.promos.isNotEmpty) ...[
-              const Divider(color: BrandPalette.ink),
-              Text(widget.promoLabel.toUpperCase(), style: _mono(10)),
-              const SizedBox(height: 7),
-              for (final promo in widget.promos)
-                RadioListTile<int?>(
-                  value: promo.grantId,
-                  groupValue: _selectedGrantId,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(promo.name, style: _serif(17)),
-                  subtitle: Text('${widget.useLabel} · -${_money(promo.discountVnd)} · ${promo.remainingUses} USE${promo.remainingUses == 1 ? '' : 'S'}', style: _mono(8.5, color: BrandPalette.inkMuted)),
-                  onChanged: (value) => setState(() => _selectedGrantId = value),
-                ),
-              RadioListTile<int?>(
-                value: null,
-                groupValue: _selectedGrantId,
-                contentPadding: EdgeInsets.zero,
-                title: Text(widget.noPromoLabel, style: _serif(16)),
-                onChanged: (_) => setState(() => _selectedGrantId = null),
-              ),
-            ],
-            const Divider(color: BrandPalette.ink),
-            if (selected != null) ...[
-              _priceRow('SUBTOTAL', subtotal),
-              _priceRow(selected.name.toUpperCase(), -selected.discountVnd),
-              const SizedBox(height: 4),
-            ],
-            Row(children: [
-              Expanded(child: Text(widget.totalLabel.toUpperCase(), style: _mono(11))),
-              Text(_money(total), style: _serif(24)),
-            ]),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: Text(widget.cancelLabel.toUpperCase(), style: _mono(9)))),
-              const SizedBox(width: 10),
-              Expanded(child: FilledButton(
-                onPressed: () => Navigator.pop(context, _CheckoutChoice(_selectedGrantId)),
-                style: FilledButton.styleFrom(backgroundColor: BrandPalette.ink, foregroundColor: BrandPalette.paperLift, shape: const RoundedRectangleBorder(), minimumSize: const Size.fromHeight(48)),
-                child: Text(widget.payLabel.toUpperCase(), style: _mono(9, color: BrandPalette.paperLift)),
-              )),
-            ]),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _priceRow(String label, int value) => Row(children: [
-        Expanded(child: Text(label, style: _mono(9, color: BrandPalette.inkMuted))),
-        Text(_money(value), style: _mono(9, color: BrandPalette.inkMuted)),
-      ]);
-}
-
-class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({
-    required this.api,
-    required this.order,
-    required this.lines,
-    required this.languageCode,
-  });
-  final MenuApi api;
-  final MenuOrderPayment order;
-  final List<_CartLine> lines;
-  final String languageCode;
-
-  @override
-  State<_PaymentDialog> createState() => _PaymentDialogState();
-}
-
-class _PaymentDialogState extends State<_PaymentDialog> {
-  Timer? _timer;
-  String _status = 'pending';
-  bool _polling = false;
-  bool _cashSelected = false;
-
-  String _copy(String key) =>
-      _menuCopy[widget.languageCode]?[key] ?? _menuCopy['en']![key]!;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _poll());
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _poll() async {
-    if (_polling || _status != 'pending') return;
-    _polling = true;
-    try {
-      final status = await widget.api.orderStatus(widget.order.token).timeout(const Duration(seconds: 6));
-      if (!mounted) return;
-      if (status.status != _status) setState(() => _status = status.status);
-      if (_status != 'pending') _timer?.cancel();
-    } catch (_) {
-    } finally {
-      _polling = false;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final paid = _status == 'paid';
-    final expired = _status == 'expired' || _status == 'cancelled';
-    return Dialog(
-      backgroundColor: BrandPalette.paper,
-      shape: const RoundedRectangleBorder(),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(
-              paid
-                  ? _copy('payment_confirmed')
-                  : expired
-                  ? _copy('payment_expired')
-                  : _cashSelected
-                  ? _copy('cash_title')
-                  : _copy('payment_title'),
-              style: _mono(12),
-            ),
-            const SizedBox(height: 14),
-            for (final line in widget.lines)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(
-                  '${line.quantity} × ${line.label(widget.languageCode)} · ${_money(line.total)}',
-                  style: _serif(17),
-                ),
-              ),
-            if (widget.order.hasPromo) ...[
-              const Divider(color: BrandPalette.rule),
-              _summaryRow(_copy('subtotal').toUpperCase(), widget.order.originalAmountVnd),
-              _summaryRow(widget.order.promoName?.toUpperCase() ?? _copy('promo').toUpperCase(), -widget.order.promoDiscountVnd),
-            ],
-            const SizedBox(height: 6),
-            Text('${_copy('total').toUpperCase()} · ${_money(widget.order.amountVnd)}', style: _mono(14)),
-            const SizedBox(height: 22),
-            if (!paid && !expired) ...[
-              if (!_cashSelected) ...[
-                Center(
-                  child: Container(
-                    color: Colors.white,
-                    padding: const EdgeInsets.all(12),
-                    child: QrImageView(
-                      data: widget.order.qrPayload,
-                      version: QrVersions.auto,
-                      size: 270,
-                      backgroundColor: Colors.white,
-                      eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
-                      dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(_copy('transfer_reference').toUpperCase(), style: _mono(9)),
-                const SizedBox(height: 6),
-                SelectableText(widget.order.paymentMessage, style: _mono(15)),
-                const SizedBox(height: 18),
-                Row(children: [
-                  const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: BrandPalette.ink,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _copy('waiting_bank'),
-                      style: _serif(15, color: BrandPalette.inkMuted),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 18),
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _cashSelected = true),
-                  icon: const Icon(Icons.payments_outlined, size: 18),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: BrandPalette.ink,
-                    side: const BorderSide(color: BrandPalette.ink),
-                    minimumSize: const Size.fromHeight(50),
-                    shape: const RoundedRectangleBorder(),
-                  ),
-                  label: Text(
-                    _copy('pay_cash').toUpperCase(),
-                    style: _mono(10),
-                  ),
-                ),
-              ] else ...[
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: BrandPalette.ink),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        _copy('cash_title').toUpperCase(),
-                        style: _mono(11),
-                      ),
-                      const SizedBox(height: 9),
-                      Text(
-                        _copy('cash_instruction'),
-                        style: _serif(17, height: 1.35),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(children: [
-                  const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: BrandPalette.ink,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _copy('waiting_cash'),
-                      style: _serif(15, color: BrandPalette.inkMuted),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 18),
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _cashSelected = false),
-                  icon: const Icon(Icons.qr_code_2, size: 18),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: BrandPalette.ink,
-                    side: const BorderSide(color: BrandPalette.ink),
-                    minimumSize: const Size.fromHeight(50),
-                    shape: const RoundedRectangleBorder(),
-                  ),
-                  label: Text(
-                    _copy('pay_qr').toUpperCase(),
-                    style: _mono(10),
-                  ),
-                ),
-              ],
-            ] else if (paid)
-              Text(
-                widget.order.hasPromo
-                    ? _copy('payment_thanks_promo')
-                    : _copy('payment_thanks'),
-                style: _serif(18, height: 1.35),
-              )
-            else
-              Text(
-                _copy('payment_inactive'),
-                style: _serif(17, height: 1.35),
-              ),
-            const SizedBox(height: 24),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BrandPalette.ink,
-                side: const BorderSide(color: BrandPalette.ink),
-                minimumSize: const Size.fromHeight(48),
-                shape: const RoundedRectangleBorder(),
-              ),
-              child: Text(
-                _copy(paid || expired ? 'close' : 'cancel_view').toUpperCase(),
-                style: _mono(10),
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _summaryRow(String label, int value) => Row(children: [
-        Expanded(child: Text(label, style: _mono(9, color: BrandPalette.inkMuted))),
-        Text(_money(value), style: _mono(9, color: BrandPalette.inkMuted)),
-      ]);
-}
-
 const _menuCopy = <String, Map<String, String>>{
   'en': {
+    'view_cart': 'View cart',
+    'your_cart': 'Your cart',
+    'remove': 'Remove',
+    'pay_now': 'Pay',
+    'loading_promos': 'Loading promos…',
+    'preparing_payment': 'Preparing your QR…',
+    'updating_payment': 'Updating your QR…',
+    'retry': 'Retry',
+    'refresh_payment': 'New payment QR',
+    'promo_unavailable':
+        'This promo is no longer eligible. Choose another promo or continue without one.',
+    'uses_left': 'uses left',
+    'payment_changed':
+        'The payment changed. Refresh the cart to see the current amount.',
     'title': 'MENU',
-    'subtitle': 'Add anything you want, choose quantities, then pay for the whole cart with one QR or cash.',
-    'back': 'BACK', 'add': 'ADD', 'cart': 'CART', 'checkout': 'CHECKOUT',
-    'customize': 'SETTINGS', 'add_to_cart': 'ADD TO CART', 'from': 'from',
-    'total': 'Total', 'pay': 'Create payment', 'cancel': 'Cancel',
-    'your_promos': 'Your promos', 'use_promo': 'Use promo', 'without_promo': 'Pay without promo',
-    'empty': 'The menu is being prepared.', 'load_error': 'Could not load the menu.',
+    'subtitle':
+        'Add anything you want, choose quantities, then pay for the whole cart with one QR or cash.',
+    'back': 'BACK',
+    'add': 'ADD',
+    'cart': 'CART',
+    'checkout': 'CHECKOUT',
+    'customize': 'SETTINGS',
+    'add_to_cart': 'ADD TO CART',
+    'from': 'from',
+    'total': 'Total',
+    'cancel': 'Cancel',
+    'your_promos': 'Your promos',
+    'use_promo': 'Use promo',
+    'without_promo': 'Pay without promo',
+    'empty': 'The menu is being prepared.',
+    'load_error': 'Could not load the menu.',
     'payment_error': 'Could not create the payment.',
     'payment_title': 'PAY HERE',
     'payment_confirmed': '✓ PAYMENT CONFIRMED',
@@ -1292,23 +1038,50 @@ const _menuCopy = <String, Map<String, String>>{
     'waiting_bank': 'Waiting for staff to confirm the bank payment…',
     'pay_cash': 'Pay cash',
     'cash_title': 'Pay cash at counter',
-    'cash_instruction': 'Please pay the total in cash at the counter. Staff will confirm your order here.',
+    'cash_instruction':
+        'Please pay the total in cash at the counter. Staff will confirm your order here.',
     'waiting_cash': 'Waiting for staff to confirm the cash payment…',
     'pay_qr': 'Pay by QR instead',
     'payment_thanks': 'Thank you. Your whole order is confirmed.',
-    'payment_thanks_promo': 'Thank you. Your whole order is confirmed and your promo was used.',
-    'payment_inactive': 'This payment request is no longer active. Any reserved promo has been returned to your account.',
+    'payment_thanks_promo':
+        'Thank you. Your whole order is confirmed and your promo was used.',
+    'payment_inactive':
+        'This payment request is no longer active. Any reserved promo has been returned to your account.',
     'close': 'Close',
-    'cancel_view': 'Cancel view',
+    'cancel_view': 'Close',
   },
   'ru': {
+    'view_cart': 'Открыть корзину',
+    'your_cart': 'Ваша корзина',
+    'remove': 'Удалить',
+    'pay_now': 'Оплатить',
+    'loading_promos': 'Загружаем промо…',
+    'preparing_payment': 'Создаём QR…',
+    'updating_payment': 'Обновляем QR…',
+    'retry': 'Повторить',
+    'refresh_payment': 'Новый QR для оплаты',
+    'promo_unavailable':
+        'Это промо больше не подходит. Выберите другое или продолжите без промо.',
+    'uses_left': 'осталось использований',
+    'payment_changed':
+        'Платёж изменился. Обновите корзину, чтобы увидеть актуальную сумму.',
     'title': 'МЕНЮ',
-    'subtitle': 'Добавьте нужные товары, выберите количество и оплатите всю корзину одним QR или наличными.',
-    'back': 'НАЗАД', 'add': 'ДОБАВИТЬ', 'cart': 'КОРЗИНА', 'checkout': 'ОФОРМИТЬ',
-    'customize': 'НАСТРОИТЬ', 'add_to_cart': 'В КОРЗИНУ', 'from': 'от',
-    'total': 'Итого', 'pay': 'Создать оплату', 'cancel': 'Отмена',
-    'your_promos': 'Ваши промо', 'use_promo': 'Использовать', 'without_promo': 'Без промо',
-    'empty': 'Меню готовится.', 'load_error': 'Не удалось загрузить меню.',
+    'subtitle':
+        'Добавьте нужные товары, выберите количество и оплатите всю корзину одним QR или наличными.',
+    'back': 'НАЗАД',
+    'add': 'ДОБАВИТЬ',
+    'cart': 'КОРЗИНА',
+    'checkout': 'ОФОРМИТЬ',
+    'customize': 'НАСТРОИТЬ',
+    'add_to_cart': 'В КОРЗИНУ',
+    'from': 'от',
+    'total': 'Итого',
+    'cancel': 'Отмена',
+    'your_promos': 'Ваши промо',
+    'use_promo': 'Использовать',
+    'without_promo': 'Без промо',
+    'empty': 'Меню готовится.',
+    'load_error': 'Не удалось загрузить меню.',
     'payment_error': 'Не удалось создать платёж.',
     'payment_title': 'ОПЛАТА',
     'payment_confirmed': '✓ ОПЛАТА ПОДТВЕРЖДЕНА',
@@ -1319,23 +1092,50 @@ const _menuCopy = <String, Map<String, String>>{
     'waiting_bank': 'Ожидаем подтверждение банковского перевода сотрудником…',
     'pay_cash': 'Оплатить наличными',
     'cash_title': 'Оплата наличными',
-    'cash_instruction': 'Оплатите итоговую сумму наличными на стойке. Сотрудник подтвердит заказ здесь.',
+    'cash_instruction':
+        'Оплатите итоговую сумму наличными на стойке. Сотрудник подтвердит заказ здесь.',
     'waiting_cash': 'Ожидаем подтверждение оплаты наличными сотрудником…',
     'pay_qr': 'Оплатить по QR',
     'payment_thanks': 'Спасибо. Ваш заказ подтверждён.',
-    'payment_thanks_promo': 'Спасибо. Ваш заказ подтверждён, промо использовано.',
-    'payment_inactive': 'Этот платёж больше не активен. Зарезервированное промо возвращено в ваш аккаунт.',
+    'payment_thanks_promo':
+        'Спасибо. Ваш заказ подтверждён, промо использовано.',
+    'payment_inactive':
+        'Этот платёж больше не активен. Зарезервированное промо возвращено в ваш аккаунт.',
     'close': 'Закрыть',
     'cancel_view': 'Закрыть',
   },
   'vi': {
+    'view_cart': 'Xem giỏ hàng',
+    'your_cart': 'Giỏ hàng của bạn',
+    'remove': 'Xóa',
+    'pay_now': 'Thanh toán',
+    'loading_promos': 'Đang tải khuyến mãi…',
+    'preparing_payment': 'Đang tạo mã QR…',
+    'updating_payment': 'Đang cập nhật mã QR…',
+    'retry': 'Thử lại',
+    'refresh_payment': 'Mã QR thanh toán mới',
+    'promo_unavailable':
+        'Khuyến mãi này không còn áp dụng. Chọn khuyến mãi khác hoặc tiếp tục không dùng khuyến mãi.',
+    'uses_left': 'lượt còn lại',
+    'payment_changed':
+        'Thanh toán đã thay đổi. Làm mới giỏ hàng để xem số tiền hiện tại.',
     'title': 'THỰC ĐƠN',
-    'subtitle': 'Thêm món, chọn số lượng rồi thanh toán toàn bộ giỏ hàng bằng một mã QR hoặc tiền mặt.',
-    'back': 'QUAY LẠI', 'add': 'THÊM', 'cart': 'GIỎ HÀNG', 'checkout': 'THANH TOÁN',
-    'customize': 'TÙY CHỈNH', 'add_to_cart': 'THÊM VÀO GIỎ', 'from': 'từ',
-    'total': 'Tổng', 'pay': 'Tạo thanh toán', 'cancel': 'Hủy',
-    'your_promos': 'Khuyến mãi của bạn', 'use_promo': 'Dùng khuyến mãi', 'without_promo': 'Không dùng khuyến mãi',
-    'empty': 'Thực đơn đang được chuẩn bị.', 'load_error': 'Không thể tải thực đơn.',
+    'subtitle':
+        'Thêm món, chọn số lượng rồi thanh toán toàn bộ giỏ hàng bằng một mã QR hoặc tiền mặt.',
+    'back': 'QUAY LẠI',
+    'add': 'THÊM',
+    'cart': 'GIỎ HÀNG',
+    'checkout': 'THANH TOÁN',
+    'customize': 'TÙY CHỈNH',
+    'add_to_cart': 'THÊM VÀO GIỎ',
+    'from': 'từ',
+    'total': 'Tổng',
+    'cancel': 'Hủy',
+    'your_promos': 'Khuyến mãi của bạn',
+    'use_promo': 'Dùng khuyến mãi',
+    'without_promo': 'Không dùng khuyến mãi',
+    'empty': 'Thực đơn đang được chuẩn bị.',
+    'load_error': 'Không thể tải thực đơn.',
     'payment_error': 'Không thể tạo thanh toán.',
     'payment_title': 'THANH TOÁN',
     'payment_confirmed': '✓ ĐÃ XÁC NHẬN THANH TOÁN',
@@ -1346,12 +1146,15 @@ const _menuCopy = <String, Map<String, String>>{
     'waiting_bank': 'Đang chờ nhân viên xác nhận chuyển khoản…',
     'pay_cash': 'Thanh toán tiền mặt',
     'cash_title': 'Trả tiền mặt tại quầy',
-    'cash_instruction': 'Vui lòng thanh toán tổng số tiền bằng tiền mặt tại quầy. Nhân viên sẽ xác nhận đơn hàng tại đây.',
+    'cash_instruction':
+        'Vui lòng thanh toán tổng số tiền bằng tiền mặt tại quầy. Nhân viên sẽ xác nhận đơn hàng tại đây.',
     'waiting_cash': 'Đang chờ nhân viên xác nhận thanh toán tiền mặt…',
     'pay_qr': 'Thanh toán bằng QR',
     'payment_thanks': 'Cảm ơn bạn. Đơn hàng đã được xác nhận.',
-    'payment_thanks_promo': 'Cảm ơn bạn. Đơn hàng đã được xác nhận và khuyến mãi đã được sử dụng.',
-    'payment_inactive': 'Yêu cầu thanh toán này không còn hiệu lực. Khuyến mãi đã giữ chỗ được trả lại vào tài khoản của bạn.',
+    'payment_thanks_promo':
+        'Cảm ơn bạn. Đơn hàng đã được xác nhận và khuyến mãi đã được sử dụng.',
+    'payment_inactive':
+        'Yêu cầu thanh toán này không còn hiệu lực. Khuyến mãi đã giữ chỗ được trả lại vào tài khoản của bạn.',
     'close': 'Đóng',
     'cancel_view': 'Đóng',
   },
@@ -1367,19 +1170,27 @@ String _money(int value) {
   return '${value < 0 ? '-' : ''}${buffer.toString()} VND';
 }
 
-TextStyle _serif(double size, {Color color = BrandPalette.ink, double? height}) => TextStyle(
-      fontFamily: 'Georgia',
-      fontSize: size,
-      color: color,
-      height: height,
-    );
+TextStyle _serif(
+  double size, {
+  Color color = BrandPalette.ink,
+  double? height,
+}) => TextStyle(
+  fontFamily: 'Georgia',
+  fontSize: size,
+  color: color,
+  height: height,
+);
 
-TextStyle _mono(double size, {Color color = BrandPalette.ink, double? height}) => TextStyle(
-      fontFamily: 'Courier New',
-      fontFamilyFallback: const ['monospace'],
-      fontSize: size,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.7,
-      color: color,
-      height: height,
-    );
+TextStyle _mono(
+  double size, {
+  Color color = BrandPalette.ink,
+  double? height,
+}) => TextStyle(
+  fontFamily: 'Courier New',
+  fontFamilyFallback: const ['monospace'],
+  fontSize: size,
+  fontWeight: FontWeight.w700,
+  letterSpacing: 0.7,
+  color: color,
+  height: height,
+);

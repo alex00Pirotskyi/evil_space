@@ -20,13 +20,17 @@ class MenuCatalog {
   }
 
   Map<String, dynamic> toJson() => {
-        'version': version,
-        'groups': groups.map((group) => group.toJson()).toList(growable: false),
-      };
+    'version': version,
+    'groups': groups.map((group) => group.toJson()).toList(growable: false),
+  };
 }
 
 class MenuLocalizedText {
-  const MenuLocalizedText({required this.en, required this.ru, required this.vi});
+  const MenuLocalizedText({
+    required this.en,
+    required this.ru,
+    required this.vi,
+  });
 
   final String en;
   final String ru;
@@ -42,7 +46,11 @@ class MenuLocalizedText {
     final en = map['en']?.toString().trim() ?? '';
     final ru = map['ru']?.toString().trim() ?? '';
     final vi = map['vi']?.toString().trim() ?? '';
-    final fallback = en.isNotEmpty ? en : ru.isNotEmpty ? ru : vi;
+    final fallback = en.isNotEmpty
+        ? en
+        : ru.isNotEmpty
+        ? ru
+        : vi;
     return MenuLocalizedText(
       en: en.isEmpty ? fallback : en,
       ru: ru.isEmpty ? fallback : ru,
@@ -52,9 +60,12 @@ class MenuLocalizedText {
 
   String resolve(String languageCode) {
     switch (languageCode.toLowerCase()) {
-      case 'ru': return ru;
-      case 'vi': return vi;
-      default: return en;
+      case 'ru':
+        return ru;
+      case 'vi':
+        return vi;
+      default:
+        return en;
     }
   }
 
@@ -80,17 +91,18 @@ class MenuOptionValue {
   final MenuLocalizedText name;
   final int priceDeltaVnd;
 
-  factory MenuOptionValue.fromJson(Map<String, dynamic> json) => MenuOptionValue(
+  factory MenuOptionValue.fromJson(Map<String, dynamic> json) =>
+      MenuOptionValue(
         id: json['id']?.toString() ?? '',
         name: MenuLocalizedText.fromJson(json['name']),
         priceDeltaVnd: _asInt(json['priceDeltaVnd']) ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name.toJson(),
-        'priceDeltaVnd': priceDeltaVnd,
-      };
+    'id': id,
+    'name': name.toJson(),
+    'priceDeltaVnd': priceDeltaVnd,
+  };
 }
 
 class MenuOptionGroup {
@@ -175,10 +187,10 @@ class MenuCartRequestLine {
   final Map<String, dynamic> options;
 
   Map<String, dynamic> toJson() => {
-        'itemId': itemId,
-        'quantity': quantity,
-        if (options.isNotEmpty) 'options': options,
-      };
+    'itemId': itemId,
+    'quantity': quantity,
+    if (options.isNotEmpty) 'options': options,
+  };
 }
 
 class MenuGroup {
@@ -188,16 +200,16 @@ class MenuGroup {
   final List<MenuItem> items;
 
   factory MenuGroup.fromJson(Map<String, dynamic> json) => MenuGroup(
-        id: json['id']?.toString() ?? '',
-        name: MenuLocalizedText.fromJson(json['name']),
-        items: _listOf(json['items'], MenuItem.fromJson),
-      );
+    id: json['id']?.toString() ?? '',
+    name: MenuLocalizedText.fromJson(json['name']),
+    items: _listOf(json['items'], MenuItem.fromJson),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name.toJson(),
-        'items': items.map((item) => item.toJson()).toList(growable: false),
-      };
+    'id': id,
+    'name': name.toJson(),
+    'items': items.map((item) => item.toJson()).toList(growable: false),
+  };
 }
 
 class MenuItem {
@@ -227,7 +239,8 @@ class MenuItem {
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     final descriptionValue = json['description'];
-    final hasDescription = descriptionValue != null &&
+    final hasDescription =
+        descriptionValue != null &&
         (descriptionValue is! String || descriptionValue.trim().isNotEmpty);
     return MenuItem(
       id: json['id']?.toString() ?? '',
@@ -242,14 +255,33 @@ class MenuItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name.toJson(),
-        'priceVnd': priceVnd,
-        'description': description?.toJson(),
-        'enabled': enabled,
-        if (options.isNotEmpty)
-          'options': options.map((option) => option.toJson()).toList(growable: false),
-      };
+    'id': id,
+    'name': name.toJson(),
+    'priceVnd': priceVnd,
+    'description': description?.toJson(),
+    'enabled': enabled,
+    if (options.isNotEmpty)
+      'options': options
+          .map((option) => option.toJson())
+          .toList(growable: false),
+  };
+}
+
+class MenuPaymentLine {
+  const MenuPaymentLine({
+    required this.itemId,
+    required this.quantity,
+    required this.unitPriceVnd,
+  });
+  final String itemId;
+  final int quantity;
+  final int unitPriceVnd;
+  factory MenuPaymentLine.fromJson(Map<String, dynamic> json) =>
+      MenuPaymentLine(
+        itemId: json['itemId']?.toString() ?? '',
+        quantity: _asInt(json['quantity']) ?? 1,
+        unitPriceVnd: _asInt(json['unitPriceVnd']) ?? 0,
+      );
 }
 
 class MenuOrderPayment {
@@ -269,6 +301,7 @@ class MenuOrderPayment {
     required this.promoDiscountVnd,
     this.promoGrantId,
     this.promoName,
+    this.items = const [],
   });
   final String token;
   final String orderCode;
@@ -279,6 +312,7 @@ class MenuOrderPayment {
   final int promoDiscountVnd;
   final int? promoGrantId;
   final String? promoName;
+  final List<MenuPaymentLine> items;
   final int amountVnd;
   final String paymentMessage;
   final String qrPayload;
@@ -301,6 +335,7 @@ class MenuOrderPayment {
       promoDiscountVnd: _asInt(json['promoDiscountVnd']) ?? 0,
       promoGrantId: _asInt(json['promoGrantId']),
       promoName: promoName == null || promoName.isEmpty ? null : promoName,
+      items: _listOf(json['items'], MenuPaymentLine.fromJson),
       amountVnd: amount,
       paymentMessage: json['paymentMessage']?.toString() ?? '',
       qrPayload: json['qrPayload']?.toString() ?? '',
@@ -417,26 +452,26 @@ class CustomerPromo {
       : '${discountValue.toString()} VND OFF';
 
   factory CustomerPromo.fromJson(Map<String, dynamic> json) => CustomerPromo(
-        id: _asInt(json['id']) ?? 0,
-        promotionId: _asInt(json['promotionId']) ?? 0,
-        promoKey: json['promoKey']?.toString() ?? '',
-        name: json['name']?.toString() ?? '',
-        description: json['description']?.toString() ?? '',
-        code: _nullableText(json['code']),
-        discountType: json['discountType']?.toString() ?? 'percent',
-        discountValue: _asInt(json['discountValue']) ?? 0,
-        maxDiscountVnd: _asInt(json['maxDiscountVnd']),
-        groupIds: _stringList(json['groupIds']),
-        source: json['source']?.toString() ?? '',
-        status: json['status']?.toString() ?? 'active',
-        grantedUses: _asInt(json['grantedUses']) ?? 0,
-        usedUses: _asInt(json['usedUses']) ?? 0,
-        reservedUses: _asInt(json['reservedUses']) ?? 0,
-        remainingUses: _asInt(json['remainingUses']) ?? 0,
-        grantedAt: _asInt(json['grantedAt']) ?? 0,
-        validFrom: _asInt(json['validFrom']) ?? 0,
-        expiresAt: _asInt(json['expiresAt']),
-      );
+    id: _asInt(json['id']) ?? 0,
+    promotionId: _asInt(json['promotionId']) ?? 0,
+    promoKey: json['promoKey']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+    code: _nullableText(json['code']),
+    discountType: json['discountType']?.toString() ?? 'percent',
+    discountValue: _asInt(json['discountValue']) ?? 0,
+    maxDiscountVnd: _asInt(json['maxDiscountVnd']),
+    groupIds: _stringList(json['groupIds']),
+    source: json['source']?.toString() ?? '',
+    status: json['status']?.toString() ?? 'active',
+    grantedUses: _asInt(json['grantedUses']) ?? 0,
+    usedUses: _asInt(json['usedUses']) ?? 0,
+    reservedUses: _asInt(json['reservedUses']) ?? 0,
+    remainingUses: _asInt(json['remainingUses']) ?? 0,
+    grantedAt: _asInt(json['grantedAt']) ?? 0,
+    validFrom: _asInt(json['validFrom']) ?? 0,
+    expiresAt: _asInt(json['expiresAt']),
+  );
 }
 
 class PromoPreview {
@@ -470,32 +505,36 @@ class PromoPreview {
   final int? expiresAt;
 
   factory PromoPreview.fromJson(Map<String, dynamic> json) => PromoPreview(
-        grantId: _asInt(json['grantId']) ?? 0,
-        promotionId: _asInt(json['promotionId']) ?? 0,
-        promoKey: json['promoKey']?.toString() ?? '',
-        name: json['name']?.toString() ?? '',
-        description: json['description']?.toString() ?? '',
-        discountType: json['discountType']?.toString() ?? 'percent',
-        discountValue: _asInt(json['discountValue']) ?? 0,
-        originalAmountVnd: _asInt(json['originalAmountVnd']) ?? 0,
-        eligibleAmountVnd: _asInt(json['eligibleAmountVnd']) ?? 0,
-        discountVnd: _asInt(json['discountVnd']) ?? 0,
-        finalAmountVnd: _asInt(json['finalAmountVnd']) ?? 0,
-        remainingUses: _asInt(json['remainingUses']) ?? 0,
-        expiresAt: _asInt(json['expiresAt']),
-      );
+    grantId: _asInt(json['grantId']) ?? 0,
+    promotionId: _asInt(json['promotionId']) ?? 0,
+    promoKey: json['promoKey']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+    discountType: json['discountType']?.toString() ?? 'percent',
+    discountValue: _asInt(json['discountValue']) ?? 0,
+    originalAmountVnd: _asInt(json['originalAmountVnd']) ?? 0,
+    eligibleAmountVnd: _asInt(json['eligibleAmountVnd']) ?? 0,
+    discountVnd: _asInt(json['discountVnd']) ?? 0,
+    finalAmountVnd: _asInt(json['finalAmountVnd']) ?? 0,
+    remainingUses: _asInt(json['remainingUses']) ?? 0,
+    expiresAt: _asInt(json['expiresAt']),
+  );
 }
 
 class PromoReference {
-  const PromoReference({required this.id, required this.name, required this.promoKey});
+  const PromoReference({
+    required this.id,
+    required this.name,
+    required this.promoKey,
+  });
   final int id;
   final String name;
   final String promoKey;
   factory PromoReference.fromJson(Map<String, dynamic> json) => PromoReference(
-        id: _asInt(json['id']) ?? 0,
-        name: json['name']?.toString() ?? '',
-        promoKey: json['promoKey']?.toString() ?? '',
-      );
+    id: _asInt(json['id']) ?? 0,
+    name: json['name']?.toString() ?? '',
+    promoKey: json['promoKey']?.toString() ?? '',
+  );
 }
 
 class MenuDraftSnapshot {
@@ -581,28 +620,28 @@ class AdminPromotion {
   final int consumed;
 
   factory AdminPromotion.fromJson(Map<String, dynamic> json) => AdminPromotion(
-        id: _asInt(json['id']) ?? 0,
-        promoKey: json['promoKey']?.toString() ?? '',
-        revision: _asInt(json['revision']) ?? 1,
-        name: json['name']?.toString() ?? '',
-        description: json['description']?.toString() ?? '',
-        code: _nullableText(json['code']),
-        discountType: json['discountType']?.toString() ?? 'percent',
-        discountValue: _asInt(json['discountValue']) ?? 0,
-        maxDiscountVnd: _asInt(json['maxDiscountVnd']),
-        minimumSubtotalVnd: _asInt(json['minimumSubtotalVnd']) ?? 0,
-        validFrom: _asInt(json['validFrom']) ?? 0,
-        expiresAt: _asInt(json['expiresAt']),
-        maxUsesPerCustomer: _asInt(json['maxUsesPerCustomer']) ?? 1,
-        maxTotalUses: _asInt(json['maxTotalUses']),
-        distributionType: json['distributionType']?.toString() ?? 'manual',
-        active: json['active'] == true,
-        groupIds: _stringList(json['groupIds']),
-        includeItemIds: _stringList(json['includeItemIds']),
-        excludeItemIds: _stringList(json['excludeItemIds']),
-        grants: _asInt(json['grants']) ?? 0,
-        consumed: _asInt(json['consumed']) ?? 0,
-      );
+    id: _asInt(json['id']) ?? 0,
+    promoKey: json['promoKey']?.toString() ?? '',
+    revision: _asInt(json['revision']) ?? 1,
+    name: json['name']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+    code: _nullableText(json['code']),
+    discountType: json['discountType']?.toString() ?? 'percent',
+    discountValue: _asInt(json['discountValue']) ?? 0,
+    maxDiscountVnd: _asInt(json['maxDiscountVnd']),
+    minimumSubtotalVnd: _asInt(json['minimumSubtotalVnd']) ?? 0,
+    validFrom: _asInt(json['validFrom']) ?? 0,
+    expiresAt: _asInt(json['expiresAt']),
+    maxUsesPerCustomer: _asInt(json['maxUsesPerCustomer']) ?? 1,
+    maxTotalUses: _asInt(json['maxTotalUses']),
+    distributionType: json['distributionType']?.toString() ?? 'manual',
+    active: json['active'] == true,
+    groupIds: _stringList(json['groupIds']),
+    includeItemIds: _stringList(json['includeItemIds']),
+    excludeItemIds: _stringList(json['excludeItemIds']),
+    grants: _asInt(json['grants']) ?? 0,
+    consumed: _asInt(json['consumed']) ?? 0,
+  );
 }
 
 class AdminCustomerSummary {
@@ -627,7 +666,8 @@ class AdminCustomerSummary {
   final int activePromos;
   final int menuOrders;
 
-  factory AdminCustomerSummary.fromJson(Map<String, dynamic> json) => AdminCustomerSummary(
+  factory AdminCustomerSummary.fromJson(Map<String, dynamic> json) =>
+      AdminCustomerSummary(
         id: _asInt(json['id']) ?? 0,
         name: json['name']?.toString() ?? '',
         phone: _nullableText(json['phone']),
@@ -655,7 +695,8 @@ class AdminCustomerDetail extends AdminCustomerSummary {
   });
   final List<CustomerPromo> promos;
 
-  factory AdminCustomerDetail.fromJson(Map<String, dynamic> json) => AdminCustomerDetail(
+  factory AdminCustomerDetail.fromJson(Map<String, dynamic> json) =>
+      AdminCustomerDetail(
         id: _asInt(json['id']) ?? 0,
         name: json['name']?.toString() ?? '',
         phone: _nullableText(json['phone']),
@@ -686,7 +727,9 @@ class AdminMenuSnapshot {
     return AdminMenuSnapshot(
       paymentConfigured: json['paymentConfigured'] == true,
       bankBin: json['bankBin']?.toString() ?? '970436',
-      catalog: catalogJson == null ? null : AdminMenuCatalog.fromJson(catalogJson),
+      catalog: catalogJson == null
+          ? null
+          : AdminMenuCatalog.fromJson(catalogJson),
       orders: _listOf(json['orders'], AdminMenuOrder.fromJson),
     );
   }
@@ -708,7 +751,8 @@ class AdminMenuCatalog {
   final String sourceJson;
   final List<MenuGroup> groups;
 
-  factory AdminMenuCatalog.fromJson(Map<String, dynamic> json) => AdminMenuCatalog(
+  factory AdminMenuCatalog.fromJson(Map<String, dynamic> json) =>
+      AdminMenuCatalog(
         id: _asInt(json['id']) ?? 0,
         version: _asInt(json['version']) ?? 0,
         createdAt: _asInt(json['createdAt']) ?? 0,
@@ -735,8 +779,10 @@ class AdminMenuOrder {
     this.promoName,
     this.paidAt,
     this.paidByEmail,
+    this.checkoutRevision = 0,
   });
   final int id;
+  final int checkoutRevision;
   final String orderCode;
   final String itemName;
   final int originalAmountVnd;
@@ -761,6 +807,7 @@ class AdminMenuOrder {
     final amount = _asInt(json['amountVnd']) ?? 0;
     return AdminMenuOrder(
       id: _asInt(json['id']) ?? 0,
+      checkoutRevision: _asInt(json['checkoutRevision']) ?? 0,
       orderCode: json['orderCode']?.toString() ?? '',
       itemName: json['itemName']?.toString() ?? '',
       originalAmountVnd: _asInt(json['originalAmountVnd']) ?? amount,
