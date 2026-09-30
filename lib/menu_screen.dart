@@ -12,6 +12,22 @@ import 'menu_api.dart';
 
 part 'menu_live_checkout.dart';
 
+const _menuInkOverlay = WidgetStateProperty<Color>.fromMap({
+  WidgetState.disabled: Colors.transparent,
+  WidgetState.pressed: Color(0x2E1C1C1A),
+  WidgetState.hovered: Color(0x1F1C1C1A),
+  WidgetState.focused: Color(0x2E1C1C1A),
+  WidgetState.any: Colors.transparent,
+});
+
+const _menuPaperOverlay = WidgetStateProperty<Color>.fromMap({
+  WidgetState.disabled: Colors.transparent,
+  WidgetState.pressed: Color(0x38F8F6EF),
+  WidgetState.hovered: Color(0x29F8F6EF),
+  WidgetState.focused: Color(0x38F8F6EF),
+  WidgetState.any: Colors.transparent,
+});
+
 class MenuScreen extends StatefulWidget {
   const MenuScreen({
     super.key,
@@ -279,7 +295,7 @@ class _MenuScreenState extends State<MenuScreen> {
                     side: selected
                         ? const BorderSide(color: BrandPalette.ink)
                         : BorderSide.none,
-                  ),
+                  ).copyWith(overlayColor: _menuInkOverlay),
                   child: Text(language.code.toUpperCase(), style: _mono(9)),
                 );
               })
@@ -290,11 +306,13 @@ class _MenuScreenState extends State<MenuScreen> {
           IconButton(
             tooltip: _copy('back'),
             onPressed: widget.onBack,
+            style: const ButtonStyle(overlayColor: _menuInkOverlay),
             icon: const Icon(Icons.arrow_back, size: 18),
           )
         else
           TextButton.icon(
             onPressed: widget.onBack,
+            style: const ButtonStyle(overlayColor: _menuInkOverlay),
             icon: const Icon(Icons.arrow_back, size: 18),
             label: Text(_copy('back'), style: _mono(10)),
           ),
@@ -336,6 +354,9 @@ class _MenuScreenState extends State<MenuScreen> {
         child: InkWell(
           key: ValueKey('menu-item-${item.id}'),
           onTap: _checkingOut ? null : () => _addItem(item),
+          overlayColor: _menuInkOverlay,
+          mouseCursor: WidgetStateMouseCursor.clickable,
+          hoverDuration: const Duration(milliseconds: 150),
           child: Container(
             width: double.infinity,
             constraints: const BoxConstraints(minHeight: 72),
@@ -425,7 +446,7 @@ class _MenuScreenState extends State<MenuScreen> {
         backgroundColor: BrandPalette.ink,
         minimumSize: Size(minWidth, 48),
         shape: const RoundedRectangleBorder(),
-      );
+      ).copyWith(overlayColor: _menuPaperOverlay);
 
   Widget _empty() => Container(
     padding: const EdgeInsets.all(24),
@@ -562,7 +583,7 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
                         side: const BorderSide(color: BrandPalette.ink),
                         minimumSize: const Size.fromHeight(48),
                         shape: const RoundedRectangleBorder(),
-                      ),
+                      ).copyWith(overlayColor: _menuInkOverlay),
                       child: Text(
                         widget.cancelLabel.toUpperCase(),
                         style: _mono(9),
@@ -586,7 +607,7 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
                         foregroundColor: BrandPalette.paperLift,
                         minimumSize: const Size.fromHeight(48),
                         shape: const RoundedRectangleBorder(),
-                      ),
+                      ).copyWith(overlayColor: _menuPaperOverlay),
                       child: Text(
                         widget.addLabel.toUpperCase(),
                         style: _mono(9, color: BrandPalette.paperLift),

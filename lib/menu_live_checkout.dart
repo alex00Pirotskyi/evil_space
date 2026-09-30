@@ -256,7 +256,12 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog>
   }
 
   Future<void> _poll() async {
-    if (!_resumed || _order == null || _busy || _polling || _paid || _inactive) {
+    if (!_resumed ||
+        _order == null ||
+        _busy ||
+        _polling ||
+        _paid ||
+        _inactive) {
       return;
     }
     _polling = true;
@@ -566,12 +571,14 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog>
                 children: [
                   IconButton(
                     tooltip: '-',
+                    style: const ButtonStyle(overlayColor: _menuInkOverlay),
                     onPressed: _editable ? () => _changeQuantity(i, -1) : null,
                     icon: const Icon(Icons.remove, size: 18),
                   ),
                   Text('${line.quantity}', style: _mono(11)),
                   IconButton(
                     tooltip: '+',
+                    style: const ButtonStyle(overlayColor: _menuInkOverlay),
                     onPressed: _editable && line.quantity < 20
                         ? () => _changeQuantity(i, 1)
                         : null,
@@ -582,6 +589,7 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog>
               Text(_money(line.total), style: _mono(10)),
               TextButton(
                 onPressed: _editable ? () => _removeLine(i) : null,
+                style: const ButtonStyle(overlayColor: _menuInkOverlay),
                 child: Text(_copy('remove').toUpperCase(), style: _mono(8.5)),
               ),
             ],
@@ -621,7 +629,7 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog>
       side: const BorderSide(color: BrandPalette.ink),
       minimumSize: const Size.fromHeight(48),
       shape: const RoundedRectangleBorder(),
-    ),
+    ).copyWith(overlayColor: _menuInkOverlay),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
