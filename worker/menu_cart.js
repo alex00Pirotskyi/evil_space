@@ -1,8 +1,6 @@
 import localizedMenuWorker from './menu_i18n.js';
 import { buildVietQrPayload, VIETCOMBANK_BIN } from './vietqr.js';
 import {
-  releasePromoForMenuOrder,
-  reservePromoForMenuOrder,
   resolvePromoForCart,
 } from './promo_engine.js';
 import { parseMenuOptions, resolveMenuSelection, selectionSignature } from './menu_options.js';
@@ -16,25 +14,257 @@ const MAX_ID_LENGTH = 64;
 
 export default {
   async fetch(request, env, ctx) {
+    try {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/api/public/menu/order') {
       if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
-      return handleCreateCartOrder(request, env, ctx);
+      return await handleCreateCartOrder(request, env, ctx);
     }
-    return localizedMenuWorker.fetch(request, env, ctx);
+    if (request.method === 'POST' && url.pathname === '/api/public/menu/order/update') {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return await handleUpdateCartOrder(request, env, ctx);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/public/menu/order/cancel') {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return await handleCancelCartOrder(request, env);
+    }
+    return await localizedMenuWorker.fetch(request, env, ctx);
+    } catch (error) {
+      console.error('Menu checkout failed', safeError(error));
+      return jsonError('Could not update the payment. Please retry.', 500);
+    }
   },
 };
 
 async function handleCreateCartOrder(request, env, ctx) {
+  return writeCartOrder(request, env, ctx, false);
+}
+
+async function handleUpdateCartOrder(request, env, ctx) {
+  return writeCartOrder(request, env, ctx, true);
+}
+
+// D1 batches are transactions. The first statement claims a unique mutation
+// key; every following write is conditional on that key. A lost status/revision
+// race therefore changes neither paid snapshots nor promo counters.
+async function writeCartOrder(request, env, ctx, updating) {
   const body = await readJson(request, 32 * 1024);
   const normalized = normalizeCartInput(body);
   if (normalized.error) return jsonError(normalized.error, 400);
-
+  const token = body?.token == null && !updating ? randomToken(32) : cleanPublicToken(body?.token);
+  if (!token) return jsonError('Payment session is required.', 400);
   const accountNumber = cleanAccountNumber(env.VIETQR_ACCOUNT_NUMBER);
   if (!accountNumber) return jsonError('Payment QR is not configured yet.', 503);
   const bankBin = cleanBankBin(env.VIETQR_BANK_BIN) || VIETCOMBANK_BIN;
+  const tokenHash = await hashToken(token);
+  const now = nowSeconds();
+  const order = await env.evil_space.prepare(`
+    SELECT * FROM menu_orders WHERE public_token_hash = ? LIMIT 1
+  `).bind(tokenHash).first();
+  if (updating && !order) return jsonError('Payment session not found.', 404);
+  const customer = await authenticatedCustomer(request, env);
+  if (order?.customer_id && customer?.id && Number(order.customer_id) !== Number(customer.id)) {
+    return jsonError('This payment session belongs to another account.', 403);
+  }
+  if (order && (order.status !== 'pending' || Number(order.expires_at) <= now)) {
+    return jsonError('This payment session is no longer active.', 409);
+  }
+  const trusted = await loadTrustedCart(env, normalized.items);
+  if (trusted.error) return jsonError(trusted.error, trusted.status ?? 409);
+  const { lines, catalogId, originalAmountVnd } = trusted;
+  const grantId = toPositiveInt(body?.promoGrantId) || null;
+  if (body?.promoGrantId != null && !grantId) return jsonError('Invalid promo selection.', 400);
+  // An order token permits cart editing, but account authentication is always
+  // required to apply an account's promo, including its current reservation.
+  if (grantId && !customer) return jsonError('Sign in to use this promo.', 401);
+  const promo = grantId ? await resolvePromoForCart(env, Number(customer.id), grantId,
+    lines, now, { ignoreMenuOrderId: Number(order?.id ?? 0) }) : null;
+  if (promo?.error) return jsonError(promo.error, 409);
 
-  const requestedKeys = [...new Set(normalized.items.map((line) => line.itemId))];
+  const mutation = randomToken(24);
+  const amountVnd = promo?.finalAmountVnd ?? originalAmountVnd;
+  const expiresAt = Number(order?.expires_at ?? now + ORDER_TTL_SECONDS);
+  const orderCode = order?.order_code ?? randomOrderCode();
+  const paymentMessage = order?.payment_message ?? `EVIL ${orderCode}`;
+  const summary = cartSummary(lines);
+  const first = lines[0];
+  const deviceId = customer ? await latestDeviceId(env, customer.id) : order?.device_id ?? null;
+  const responseOrder = {
+    token, orderCode, itemId: lines.length === 1 ? first.itemKey : 'cart',
+    itemName: summary, items: lines.map(publicLine), originalAmountVnd,
+    promoEligibleAmountVnd: promo?.eligibleAmountVnd ?? 0,
+    promoDiscountVnd: promo?.discountVnd ?? 0, promoGrantId: grantId,
+    promoName: promo?.name ?? null, amountVnd, paymentMessage,
+    qrPayload: buildVietQrPayload({bankBin, accountNumber, amountVnd, description: paymentMessage}),
+    status: 'pending', createdAt: Number(order?.created_at ?? now), expiresAt,
+  };
+  if (order && Number(order.amount_vnd) === amountVnd &&
+      Number(order.promo_grant_id ?? 0) === Number(grantId ?? 0) &&
+      (!customer || Number(order.customer_id) === Number(customer.id))) {
+    const previous = await env.evil_space.prepare(`
+      SELECT item_key, quantity, unit_price_vnd, selection_json FROM menu_order_items
+      WHERE order_id = ? ORDER BY id
+    `).bind(Number(order.id)).all();
+    if (previous.results?.length === lines.length && previous.results.every((line, index) =>
+      line.item_key === lines[index].itemKey && Number(line.quantity) === lines[index].quantity &&
+      Number(line.unit_price_vnd) === lines[index].unitPriceVnd &&
+      String(line.selection_json ?? '{}') === lines[index].selectionJson)) {
+      // Reopening an unchanged cart doesn't invalidate staff confirmation
+      // buttons or generate another Telegram notification.
+      return json({ok: true, order: responseOrder});
+    }
+  }
+  const available = promoAvailabilitySql();
+  const availabilityArgs = [grantId, grantId, Number(customer?.id ?? 0), now, now,
+    Number(order?.id ?? 0), Number(order?.id ?? 0)];
+  const orderFields = [catalogId, first.itemId, lines.length === 1 ? first.itemKey : 'cart',
+    summary, amountVnd, originalAmountVnd, promo?.eligibleAmountVnd ?? 0,
+    promo?.discountVnd ?? 0, grantId];
+  const claim = order
+    ? env.evil_space.prepare(`
+        UPDATE menu_orders SET catalog_id = ?, item_id = ?, item_key = ?, item_name = ?,
+          amount_vnd = ?, original_amount_vnd = ?, promo_eligible_amount_vnd = ?,
+          promo_discount_vnd = ?, promo_grant_id = ?,
+          customer_id = COALESCE(customer_id, ?), device_id = COALESCE(?, device_id),
+          checkout_revision = checkout_revision + 1, checkout_mutation = ?
+        WHERE id = ? AND status = 'pending' AND expires_at > ?
+          AND checkout_revision = ? AND ${available}
+      `).bind(...orderFields, customer?.id ?? null, deviceId, mutation, Number(order.id),
+          now, Number(order.checkout_revision), ...availabilityArgs)
+    : env.evil_space.prepare(`
+        INSERT INTO menu_orders
+          (catalog_id, item_id, item_key, item_name, amount_vnd, original_amount_vnd,
+           promo_eligible_amount_vnd, promo_discount_vnd, promo_grant_id, customer_id,
+           device_id, checkout_mutation, public_token_hash, order_code, payment_message,
+           status, created_at, expires_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?
+        WHERE ${available}
+      `).bind(...orderFields, customer?.id ?? null, deviceId, mutation, tokenHash,
+          orderCode, paymentMessage, now, expiresAt, ...availabilityArgs);
+
+  const owned = `SELECT id FROM menu_orders WHERE public_token_hash = ? AND checkout_mutation = ?`;
+  const statements = [claim,
+    // Return the old reservation before replacing its single per-order row.
+    env.evil_space.prepare(`
+      UPDATE customer_promo_grants SET reserved_uses = reserved_uses - 1
+      WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
+        WHERE order_type = 'menu' AND order_id IN (${owned}) AND status = 'reserved'
+          AND customer_promo_id != COALESCE(?, 0))
+    `).bind(tokenHash, mutation, grantId),
+    env.evil_space.prepare(`
+      UPDATE promo_redemptions SET status = 'released', released_at = ?
+      WHERE order_type = 'menu' AND order_id IN (${owned}) AND status = 'reserved'
+        AND customer_promo_id != COALESCE(?, 0)
+    `).bind(now, tokenHash, mutation, grantId),
+  ];
+  if (promo) statements.push(
+    env.evil_space.prepare(`
+      UPDATE customer_promo_grants SET reserved_uses = reserved_uses + 1
+      WHERE id = ? AND EXISTS (${owned}) AND NOT EXISTS (
+        SELECT 1 FROM promo_redemptions WHERE order_type = 'menu'
+          AND order_id IN (${owned}) AND customer_promo_id = ? AND status = 'reserved')
+    `).bind(grantId, tokenHash, mutation, tokenHash, mutation, grantId),
+    env.evil_space.prepare(`
+      INSERT INTO promo_redemptions
+        (customer_promo_id, customer_id, order_type, order_id, original_amount_vnd,
+         eligible_amount_vnd, discount_vnd, final_amount_vnd, status, reserved_at, expires_at)
+      SELECT ?, ?, 'menu', id, ?, ?, ?, ?, 'reserved', ?, ?
+      FROM menu_orders WHERE public_token_hash = ? AND checkout_mutation = ?
+      ON CONFLICT(order_type, order_id) DO UPDATE SET
+        customer_promo_id = excluded.customer_promo_id, customer_id = excluded.customer_id,
+        original_amount_vnd = excluded.original_amount_vnd, eligible_amount_vnd = excluded.eligible_amount_vnd,
+        discount_vnd = excluded.discount_vnd, final_amount_vnd = excluded.final_amount_vnd,
+        status = 'reserved', reserved_at = excluded.reserved_at, expires_at = excluded.expires_at,
+        consumed_at = NULL, released_at = NULL
+    `).bind(grantId, Number(customer.id), originalAmountVnd, promo.eligibleAmountVnd,
+        promo.discountVnd, amountVnd, now, expiresAt, tokenHash, mutation),
+  );
+  statements.push(
+    env.evil_space.prepare(`DELETE FROM menu_order_items WHERE order_id IN (${owned})`)
+      .bind(tokenHash, mutation),
+    ...lines.map(line => env.evil_space.prepare(`
+      INSERT INTO menu_order_items
+        (order_id, item_id, item_key, item_name, unit_price_vnd, quantity, line_total_vnd,
+         created_at, group_key, selection_json, selection_summary)
+      SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM menu_orders
+      WHERE public_token_hash = ? AND checkout_mutation = ?
+    `).bind(line.itemId, line.itemKey, line.itemName, line.unitPriceVnd, line.quantity,
+      line.lineTotalVnd, now, line.groupKey, line.selectionJson, line.selectionSummary || null,
+      tokenHash, mutation)),
+  );
+  let results;
+  try {
+    results = await env.evil_space.batch(statements);
+  } catch (error) {
+    // Two identical create retries can arrive together; the token's UNIQUE
+    // constraint selects one winner. The loser retries as an update, never a
+    // second order. Rollback also protects reservations on any insert failure.
+    if (!order && String(error).toLowerCase().includes('unique')) {
+      const raced = await env.evil_space.prepare('SELECT id FROM menu_orders WHERE public_token_hash = ?')
+        .bind(tokenHash).first();
+      if (raced) return jsonError('Payment session created. Retry to refresh it.', 409);
+      return jsonError('Could not create payment order. Retry.', 503);
+    }
+    throw error;
+  }
+  if (Number(results[0].meta?.changes ?? 0) !== 1) {
+    return jsonError('Payment or promo changed. Refresh the cart and try again.', 409);
+  }
+  const saved = await env.evil_space.prepare('SELECT id FROM menu_orders WHERE public_token_hash = ?')
+    .bind(tokenHash).first();
+  const notification = notifyAdminsCartOrder(env, { id: Number(saved.id), orderCode,
+    paymentMessage, amountVnd, originalAmountVnd, promoDiscountVnd: promo?.discountVnd ?? 0,
+    promoName: promo?.name ?? null, lines, updated: !!order, revision: Number(order?.checkout_revision ?? -1) + 1 });
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(notification);
+  else notification.catch(error => console.error('Cart notification failed', safeError(error)));
+  return json({ok: true, order: responseOrder}, order ? 200 : 201);
+}
+
+function promoAvailabilitySql() {
+  // This is checked within the mutation transaction, after async preview and
+  // authentication, so concurrent orders cannot claim the last campaign use.
+  return `(? IS NULL OR EXISTS (
+    SELECT 1 FROM customer_promo_grants g
+    JOIN marketing_promotions p ON p.id = g.promotion_id
+    WHERE g.id = ? AND g.customer_id = ? AND g.status = 'active' AND p.active = 1
+      AND p.valid_from <= ? AND (p.expires_at IS NULL OR p.expires_at > ?)
+      AND (g.used_uses + g.reserved_uses < g.granted_uses OR EXISTS (
+        SELECT 1 FROM promo_redemptions r WHERE r.order_type = 'menu'
+          AND r.order_id = ? AND r.customer_promo_id = g.id AND r.status = 'reserved'))
+      AND (p.max_total_uses IS NULL OR (
+        SELECT COUNT(*) FROM promo_redemptions r
+        JOIN customer_promo_grants rg ON rg.id = r.customer_promo_id
+        WHERE rg.promotion_id = p.id AND r.status IN ('reserved', 'consumed')
+          AND NOT (r.order_type = 'menu' AND r.order_id = ?)
+      ) < p.max_total_uses)
+  ))`;
+}
+
+async function handleCancelCartOrder(request, env) {
+  const body = await readJson(request, 8 * 1024);
+  const token = cleanPublicToken(body?.token);
+  if (!token) return jsonError('Payment session is required.', 400);
+  const tokenHash = await hashToken(token);
+  const now = nowSeconds();
+  await env.evil_space.batch([
+    env.evil_space.prepare(`UPDATE menu_orders SET status = 'cancelled',
+      checkout_revision = checkout_revision + 1 WHERE public_token_hash = ? AND status = 'pending'`)
+      .bind(tokenHash),
+    env.evil_space.prepare(`UPDATE customer_promo_grants SET reserved_uses = reserved_uses - 1
+      WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
+        WHERE order_type = 'menu' AND status = 'reserved' AND order_id IN (
+          SELECT id FROM menu_orders WHERE public_token_hash = ? AND status = 'cancelled'))`)
+      .bind(tokenHash),
+    env.evil_space.prepare(`UPDATE promo_redemptions SET status = 'released', released_at = ?
+      WHERE order_type = 'menu' AND status = 'reserved' AND order_id IN (
+        SELECT id FROM menu_orders WHERE public_token_hash = ? AND status = 'cancelled')`)
+      .bind(now, tokenHash),
+  ]);
+  return json({ ok: true });
+}
+
+async function loadTrustedCart(env, requestedItems) {
+  const requestedKeys = [...new Set(requestedItems.map((line) => line.itemId))];
   const placeholders = requestedKeys.map(() => '?').join(', ');
   const rows = await env.evil_space
     .prepare(`
@@ -51,11 +281,14 @@ async function handleCreateCartOrder(request, env, ctx) {
 
   const byKey = new Map((rows.results ?? []).map((row) => [String(row.item_key), row]));
   if (byKey.size !== requestedKeys.length) {
-    return jsonError('One or more menu items are unavailable. Refresh the menu and try again.', 409);
+    return {
+      error: 'One or more menu items are unavailable. Refresh the menu and try again.',
+      status: 409,
+    };
   }
 
   const lines = [];
-  for (const requested of normalized.items) {
+  for (const requested of requestedItems) {
     const item = byKey.get(requested.itemId);
     const resolved = resolveMenuSelection({
       itemName: String(item.name),
@@ -63,7 +296,7 @@ async function handleCreateCartOrder(request, env, ctx) {
       options: parseMenuOptions(item.options_json),
       selection: requested.options,
     });
-    if (resolved.error) return jsonError(resolved.error, 400);
+    if (resolved.error) return { error: resolved.error, status: 400 };
     lines.push({
       itemId: Number(item.id),
       catalogId: Number(item.catalog_id),
@@ -82,183 +315,21 @@ async function handleCreateCartOrder(request, env, ctx) {
 
   const catalogId = lines[0].catalogId;
   if (lines.some((line) => line.catalogId !== catalogId)) {
-    return jsonError('Menu changed while checking out. Refresh and try again.', 409);
+    return {
+      error: 'Menu changed while checking out. Refresh and try again.',
+      status: 409,
+    };
   }
 
   const originalAmountVnd = lines.reduce((total, line) => total + line.lineTotalVnd, 0);
-  if (!Number.isSafeInteger(originalAmountVnd) || originalAmountVnd <= 0 || originalAmountVnd > 999999999) {
-    return jsonError('Invalid cart total.', 400);
+  if (
+    !Number.isSafeInteger(originalAmountVnd) ||
+    originalAmountVnd <= 0 ||
+    originalAmountVnd > 999999999
+  ) {
+    return { error: 'Invalid cart total.', status: 400 };
   }
-
-  const customer = await authenticatedCustomer(request, env);
-  const requestedPromoGrantId = toPositiveInt(body?.promoGrantId);
-  if (body?.promoGrantId != null && !requestedPromoGrantId) {
-    return jsonError('Invalid promo selection.', 400);
-  }
-  if (requestedPromoGrantId && !customer) {
-    return jsonError('Sign in to use this promo.', 401);
-  }
-
-  let promo = null;
-  if (requestedPromoGrantId) {
-    promo = await resolvePromoForCart(
-      env,
-      Number(customer.id),
-      requestedPromoGrantId,
-      lines,
-    );
-    if (promo.error) return jsonError(promo.error, 409);
-  }
-  const amountVnd = promo?.finalAmountVnd ?? originalAmountVnd;
-
-  const now = nowSeconds();
-  const expiresAt = now + ORDER_TTL_SECONDS;
-  const publicToken = randomToken(32);
-  const publicTokenHash = await hashToken(publicToken);
-  const deviceId = customer ? await latestDeviceId(env, customer.id) : null;
-  const summary = cartSummary(lines);
-  const first = lines[0];
-
-  let order = null;
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const orderCode = randomOrderCode();
-    const paymentMessage = `EVIL ${orderCode}`;
-    try {
-      const inserted = await env.evil_space
-        .prepare(`
-          INSERT INTO menu_orders
-            (public_token_hash, order_code, catalog_id, item_id, item_key,
-             item_name, amount_vnd, original_amount_vnd, promo_eligible_amount_vnd,
-             promo_discount_vnd, promo_grant_id, payment_message, status,
-             created_at, expires_at, customer_id, device_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
-        `)
-        .bind(
-          publicTokenHash,
-          orderCode,
-          catalogId,
-          first.itemId,
-          lines.length === 1 ? first.itemKey : 'cart',
-          summary,
-          amountVnd,
-          originalAmountVnd,
-          promo?.eligibleAmountVnd ?? 0,
-          promo?.discountVnd ?? 0,
-          promo?.grantId ?? null,
-          paymentMessage,
-          now,
-          expiresAt,
-          customer?.id ?? null,
-          deviceId,
-        )
-        .run();
-      order = {
-        id: Number(inserted.meta?.last_row_id ?? 0),
-        orderCode,
-        paymentMessage,
-      };
-      break;
-    } catch (error) {
-      if (!String(error).toLowerCase().includes('unique')) throw error;
-    }
-  }
-
-  if (!order?.id) return jsonError('Could not create payment order.', 503);
-
-  let promoReserved = false;
-  try {
-    await env.evil_space.batch(
-      lines.map((line) =>
-        env.evil_space
-          .prepare(`
-            INSERT INTO menu_order_items
-              (order_id, item_id, item_key, item_name, unit_price_vnd,
-               quantity, line_total_vnd, created_at, group_key,
-               selection_json, selection_summary)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `)
-          .bind(
-            order.id,
-            line.itemId,
-            line.itemKey,
-            line.itemName,
-            line.unitPriceVnd,
-            line.quantity,
-            line.lineTotalVnd,
-            now,
-            line.groupKey,
-            line.selectionJson,
-            line.selectionSummary || null,
-          ),
-      ),
-    );
-
-    if (promo) {
-      const reserved = await reservePromoForMenuOrder(
-        env,
-        Number(customer.id),
-        promo.grantId,
-        order.id,
-        promo,
-        expiresAt,
-        now,
-      );
-      if (reserved.error) {
-        await env.evil_space.prepare('DELETE FROM menu_orders WHERE id = ?').bind(order.id).run();
-        return jsonError(reserved.error, 409);
-      }
-      promoReserved = true;
-    }
-  } catch (error) {
-    if (promoReserved) await releasePromoForMenuOrder(env, order.id, now).catch(() => null);
-    await env.evil_space.prepare('DELETE FROM menu_orders WHERE id = ?').bind(order.id).run().catch(() => null);
-    throw error;
-  }
-
-  const qrPayload = buildVietQrPayload({
-    bankBin,
-    accountNumber,
-    amountVnd,
-    description: order.paymentMessage,
-  });
-
-  const notification = notifyAdminsCartOrder(env, {
-    id: order.id,
-    orderCode: order.orderCode,
-    paymentMessage: order.paymentMessage,
-    amountVnd,
-    originalAmountVnd,
-    promoDiscountVnd: promo?.discountVnd ?? 0,
-    promoName: promo?.name ?? null,
-    lines,
-  });
-  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(notification);
-  else notification.catch((error) => console.error('Cart notification failed', safeError(error)));
-
-  return json(
-    {
-      ok: true,
-      order: {
-        token: publicToken,
-        orderCode: order.orderCode,
-        itemId: lines.length === 1 ? first.itemKey : 'cart',
-        itemName: summary,
-        items: lines.map(publicLine),
-        originalAmountVnd,
-        promoEligibleAmountVnd: promo?.eligibleAmountVnd ?? 0,
-        promoDiscountVnd: promo?.discountVnd ?? 0,
-        promoGrantId: promo?.grantId ?? null,
-        promoName: promo?.name ?? null,
-        amountVnd,
-        paymentMessage: order.paymentMessage,
-        qrPayload,
-        status: 'pending',
-        createdAt: now,
-        expiresAt,
-      },
-    },
-    201,
-  );
+  return { lines, catalogId, originalAmountVnd };
 }
 
 export function normalizeCartInput(body) {
@@ -374,7 +445,7 @@ async function notifyAdminsCartOrder(env, order) {
           text: copy.text,
           parse_mode: 'HTML',
           reply_markup: {
-            inline_keyboard: [[{ text: copy.button, callback_data: `mp:${order.id}` }]],
+            inline_keyboard: [[{ text: copy.button, callback_data: `mp:${order.id}:${order.revision}` }]],
           },
         });
       } catch (error) {
@@ -396,18 +467,18 @@ function cartOrderCopy(language, order) {
     : '';
   if (language === 'ru') {
     return {
-      text: `🛒 <b>НОВЫЙ ЗАКАЗ</b>\n\nЗаказ: <b>${code}</b>\n${lines}${promo}\n\n<b>ИТОГО: ${total}</b>\nПеревод: <code>${reference}</code>\n\nПроверьте оплату в банке.`,
+      text: `🛒 <b>${order.updated ? 'ЗАКАЗ ОБНОВЛЁН' : 'НОВЫЙ ЗАКАЗ'}</b>\n\nЗаказ: <b>${code}</b>\n${lines}${promo}\n\n<b>ИТОГО: ${total}</b>\nПеревод: <code>${reference}</code>\n\nПроверьте оплату в банке.`,
       button: '✅ ЗАКАЗ ОПЛАЧЕН',
     };
   }
   if (language === 'vi') {
     return {
-      text: `🛒 <b>ĐƠN HÀNG MỚI</b>\n\nĐơn: <b>${code}</b>\n${lines}${promo}\n\n<b>TỔNG: ${total}</b>\nNội dung CK: <code>${reference}</code>\n\nHãy kiểm tra thanh toán trong ngân hàng.`,
+      text: `🛒 <b>${order.updated ? 'ĐƠN HÀNG ĐÃ CẬP NHẬT' : 'ĐƠN HÀNG MỚI'}</b>\n\nĐơn: <b>${code}</b>\n${lines}${promo}\n\n<b>TỔNG: ${total}</b>\nNội dung CK: <code>${reference}</code>\n\nHãy kiểm tra thanh toán trong ngân hàng.`,
       button: '✅ ĐÃ THANH TOÁN',
     };
   }
   return {
-    text: `🛒 <b>NEW ORDER</b>\n\nOrder: <b>${code}</b>\n${lines}${promo}\n\n<b>TOTAL: ${total}</b>\nTransfer reference: <code>${reference}</code>\n\nCheck the bank payment, then confirm below.`,
+    text: `🛒 <b>${order.updated ? 'ORDER UPDATED' : 'NEW ORDER'}</b>\n\nOrder: <b>${code}</b>\n${lines}${promo}\n\n<b>TOTAL: ${total}</b>\nTransfer reference: <code>${reference}</code>\n\nCheck the bank payment, then confirm below.`,
     button: '✅ ORDER PAID',
   };
 }
@@ -423,6 +494,12 @@ async function telegramApi(env, method, payload) {
     throw new Error(`Telegram ${method} failed (${response.status}).`);
   }
   return data;
+}
+
+function cleanPublicToken(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text.length < 32 || text.length > 256 || !/^[A-Za-z0-9_-]+$/.test(text)) return '';
+  return text;
 }
 
 function cleanId(value) {

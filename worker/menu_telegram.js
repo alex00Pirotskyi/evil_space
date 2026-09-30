@@ -14,7 +14,7 @@ export async function handleMenuTelegramShortcut(request, env) {
 
   const callback = update?.callback_query;
   const data = typeof callback?.data === 'string' ? callback.data : '';
-  const match = /^mp:(\d+)$/.exec(data);
+  const match = /^mp:(\d+)(?::(\d+))?$/.exec(data);
   if (!match) return null;
 
   const userId = Number(callback?.from?.id ?? 0);
@@ -22,13 +22,17 @@ export async function handleMenuTelegramShortcut(request, env) {
   const messageId = Number(callback?.message?.message_id ?? 0);
   if (!userId || !chatId) return json({ ok: true });
 
-  const result = await markMenuOrderPaidByTelegram(env, Number(match[1]), userId);
+  const result = await markMenuOrderPaidByTelegram(env, Number(match[1]), userId, Number(match[2] ?? 0));
   if (result.status === 'forbidden') {
     await answerCallback(env, callback.id, 'Telegram is not linked to an approved admin.', true);
     return json({ ok: true });
   }
   if (result.status === 'missing' || result.status === 'invalid') {
     await answerCallback(env, callback.id, 'Order not found.', true);
+    return json({ ok: true });
+  }
+  if (result.status === 'changed') {
+    await answerCallback(env, callback.id, 'Cart changed. Verify the latest order total and use its newest confirmation button.', true);
     return json({ ok: true });
   }
   if (result.status === 'expired') {

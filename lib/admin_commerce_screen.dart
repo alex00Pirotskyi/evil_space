@@ -1036,7 +1036,7 @@ class _AdminCommerceScreenState extends State<AdminCommerceScreen> {
     );
     if (yes != true) return;
     await _runBusy(() async {
-      final snapshot = await widget.api.markPaid(order.id);
+      final snapshot = await widget.api.markPaid(order.id, revision: order.checkoutRevision);
       if (mounted) setState(() => _snapshot = snapshot);
     });
   }

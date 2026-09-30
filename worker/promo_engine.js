@@ -93,7 +93,7 @@ export async function grantSignupPromos(env, customerId, now = nowSeconds()) {
   if (statements.length) await env.evil_space.batch(statements);
 }
 
-export async function resolvePromoForCart(env, customerId, grantId, lines, now = nowSeconds()) {
+export async function resolvePromoForCart(env, customerId, grantId, lines, now = nowSeconds(), options = {}) {
   const cid = toPositiveInt(customerId);
   const gid = toPositiveInt(grantId);
   if (!cid || !gid) return { error: 'Promo is not available.' };
@@ -121,7 +121,26 @@ export async function resolvePromoForCart(env, customerId, grantId, lines, now =
   if (grant.expires_at != null && Number(grant.expires_at) <= now) {
     return { error: 'Promo has expired.' };
   }
-  const remaining = Number(grant.granted_uses) - Number(grant.used_uses) - Number(grant.reserved_uses);
+  const ignoreMenuOrderId = toPositiveInt(options?.ignoreMenuOrderId);
+  let ownReservation = 0;
+  if (ignoreMenuOrderId) {
+    const own = await env.evil_space
+      .prepare(`
+        SELECT 1 AS reserved
+        FROM promo_redemptions
+        WHERE order_type = 'menu' AND order_id = ?
+          AND customer_promo_id = ? AND status = 'reserved'
+        LIMIT 1
+      `)
+      .bind(ignoreMenuOrderId, gid)
+      .first();
+    ownReservation = own ? 1 : 0;
+  }
+  const remaining =
+    Number(grant.granted_uses) -
+    Number(grant.used_uses) -
+    Number(grant.reserved_uses) +
+    ownReservation;
   if (remaining < 1) return { error: 'Promo has no uses remaining.' };
 
   const originalAmountVnd = lines.reduce((sum, line) => sum + Number(line.lineTotalVnd || 0), 0);
@@ -133,16 +152,29 @@ export async function resolvePromoForCart(env, customerId, grantId, lines, now =
   }
 
   if (grant.max_total_uses != null) {
-    const used = await env.evil_space
-      .prepare(`
-        SELECT COUNT(*) AS count
-        FROM promo_redemptions
-        WHERE customer_promo_id IN (
-          SELECT id FROM customer_promo_grants WHERE promotion_id = ?
-        ) AND status IN ('reserved', 'consumed')
-      `)
-      .bind(Number(grant.promotion_id))
-      .first();
+    const used = ignoreMenuOrderId
+      ? await env.evil_space
+          .prepare(`
+            SELECT COUNT(*) AS count
+            FROM promo_redemptions
+            WHERE customer_promo_id IN (
+              SELECT id FROM customer_promo_grants WHERE promotion_id = ?
+            )
+              AND status IN ('reserved', 'consumed')
+              AND NOT (order_type = 'menu' AND order_id = ?)
+          `)
+          .bind(Number(grant.promotion_id), ignoreMenuOrderId)
+          .first()
+      : await env.evil_space
+          .prepare(`
+            SELECT COUNT(*) AS count
+            FROM promo_redemptions
+            WHERE customer_promo_id IN (
+              SELECT id FROM customer_promo_grants WHERE promotion_id = ?
+            ) AND status IN ('reserved', 'consumed')
+          `)
+          .bind(Number(grant.promotion_id))
+          .first();
     if (Number(used?.count ?? 0) >= Number(grant.max_total_uses)) {
       return { error: 'Promo campaign has reached its usage limit.' };
     }
@@ -260,95 +292,64 @@ export async function reservePromoForMenuOrder(env, customerId, grantId, orderId
 }
 
 export async function consumePromoForMenuOrder(env, orderId, now = nowSeconds()) {
-  const redemption = await env.evil_space
-    .prepare(`
-      SELECT id, customer_promo_id
-      FROM promo_redemptions
-      WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved'
-      LIMIT 1
-    `)
-    .bind(toPositiveInt(orderId))
-    .first();
-  if (!redemption) return;
-
+  const id = toPositiveInt(orderId);
   await env.evil_space.batch([
-    env.evil_space
-      .prepare(`
-        UPDATE promo_redemptions
-        SET status = 'consumed', consumed_at = ?
-        WHERE id = ? AND status = 'reserved'
-      `)
-      .bind(now, Number(redemption.id)),
-    env.evil_space
-      .prepare(`
-        UPDATE customer_promo_grants
-        SET reserved_uses = CASE WHEN reserved_uses > 0 THEN reserved_uses - 1 ELSE 0 END,
-            used_uses = used_uses + 1,
-            status = CASE
-              WHEN used_uses + 1 >= granted_uses THEN 'exhausted'
-              ELSE status
-            END
-        WHERE id = ?
-      `)
-      .bind(Number(redemption.customer_promo_id)),
+    env.evil_space.prepare(`
+      UPDATE customer_promo_grants
+      SET reserved_uses = reserved_uses - 1, used_uses = used_uses + 1,
+          status = CASE WHEN used_uses + 1 >= granted_uses THEN 'exhausted' ELSE status END
+      WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
+        WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved')
+        AND EXISTS (SELECT 1 FROM menu_orders WHERE id = ? AND status = 'paid')
+    `).bind(id, id),
+    env.evil_space.prepare(`
+      UPDATE promo_redemptions SET status = 'consumed', consumed_at = ?
+      WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved'
+        AND EXISTS (SELECT 1 FROM menu_orders WHERE id = ? AND status = 'paid')
+    `).bind(now, id, id),
   ]);
 }
 
 export async function releasePromoForMenuOrder(env, orderId, now = nowSeconds()) {
-  const redemption = await env.evil_space
-    .prepare(`
-      SELECT id, customer_promo_id
-      FROM promo_redemptions
-      WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved'
-      LIMIT 1
-    `)
-    .bind(toPositiveInt(orderId))
-    .first();
-  if (!redemption) return;
+  const id = toPositiveInt(orderId);
   await env.evil_space.batch([
-    env.evil_space
-      .prepare(`
-        UPDATE promo_redemptions
-        SET status = 'released', released_at = ?
-        WHERE id = ? AND status = 'reserved'
-      `)
-      .bind(now, Number(redemption.id)),
-    env.evil_space
-      .prepare(`
-        UPDATE customer_promo_grants
-        SET reserved_uses = CASE WHEN reserved_uses > 0 THEN reserved_uses - 1 ELSE 0 END,
-            status = CASE WHEN status = 'exhausted' AND used_uses < granted_uses THEN 'active' ELSE status END
-        WHERE id = ?
-      `)
-      .bind(Number(redemption.customer_promo_id)),
+    env.evil_space.prepare(`
+      UPDATE customer_promo_grants
+      SET reserved_uses = reserved_uses - 1,
+          status = CASE WHEN status = 'exhausted' AND used_uses < granted_uses THEN 'active' ELSE status END
+      WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
+        WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved')
+        AND NOT EXISTS (SELECT 1 FROM menu_orders WHERE id = ? AND status = 'paid')
+    `).bind(id, id),
+    env.evil_space.prepare(`
+      UPDATE promo_redemptions SET status = 'released', released_at = ?
+      WHERE order_type = 'menu' AND order_id = ? AND status = 'reserved'
+        AND NOT EXISTS (SELECT 1 FROM menu_orders WHERE id = ? AND status = 'paid')
+    `).bind(now, id, id),
   ]);
 }
 
 export async function releaseExpiredPromoReservations(env, now = nowSeconds()) {
-  const expired = await env.evil_space
-    .prepare(`
-      SELECT id, customer_promo_id
-      FROM promo_redemptions
-      WHERE status = 'reserved' AND expires_at <= ?
-      ORDER BY id
-      LIMIT 100
-    `)
-    .bind(now)
-    .all();
+  const expired = await env.evil_space.prepare(`
+    SELECT id, order_type, order_id FROM promo_redemptions
+    WHERE status = 'reserved' AND expires_at <= ? ORDER BY id LIMIT 100
+  `).bind(now).all();
   for (const row of expired.results ?? []) {
-    await env.evil_space.batch([
-      env.evil_space
-        .prepare("UPDATE promo_redemptions SET status = 'released', released_at = ? WHERE id = ? AND status = 'reserved'")
-        .bind(now, Number(row.id)),
-      env.evil_space
-        .prepare(`
-          UPDATE customer_promo_grants
-          SET reserved_uses = CASE WHEN reserved_uses > 0 THEN reserved_uses - 1 ELSE 0 END,
-              status = CASE WHEN status = 'exhausted' AND used_uses < granted_uses THEN 'active' ELSE status END
-          WHERE id = ?
-        `)
-        .bind(Number(row.customer_promo_id)),
-    ]);
+    // A staff confirmation may precede consumption by one await. Never return
+    // a paid order's promo just because the expiry cleaner runs in that gap.
+    if (row.order_type === 'menu') {
+      await consumePromoForMenuOrder(env, Number(row.order_id), now);
+      await releasePromoForMenuOrder(env, Number(row.order_id), now);
+    } else {
+      await env.evil_space.batch([
+        env.evil_space.prepare(`UPDATE customer_promo_grants SET reserved_uses = reserved_uses - 1
+          WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
+            WHERE id = ? AND status = 'reserved' AND expires_at <= ?)`)
+          .bind(Number(row.id), now),
+        env.evil_space.prepare(`UPDATE promo_redemptions SET status = 'released', released_at = ?
+          WHERE id = ? AND status = 'reserved' AND expires_at <= ?`).bind(now, Number(row.id), now),
+      ]);
+    }
   }
 }
 
@@ -406,12 +407,23 @@ async function handleEligiblePromos(request, env) {
   const lines = await loadTrustedCartLines(env, normalized.items);
   if (lines.error) return jsonError(lines.error, 409);
   const now = nowSeconds();
+  let ownOrderId = null;
+  if (typeof body?.paymentToken === 'string') {
+    const order = await env.evil_space.prepare(`
+      SELECT id FROM menu_orders
+      WHERE public_token_hash = ? AND customer_id = ?
+        AND status = 'pending' AND expires_at > ?
+      LIMIT 1
+    `).bind(await hashToken(body.paymentToken), Number(customer.id), now).first();
+    ownOrderId = order?.id ?? null;
+  }
   await grantEveryonePromos(env, Number(customer.id), now);
   const wallet = await customerPromoWallet(env, Number(customer.id), now);
   const applicable = [];
   for (const promo of wallet) {
-    if (promo.status !== 'active' || promo.remainingUses < 1) continue;
-    const pricing = await resolvePromoForCart(env, Number(customer.id), promo.id, lines.lines, now);
+    if (promo.status !== 'active') continue;
+    const pricing = await resolvePromoForCart(env, Number(customer.id), promo.id, lines.lines, now,
+      { ignoreMenuOrderId: ownOrderId });
     if (!pricing.error) applicable.push(pricing);
   }
   applicable.sort((a, b) => b.discountVnd - a.discountVnd || a.name.localeCompare(b.name));

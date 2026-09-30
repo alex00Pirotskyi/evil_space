@@ -21,6 +21,8 @@ const reviewAdminEmail = `review-${randomBytes(6).toString('hex')}@example.inval
 const adminPassword = randomBytes(24).toString('base64url');
 const reviewApprovalToken = randomBytes(32).toString('base64url');
 const testPaymentAccount = String(randomInt(1000000000, 10000000000));
+const liveCustomerToken = randomBytes(32).toString('base64url');
+const otherCustomerToken = randomBytes(32).toString('base64url');
 let dev = null;
 let devOutput = '';
 
@@ -191,6 +193,24 @@ async function seedAdmins() {
     .digest('base64url');
 
   const sql = `
+    INSERT INTO customers (id, name, created_at, updated_at)
+      VALUES (9001, 'Live checkout customer', ${now}, ${now}),
+             (9002, 'Other checkout customer', ${now}, ${now});
+    INSERT INTO customer_sessions (customer_id, token_hash, created_at, expires_at, last_seen_at)
+      VALUES (9001, ${sqlString(createHash('sha256').update(liveCustomerToken).digest('base64url'))}, ${now}, ${now + 3600}, ${now}),
+             (9002, ${sqlString(createHash('sha256').update(otherCustomerToken).digest('base64url'))}, ${now}, ${now + 3600}, ${now});
+    INSERT INTO marketing_promotions (id, promo_key, name, discount_type, discount_value,
+      distribution_type, max_total_uses, created_at, created_by_email)
+      VALUES (9101, 'LIVE10', 'Ten thousand off', 'fixed_vnd', 10000, 'manual', NULL, ${now}, 'test'),
+             (9102, 'LIVE20', 'Twenty thousand off', 'fixed_vnd', 20000, 'manual', NULL, ${now}, 'test'),
+             (9103, 'LIVE_LIMIT', 'Limited campaign', 'fixed_vnd', 5000, 'manual', 1, ${now}, 'test');
+    INSERT INTO marketing_promotion_groups (promotion_id, group_key)
+      VALUES (9101, 'beverages'), (9102, 'beverages'), (9103, 'beverages');
+    INSERT INTO customer_promo_grants (id, customer_id, promotion_id, granted_uses, granted_at)
+      VALUES (9201, 9001, 9101, 1, ${now}), (9202, 9001, 9102, 1, ${now}),
+             (9203, 9001, 9103, 1, ${now}), (9204, 9002, 9103, 1, ${now});
+    CREATE TRIGGER test_cart_insert_failure BEFORE INSERT ON menu_order_items
+      WHEN NEW.quantity = 19 BEGIN SELECT RAISE(ABORT, 'forced test insert failure'); END;
     DELETE FROM admins WHERE email IN (${sqlString(adminEmail)}, ${sqlString(reviewAdminEmail)});
     INSERT INTO admins
       (email, password_hash, password_salt, status, approval_token_hash,
@@ -481,6 +501,8 @@ async function runFlow() {
   payload = await response.json();
   assert.equal(payload.order.status, 'paid');
 
+  await runLiveCartFlow(cookie);
+
   response = await http('/api/public/status');
   assert.equal(response.status, 200);
   payload = await response.json();
@@ -572,6 +594,128 @@ async function runFlow() {
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.equal(payload.authenticated, false);
+}
+
+async function runLiveCartFlow(adminCookie) {
+  const customerCookie = `__Host-evil_customer_session=${liveCustomerToken}`;
+  const otherCookie = `__Host-evil_customer_session=${otherCustomerToken}`;
+  const headers = {Cookie: customerCookie};
+  const items = [{itemId: 'cola', quantity: 2}];
+  const token = randomBytes(32).toString('base64url');
+  async function post(endpoint, body, who = headers) {
+    const response = await jsonRequest(`/api/public/menu/${endpoint}`, body, who);
+    const data = await response.json();
+    return {response, data};
+  }
+  async function wallet(who = headers) {
+    const response = await http('/api/public/account/promos', {headers: who});
+    assert.equal(response.status, 200);
+    return (await response.json()).promos;
+  }
+  async function grant(id) { return (await wallet()).find(p => p.id === id); }
+  async function adminOrder(code) {
+    const response = await http('/api/admin/menu', {headers: {Cookie: adminCookie}});
+    return (await response.json()).snapshot.orders.find(o => o.orderCode === code);
+  }
+  let result = await post('order', {token, items, promoGrantId: 9201, amountVnd: 1});
+  assert.equal(result.response.status, 201, JSON.stringify(result.data));
+  const initial = result.data.order;
+  assert.equal(initial.amountVnd, 50000);
+  assert.equal((await grant(9201)).reservedUses, 1);
+
+  // A lost create response/retry updates the same order and never reserves twice.
+  result = await post('order', {token, items, promoGrantId: 9201});
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.order.orderCode, initial.orderCode);
+  assert.equal((await grant(9201)).reservedUses, 1);
+
+  result = await post('promos', {items, paymentToken: token});
+  assert.ok(result.data.promos.some(p => p.grantId === 9201));
+  result = await post('promos', {items});
+  assert.ok(!result.data.promos.some(p => p.grantId === 9201));
+  result = await post('promos', {items, paymentToken: token}, {Cookie: otherCookie});
+  assert.ok(!result.data.promos.some(p => p.grantId === 9201));
+
+  result = await post('order/update', {token, items: [{itemId: 'cola', quantity: 3}], promoGrantId: 9201});
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.order.amountVnd, 80000);
+  assert.equal(result.data.order.paymentMessage, initial.paymentMessage);
+  assert.notEqual(result.data.order.qrPayload, initial.qrPayload);
+  assert.equal((await grant(9201)).reservedUses, 1);
+
+  // Switching, removing and reapplying promos reuse the redemption row safely.
+  result = await post('order/update', {token, items, promoGrantId: 9202});
+  assert.equal(result.response.status, 200, JSON.stringify(result.data));
+  assert.equal(result.data.order.amountVnd, 40000);
+  assert.equal((await grant(9201)).remainingUses, 1);
+  assert.equal((await grant(9202)).reservedUses, 1);
+  result = await post('order/update', {token, items});
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.order.amountVnd, 60000);
+  assert.equal((await grant(9202)).remainingUses, 1);
+  result = await post('order/update', {token, items, promoGrantId: 9201});
+  assert.equal(result.response.status, 200);
+
+  // Unavailable items, another customer's grant, and insert failures roll back
+  // both the order snapshot and the previous promo reservation.
+  result = await post('order/update', {token, items: [{itemId: 'missing', quantity: 1}], promoGrantId: 9202});
+  assert.equal(result.response.status, 409);
+  result = await post('order/update', {token, items, promoGrantId: 9201}, {Cookie: otherCookie});
+  assert.equal(result.response.status, 403);
+  result = await post('order/update', {token, items, promoGrantId: 9201}, {});
+  assert.equal(result.response.status, 401);
+  result = await post('order/update', {token, items: [{itemId: 'cola', quantity: 19}], promoGrantId: 9202});
+  assert.equal(result.response.status, 500);
+  assert.equal((await grant(9201)).reservedUses, 1);
+  assert.equal((await grant(9202)).remainingUses, 1);
+  const pending = await adminOrder(initial.orderCode);
+  assert.equal(pending.amountVnd, 50000);
+  assert.match(pending.itemName, /2 × Cola/);
+
+  // Staff confirmation wins against later edits/cancellation. Repeated paid
+  // confirmations consume exactly one use; no paid snapshot is overwritten.
+  let stale = await jsonRequest('/api/admin/menu/order/paid', {id: pending.id, revision: 0}, {Cookie: adminCookie});
+  assert.equal(stale.status, 409);
+  let response = await jsonRequest('/api/admin/menu/order/paid', {id: pending.id, revision: pending.checkoutRevision}, {Cookie: adminCookie});
+  assert.equal(response.status, 200);
+  response = await jsonRequest('/api/admin/menu/order/paid', {id: pending.id, revision: pending.checkoutRevision}, {Cookie: adminCookie});
+  assert.equal(response.status, 200);
+  result = await post('order/update', {token, items: [{itemId: 'cola', quantity: 4}], promoGrantId: 9202});
+  assert.equal(result.response.status, 409);
+  await post('order/cancel', {token});
+  assert.equal((await grant(9201)).usedUses, 1);
+  assert.equal((await grant(9201)).reservedUses, 0);
+  const paid = await adminOrder(initial.orderCode);
+  assert.equal(paid.status, 'paid');
+  assert.equal(paid.amountVnd, 50000);
+  assert.match(paid.itemName, /2 × Cola/);
+
+  const cancelToken = randomBytes(32).toString('base64url');
+  result = await post('order', {token: cancelToken, items, promoGrantId: 9202});
+  assert.equal(result.response.status, 201);
+  await Promise.all([post('order/cancel', {token: cancelToken}), post('order/cancel', {token: cancelToken})]);
+  assert.equal((await grant(9202)).reservedUses, 0);
+  assert.equal((await grant(9202)).remainingUses, 1);
+  result = await post('order/update', {token: cancelToken, items});
+  assert.equal(result.response.status, 409);
+
+  // A campaign with one remaining use may be reserved by only one order.
+  const limited = await Promise.all([
+    post('order', {items, promoGrantId: 9203}),
+    post('order', {items, promoGrantId: 9204}, {Cookie: otherCookie}),
+  ]);
+  assert.deepEqual(limited.map(r => r.response.status).sort(), [201, 409]);
+  const winner = limited.find(r => r.response.status === 201).data.order;
+  const winnerCookie = winner.promoGrantId === 9203 ? headers : {Cookie: otherCookie};
+  result = await post('order/update', {token: winner.token, items: [{itemId: 'cola', quantity: 3}],
+    promoGrantId: winner.promoGrantId}, winnerCookie);
+  assert.equal(result.response.status, 200); // Own reservation isn't the campaign cap.
+  await post('order/cancel', {token: winner.token}, winnerCookie);
+
+  const snapshotResponse = await http('/api/admin/menu', {headers: {Cookie: adminCookie}});
+  const allOrders = (await snapshotResponse.json()).snapshot.orders;
+  assert.equal(allOrders.filter(o => o.orderCode === initial.orderCode).length, 1);
+  console.log('Integration: live cart retry, repricing, promo switching, rollback and confirmation passed');
 }
 
 async function http(pathname, options = {}) {

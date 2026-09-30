@@ -294,17 +294,20 @@ async function handleAdminMarkPaid(request, env) {
   const body = await readJson(request, 16 * 1024);
   const id = toPositiveInt(body?.id);
   if (!id) return jsonError('Order is required.', 400);
+  const revision = Number(body?.revision ?? 0);
+  if (!Number.isSafeInteger(revision) || revision < 0) return jsonError('Invalid order revision.', 400);
 
   const result = await markOrderPaid(env, id, {
     email: session.email,
     telegramUserId: null,
-  });
+  }, revision);
   if (result.status === 'missing') return jsonError('Order not found.', 404);
   if (result.status === 'expired') return jsonError('Order has expired.', 409);
+  if (result.status === 'changed') return jsonError('The cart changed. Refresh and verify the new total before confirming payment.', 409);
   return json({ ok: true, order: result.order, snapshot: await adminSnapshot(env) });
 }
 
-export async function markMenuOrderPaidByTelegram(env, orderId, telegramUserId) {
+export async function markMenuOrderPaidByTelegram(env, orderId, telegramUserId, revision = 0) {
   const id = toPositiveInt(orderId);
   const userId = toPositiveInt(telegramUserId);
   if (!id || !userId) return { status: 'invalid' };
@@ -324,10 +327,10 @@ export async function markMenuOrderPaidByTelegram(env, orderId, telegramUserId) 
   return markOrderPaid(env, id, {
     email: String(admin.email),
     telegramUserId: userId,
-  });
+  }, revision);
 }
 
-async function markOrderPaid(env, id, actor) {
+async function markOrderPaid(env, id, actor, revision) {
   const now = nowSeconds();
   const current = await orderForAdmin(env, id);
   if (!current) return { status: 'missing' };
@@ -335,6 +338,9 @@ async function markOrderPaid(env, id, actor) {
   if (current.status === 'paid') {
     await consumePromoForMenuOrder(env, id, Number(current.paid_at ?? now));
     return { status: 'paid', order: adminOrder(current) };
+  }
+  if (current.status === 'pending' && Number(current.checkout_revision) !== revision) {
+    return { status: 'changed' };
   }
   if (current.status !== 'pending' || Number(current.expires_at) <= now) {
     if (current.status === 'pending') {
@@ -353,9 +359,9 @@ async function markOrderPaid(env, id, actor) {
     .prepare(`
       UPDATE menu_orders
       SET status = 'paid', paid_at = ?, paid_by_email = ?, paid_by_telegram_user_id = ?
-      WHERE id = ? AND status = 'pending'
+      WHERE id = ? AND status = 'pending' AND checkout_revision = ? AND expires_at > ?
     `)
-    .bind(now, actor.email, actor.telegramUserId, id)
+    .bind(now, actor.email, actor.telegramUserId, id, revision, now)
     .run();
   if (Number(result.meta?.changes ?? 0) < 1) {
     const raced = await orderForAdmin(env, id);
@@ -363,6 +369,7 @@ async function markOrderPaid(env, id, actor) {
       await consumePromoForMenuOrder(env, id, Number(raced.paid_at ?? now));
       return { status: 'paid', order: adminOrder(raced) };
     }
+    if (raced?.status === 'pending') return { status: 'changed' };
     return { status: 'missing' };
   }
 
@@ -385,7 +392,7 @@ async function orderForAdmin(env, id) {
              o.original_amount_vnd, o.promo_eligible_amount_vnd,
              o.promo_discount_vnd, o.promo_grant_id, p.name AS promo_name,
              o.payment_message, o.status, o.created_at, o.expires_at,
-             o.paid_at, o.paid_by_email
+             o.paid_at, o.paid_by_email, o.checkout_revision
       FROM menu_orders o
       LEFT JOIN customer_promo_grants g ON g.id = o.promo_grant_id
       LEFT JOIN marketing_promotions p ON p.id = g.promotion_id
@@ -405,7 +412,7 @@ async function adminSnapshot(env) {
              o.original_amount_vnd, o.promo_eligible_amount_vnd,
              o.promo_discount_vnd, o.promo_grant_id, p.name AS promo_name,
              o.payment_message, o.status, o.created_at, o.expires_at,
-             o.paid_at, o.paid_by_email
+             o.paid_at, o.paid_by_email, o.checkout_revision
       FROM menu_orders o
       LEFT JOIN customer_promo_grants g ON g.id = o.promo_grant_id
       LEFT JOIN marketing_promotions p ON p.id = g.promotion_id
@@ -647,6 +654,7 @@ function publicOrder(order, status = String(order.status)) {
 function adminOrder(order) {
   return {
     id: Number(order.id),
+    checkoutRevision: Number(order.checkout_revision ?? 0),
     orderCode: String(order.order_code),
     itemName: String(order.item_name),
     originalAmountVnd: Number(order.original_amount_vnd ?? order.amount_vnd),
