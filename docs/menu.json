@@ -106,7 +106,7 @@
               "min": 1,
               "max": 3,
               "default": 1,
-              "pricePerStepVnd": 20000
+              "pricePerStepVnd": 15000
             },
             {
               "id": "sugar",
@@ -174,7 +174,7 @@
               "min": 1,
               "max": 3,
               "default": 1,
-              "pricePerStepVnd": 20000
+              "pricePerStepVnd": 15000
             },
             {
               "id": "sugar",
@@ -242,7 +242,7 @@
               "min": 1,
               "max": 3,
               "default": 1,
-              "pricePerStepVnd": 20000
+              "pricePerStepVnd": 15000
             },
             {
               "id": "sugar",
@@ -301,7 +301,7 @@
               "min": 1,
               "max": 3,
               "default": 1,
-              "pricePerStepVnd": 20000
+              "pricePerStepVnd": 15000
             },
             {
               "id": "sugar",
@@ -360,7 +360,7 @@
               "min": 1,
               "max": 3,
               "default": 1,
-              "pricePerStepVnd": 20000
+              "pricePerStepVnd": 15000
             },
             {
               "id": "sugar",
