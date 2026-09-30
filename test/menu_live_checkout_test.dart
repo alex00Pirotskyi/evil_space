@@ -157,12 +157,7 @@ Future<void> openCart(
     ),
   );
   await tester.pump();
-  final add = language == AppLanguage.ru
-      ? 'ДОБАВИТЬ'
-      : language == AppLanguage.vi
-      ? 'THÊM'
-      : 'ADD';
-  await tester.tap(find.text(add).first);
+  await tester.tap(find.text('Cola'));
   await tester.pump();
   final view = language == AppLanguage.ru
       ? 'ОТКРЫТЬ КОРЗИНУ'
@@ -296,15 +291,29 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('emptying the menu after closing QR cancels the same session', (tester) async {
+  testWidgets('tapping anywhere on a menu row adds to the same pending cart', (
+    tester,
+  ) async {
     final api = CheckoutApi();
     await openCart(tester, api);
+    final reference = api.current!.paymentMessage;
     await tapVisible(tester, find.text('CLOSE'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.byIcon(Icons.remove).first);
+    final row = find.byKey(const ValueKey('menu-item-cola'));
+    final bounds = tester.getRect(row);
+    expect(bounds.width, greaterThan(300));
+    expect(bounds.height, greaterThanOrEqualTo(72));
+    expect(find.text('ADD'), findsNothing);
+    expect(find.byIcon(Icons.add), findsNothing);
+    expect(find.byIcon(Icons.remove), findsNothing);
+    await tester.tapAt(Offset(bounds.right - 8, bounds.center.dy));
     await tester.pump();
-    expect(api.cancellations, [api.creates.single]);
-    expect(find.text('VIEW CART'), findsNothing);
+    await tapVisible(tester, find.text('VIEW CART'));
+    expect(api.creates, hasLength(1));
+    expect(api.updates.last.single.quantity, 2);
+    expect(api.current!.paymentMessage, reference);
+    expect(find.text('PAY 60,000 VND'), findsOneWidget);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

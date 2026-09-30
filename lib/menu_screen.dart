@@ -157,48 +157,6 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
-  void _changeLineQuantity(_CartLine line, int delta) {
-    if (_checkingOut) return;
-    final index = _cart.indexWhere((entry) => entry.key == line.key);
-    if (index < 0) return;
-    final next = (_cart[index].quantity + delta).clamp(0, 20);
-    final previous = List<_CartLine>.of(_cart);
-    setState(() {
-      if (next == 0) {
-        _cart.removeAt(index);
-      } else {
-        _cart[index] = _cart[index].copyWith(quantity: next);
-      }
-    });
-    unawaited(_cancelEmptyCartFromMenu(previous));
-  }
-
-  Future<void> _cancelEmptyCartFromMenu(List<_CartLine> previous) async {
-    final token = _paymentToken;
-    if (_cart.isNotEmpty || token == null) return;
-    setState(() => _checkingOut = true);
-    try {
-      await _api.cancelCartOrder(token).timeout(const Duration(seconds: 8));
-      _pendingOrder = null;
-      _paymentToken = null;
-    } catch (_) {
-      if (mounted)
-        setState(() {
-          _cart.addAll(previous);
-          _error = _copy('payment_error');
-        });
-    } finally {
-      if (mounted) setState(() => _checkingOut = false);
-    }
-  }
-
-  _CartLine? _simpleLine(MenuItem item) {
-    for (final line in _cart) {
-      if (line.item.id == item.id && line.options.isEmpty) return line;
-    }
-    return null;
-  }
-
   List<_CartLine> get _cartLines => List.unmodifiable(_cart);
 
   int get _cartCount => _cart.fold(0, (sum, line) => sum + line.quantity);
@@ -368,16 +326,23 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _item(MenuItem item) {
-    final simpleLine = _simpleLine(item);
     final language = widget.localization.language.code;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
+    return Material(
+      color: Colors.transparent,
+      child: Semantics(
+        button: true,
+        enabled: !_checkingOut,
+        hint: item.hasOptions ? _copy('customize') : _copy('add'),
+        child: InkWell(
+          key: ValueKey('menu-item-${item.id}'),
+          onTap: _checkingOut ? null : () => _addItem(item),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 72),
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -403,57 +368,7 @@ class _MenuScreenState extends State<MenuScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          if (item.hasOptions)
-            FilledButton(
-              onPressed: _checkingOut ? null : () => _addItem(item),
-              style: _filledButtonStyle(minWidth: 120),
-              child: Text(
-                _copy('customize'),
-                style: _mono(9.5, color: BrandPalette.paperLift),
-              ),
-            )
-          else if (simpleLine == null)
-            FilledButton(
-              onPressed: _checkingOut ? null : () => _addItem(item),
-              style: _filledButtonStyle(),
-              child: Text(
-                _copy('add'),
-                style: _mono(10, color: BrandPalette.paperLift),
-              ),
-            )
-          else
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: BrandPalette.ink),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: _checkingOut
-                        ? null
-                        : () => _changeLineQuantity(simpleLine, -1),
-                    icon: const Icon(Icons.remove, size: 18),
-                  ),
-                  SizedBox(
-                    width: 34,
-                    child: Text(
-                      '${simpleLine.quantity}',
-                      textAlign: TextAlign.center,
-                      style: _mono(12),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _checkingOut || simpleLine.quantity >= 20
-                        ? null
-                        : () => _changeLineQuantity(simpleLine, 1),
-                    icon: const Icon(Icons.add, size: 18),
-                  ),
-                ],
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
