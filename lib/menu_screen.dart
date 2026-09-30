@@ -132,7 +132,6 @@ class _MenuScreenState extends State<MenuScreen> {
         languageCode: widget.localization.language.code,
         addLabel: _copy('add_to_cart'),
         cancelLabel: _copy('cancel'),
-        totalLabel: _copy('total'),
       ),
     );
     if (configured == null || !mounted) return;
@@ -174,24 +173,6 @@ class _MenuScreenState extends State<MenuScreen> {
     unawaited(_cancelEmptyCartFromMenu(previous));
   }
 
-  void _removeOneConfigured(MenuItem item) {
-    if (_checkingOut) return;
-    for (var index = _cart.length - 1; index >= 0; index--) {
-      final line = _cart[index];
-      if (line.item.id != item.id) continue;
-      final previous = List<_CartLine>.of(_cart);
-      setState(() {
-        if (line.quantity <= 1) {
-          _cart.removeAt(index);
-        } else {
-          _cart[index] = line.copyWith(quantity: line.quantity - 1);
-        }
-      });
-      unawaited(_cancelEmptyCartFromMenu(previous));
-      return;
-    }
-  }
-
   Future<void> _cancelEmptyCartFromMenu(List<_CartLine> previous) async {
     final token = _paymentToken;
     if (_cart.isNotEmpty || token == null) return;
@@ -201,10 +182,11 @@ class _MenuScreenState extends State<MenuScreen> {
       _pendingOrder = null;
       _paymentToken = null;
     } catch (_) {
-      if (mounted) setState(() {
-        _cart.addAll(previous);
-        _error = _copy('payment_error');
-      });
+      if (mounted)
+        setState(() {
+          _cart.addAll(previous);
+          _error = _copy('payment_error');
+        });
     } finally {
       if (mounted) setState(() => _checkingOut = false);
     }
@@ -216,10 +198,6 @@ class _MenuScreenState extends State<MenuScreen> {
     }
     return null;
   }
-
-  int _configuredCount(MenuItem item) => _cart
-      .where((line) => line.item.id == item.id)
-      .fold(0, (sum, line) => sum + line.quantity);
 
   List<_CartLine> get _cartLines => List.unmodifiable(_cart);
 
@@ -356,11 +334,12 @@ class _MenuScreenState extends State<MenuScreen> {
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back, size: 18),
           )
-        else TextButton.icon(
-          onPressed: widget.onBack,
-          icon: const Icon(Icons.arrow_back, size: 18),
-          label: Text(_copy('back'), style: _mono(10)),
-        ),
+        else
+          TextButton.icon(
+            onPressed: widget.onBack,
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: Text(_copy('back'), style: _mono(10)),
+          ),
       ],
     ),
   );
@@ -390,7 +369,6 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _item(MenuItem item) {
     final simpleLine = _simpleLine(item);
-    final configuredCount = _configuredCount(item);
     final language = widget.localization.language.code;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
@@ -426,43 +404,13 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          if (item.hasOptions && configuredCount == 0)
+          if (item.hasOptions)
             FilledButton(
               onPressed: _checkingOut ? null : () => _addItem(item),
               style: _filledButtonStyle(minWidth: 120),
               child: Text(
                 _copy('customize'),
                 style: _mono(9.5, color: BrandPalette.paperLift),
-              ),
-            )
-          else if (item.hasOptions)
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: BrandPalette.ink),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: _checkingOut
-                        ? null
-                        : () => _removeOneConfigured(item),
-                    icon: const Icon(Icons.remove, size: 18),
-                  ),
-                  SizedBox(
-                    width: 34,
-                    child: Text(
-                      '$configuredCount',
-                      textAlign: TextAlign.center,
-                      style: _mono(12),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _checkingOut ? null : () => _addItem(item),
-                    tooltip: _copy('customize'),
-                    icon: const Icon(Icons.tune, size: 18),
-                  ),
-                ],
               ),
             )
           else if (simpleLine == null)
@@ -591,14 +539,12 @@ class _ItemOptionsDialog extends StatefulWidget {
     required this.languageCode,
     required this.addLabel,
     required this.cancelLabel,
-    required this.totalLabel,
   });
 
   final MenuItem item;
   final String languageCode;
   final String addLabel;
   final String cancelLabel;
-  final String totalLabel;
 
   @override
   State<_ItemOptionsDialog> createState() => _ItemOptionsDialogState();
@@ -685,25 +631,12 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
                 style: _mono(12),
               ),
               const SizedBox(height: 6),
-              Text(_money(widget.item.priceVnd), style: _serif(25)),
+              Text(_money(_unitPrice), style: _serif(25)),
               const SizedBox(height: 18),
               for (final option in widget.item.options) ...[
                 _option(option),
                 const SizedBox(height: 18),
               ],
-              const Divider(color: BrandPalette.ink),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.totalLabel.toUpperCase(),
-                      style: _mono(10),
-                    ),
-                  ),
-                  Text(_money(_unitPrice), style: _serif(24)),
-                ],
-              ),
-              const SizedBox(height: 20),
               Row(
                 children: [
                   Expanded(
