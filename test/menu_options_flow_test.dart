@@ -114,7 +114,7 @@ void main() {
     'configuration has one updating price including default options',
     (tester) async {
       await openMenu(tester, OptionsApi());
-      await tapVisible(tester, find.text('SETTINGS'));
+      await tapVisible(tester, find.text('Americano'));
       Finder dialogText(String text) =>
           find.descendant(of: find.byType(Dialog), matching: find.text(text));
 
@@ -133,23 +133,24 @@ void main() {
     },
   );
 
-  for (final (language, settings, add, viewCart) in [
-    (AppLanguage.en, 'SETTINGS', 'ADD TO CART', 'VIEW CART'),
-    (AppLanguage.ru, 'НАСТРОИТЬ', 'В КОРЗИНУ', 'ОТКРЫТЬ КОРЗИНУ'),
-    (AppLanguage.vi, 'TÙY CHỈNH', 'THÊM VÀO GIỎ', 'XEM GIỎ HÀNG'),
+  for (final (language, add, viewCart) in [
+    (AppLanguage.en, 'ADD TO CART', 'VIEW CART'),
+    (AppLanguage.ru, 'В КОРЗИНУ', 'ОТКРЫТЬ КОРЗИНУ'),
+    (AppLanguage.vi, 'THÊM VÀO GIỎ', 'XEM GIỎ HÀNG'),
   ]) {
     testWidgets(
-      'same settings button adds different drinks in ${language.code}',
+      'tapping the drink name adds different configurations in ${language.code}',
       (tester) async {
         final api = OptionsApi();
         await openMenu(tester, api, language);
-        await tapVisible(tester, find.text(settings));
+        await tapVisible(tester, find.text('Americano'));
         await tapVisible(tester, find.text('With milk'));
         await tapVisible(tester, find.text(add));
-        expect(find.widgetWithText(FilledButton, settings), findsOneWidget);
+        expect(find.text('Americano'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
         expect(find.byIcon(Icons.tune), findsNothing);
 
-        await tapVisible(tester, find.text(settings));
+        await tapVisible(tester, find.text('Americano'));
         // Each new drink starts from menu defaults, not the previous drink.
         expect(
           tester
@@ -160,7 +161,8 @@ void main() {
           'none',
         );
         await tapVisible(tester, find.text(add));
-        expect(find.widgetWithText(FilledButton, settings), findsOneWidget);
+        expect(find.text('Americano'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
         await tapVisible(tester, find.text(viewCart));
         expect(api.ordered, hasLength(2));
         expect(api.ordered!.map((line) => line.quantity), [1, 1]);
