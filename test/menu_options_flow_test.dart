@@ -104,7 +104,9 @@ Future<void> openMenu(
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.tap(finder);
-  await tester.pumpAndSettle();
+  await tester.pump();
+  // The menu's checkout button keeps spinning behind the open cart dialog.
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
