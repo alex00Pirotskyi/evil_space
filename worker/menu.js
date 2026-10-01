@@ -6,7 +6,6 @@ import {
 import { parseMenuOptions, validateMenuOptions } from './menu_options.js';
 
 const SESSION_COOKIE = '__Host-evil_admin_session';
-const ORDER_TTL_SECONDS = 30 * 60;
 const MAX_MENU_BYTES = 256 * 1024;
 const MAX_GROUPS = 50;
 const MAX_ITEMS = 500;
@@ -93,7 +92,7 @@ async function handleCreateOrder(request, env, ctx) {
   if (!item) return jsonError('This menu item is unavailable.', 404);
 
   const now = nowSeconds();
-  const expiresAt = now + ORDER_TTL_SECONDS;
+  const expiresAt = 0;
   const token = randomToken(32);
   const tokenHash = await hashToken(token);
 
@@ -199,20 +198,7 @@ async function handleOrderStatus(url, env) {
     .first();
   if (!order) return jsonError('Order not found.', 404);
 
-  let status = String(order.status);
-  const now = nowSeconds();
-  if (status === 'pending' && Number(order.expires_at) <= now) {
-    const expired = await env.evil_space
-      .prepare("UPDATE menu_orders SET status = 'expired' WHERE id = ? AND status = 'pending'")
-      .bind(order.id)
-      .run();
-    if (Number(expired.meta?.changes ?? 0) > 0) {
-      await releasePromoForMenuOrder(env, Number(order.id), now);
-      status = 'expired';
-    }
-  }
-
-  return json({ ok: true, order: publicOrder(order, status) });
+  return json({ ok: true, order: publicOrder(order) });
 }
 
 async function handleAdminMenu(request, env) {
@@ -342,26 +328,20 @@ async function markOrderPaid(env, id, actor, revision) {
   if (current.status === 'pending' && Number(current.checkout_revision) !== revision) {
     return { status: 'changed' };
   }
-  if (current.status !== 'pending' || Number(current.expires_at) <= now) {
-    if (current.status === 'pending') {
-      const expired = await env.evil_space
-        .prepare("UPDATE menu_orders SET status = 'expired' WHERE id = ? AND status = 'pending'")
-        .bind(id)
-        .run();
-      if (Number(expired.meta?.changes ?? 0) > 0) await releasePromoForMenuOrder(env, id, now);
-    } else if (current.status === 'expired' || current.status === 'cancelled') {
+  if (current.status !== 'pending') {
+    if (current.status === 'expired' || current.status === 'cancelled') {
       await releasePromoForMenuOrder(env, id, now);
     }
-    return { status: 'expired', order: adminOrder({ ...current, status: 'expired' }) };
+    return { status: 'expired', order: adminOrder(current) };
   }
 
   const result = await env.evil_space
     .prepare(`
       UPDATE menu_orders
       SET status = 'paid', paid_at = ?, paid_by_email = ?, paid_by_telegram_user_id = ?
-      WHERE id = ? AND status = 'pending' AND checkout_revision = ? AND expires_at > ?
+      WHERE id = ? AND status = 'pending' AND checkout_revision = ?
     `)
-    .bind(now, actor.email, actor.telegramUserId, id, revision, now)
+    .bind(now, actor.email, actor.telegramUserId, id, revision)
     .run();
   if (Number(result.meta?.changes ?? 0) < 1) {
     const raced = await orderForAdmin(env, id);
@@ -646,7 +626,7 @@ function publicOrder(order, status = String(order.status)) {
     paymentMessage: String(order.payment_message),
     status,
     createdAt: Number(order.created_at),
-    expiresAt: Number(order.expires_at),
+    expiresAt: order.status === 'pending' ? 0 : Number(order.expires_at),
     paidAt: order.paid_at == null ? null : Number(order.paid_at),
   };
 }
@@ -666,7 +646,7 @@ function adminOrder(order) {
     paymentMessage: String(order.payment_message),
     status: String(order.status),
     createdAt: Number(order.created_at),
-    expiresAt: Number(order.expires_at),
+    expiresAt: order.status === 'pending' ? 0 : Number(order.expires_at),
     paidAt: order.paid_at == null ? null : Number(order.paid_at),
     paidByEmail: order.paid_by_email == null ? null : String(order.paid_by_email),
   };

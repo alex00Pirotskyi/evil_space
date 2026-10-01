@@ -6,7 +6,6 @@ import {
 import { parseMenuOptions, resolveMenuSelection, selectionSignature } from './menu_options.js';
 
 const CUSTOMER_SESSION_COOKIE = '__Host-evil_customer_session';
-const ORDER_TTL_SECONDS = 30 * 60;
 const MAX_LINES = 20;
 const MAX_QUANTITY = 20;
 const MAX_TOTAL_QUANTITY = 100;
@@ -66,7 +65,7 @@ async function writeCartOrder(request, env, ctx, updating) {
   if (order?.customer_id && customer?.id && Number(order.customer_id) !== Number(customer.id)) {
     return jsonError('This payment session belongs to another account.', 403);
   }
-  if (order && (order.status !== 'pending' || Number(order.expires_at) <= now)) {
+  if (order && order.status !== 'pending') {
     return jsonError('This payment session is no longer active.', 409);
   }
   const trusted = await loadTrustedCart(env, normalized.items);
@@ -83,7 +82,8 @@ async function writeCartOrder(request, env, ctx, updating) {
 
   const mutation = randomToken(24);
   const amountVnd = promo?.finalAmountVnd ?? originalAmountVnd;
-  const expiresAt = Number(order?.expires_at ?? now + ORDER_TTL_SECONDS);
+  // Zero preserves the legacy response/schema field without a payment deadline.
+  const expiresAt = 0;
   const orderCode = order?.order_code ?? randomOrderCode();
   const paymentMessage = order?.payment_message ?? `EVIL ${orderCode}`;
   const summary = cartSummary(lines);
@@ -127,10 +127,10 @@ async function writeCartOrder(request, env, ctx, updating) {
           promo_discount_vnd = ?, promo_grant_id = ?,
           customer_id = COALESCE(customer_id, ?), device_id = COALESCE(?, device_id),
           checkout_revision = checkout_revision + 1, checkout_mutation = ?
-        WHERE id = ? AND status = 'pending' AND expires_at > ?
+        WHERE id = ? AND status = 'pending'
           AND checkout_revision = ? AND ${available}
       `).bind(...orderFields, customer?.id ?? null, deviceId, mutation, Number(order.id),
-          now, Number(order.checkout_revision), ...availabilityArgs)
+          Number(order.checkout_revision), ...availabilityArgs)
     : env.evil_space.prepare(`
         INSERT INTO menu_orders
           (catalog_id, item_id, item_key, item_name, amount_vnd, original_amount_vnd,
@@ -260,6 +260,16 @@ async function handleCancelCartOrder(request, env) {
         SELECT id FROM menu_orders WHERE public_token_hash = ? AND status = 'cancelled')`)
       .bind(now, tokenHash),
   ]);
+  const order = await env.evil_space.prepare(`
+    SELECT status FROM menu_orders WHERE public_token_hash = ? LIMIT 1
+  `).bind(tokenHash).first();
+  if (!order) return jsonError('Payment session not found.', 404);
+  if (order.status === 'paid') {
+    return jsonError('This order has already been paid.', 409);
+  }
+  if (order.status === 'pending') {
+    return jsonError('Could not cancel the payment. Please retry.', 409);
+  }
   return json({ ok: true });
 }
 

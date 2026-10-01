@@ -14,6 +14,10 @@ class CheckoutApi extends MenuApi {
   MenuOrderPayment? current;
   Completer<MenuOrderPayment>? delayedUpdate;
   Completer<List<PromoPreview>>? delayedPromos;
+  Completer<void>? delayedCancel;
+  bool failCancel = false;
+  bool paidDuringCancel = false;
+  int statusRequests = 0;
   bool failUpdate = false;
   bool paidDuringUpdate = false;
   String status = 'pending';
@@ -111,20 +115,30 @@ class CheckoutApi extends MenuApi {
   }
 
   @override
-  Future<MenuOrderStatus> orderStatus(String token) async =>
-      MenuOrderStatus.fromJson({
-        'status': status,
-        'orderCode': current?.orderCode,
-        'amountVnd': current?.amountVnd,
-        'originalAmountVnd': current?.originalAmountVnd,
-        'paymentMessage': current?.paymentMessage,
-        'promoGrantId': current?.promoGrantId,
-        'promoDiscountVnd': current?.promoDiscountVnd,
-      });
+  Future<MenuOrderStatus> orderStatus(String token) async {
+    statusRequests++;
+    return MenuOrderStatus.fromJson({
+      'status': status,
+      'orderCode': current?.orderCode,
+      'amountVnd': current?.amountVnd,
+      'originalAmountVnd': current?.originalAmountVnd,
+      'paymentMessage': current?.paymentMessage,
+      'promoGrantId': current?.promoGrantId,
+      'promoDiscountVnd': current?.promoDiscountVnd,
+    });
+  }
 
   @override
   Future<void> cancelCartOrder(String token) async {
     cancellations.add(token);
+    if (paidDuringCancel) {
+      status = 'paid';
+      throw const MenuApiException('Already paid', statusCode: 409);
+    }
+    if (failCancel) {
+      throw const MenuApiException('Network error', statusCode: 500);
+    }
+    if (delayedCancel != null) await delayedCancel!.future;
     status = 'cancelled';
   }
 }
@@ -200,8 +214,10 @@ void main() {
       await tester.tap(find.byIcon(Icons.add).last);
       await tester.pump();
       expect(find.byType(QrImageView), findsNothing);
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(api.updates.last.single.quantity, 2);
+      expect(api.updates.single.single.quantity, 2);
+      await tester.pump(const Duration(seconds: 20));
+      expect(find.text('RETRY'), findsNothing);
+      expect(api.updates, hasLength(1));
       api.delayedUpdate!.complete(api.payment(token, api.updates.last, null));
       await tester.pump();
       await tester.pump();
@@ -295,9 +311,115 @@ void main() {
     await tapVisible(tester, find.text('REMOVE'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(api.cancellations, [api.creates.single]);
+    expect(api.statusRequests, 0);
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.text('PAY'), findsNothing);
     expect(tester.widget<Material>(surface).color, Colors.transparent);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('minus on quantity one cancels the empty cart', (tester) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    await tapVisible(tester, find.byIcon(Icons.remove));
+    expect(api.cancellations, [api.creates.single]);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('PAY'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('slow cancellation has no deadline and no follow-up status call', (
+    tester,
+  ) async {
+    final api = CheckoutApi()..delayedCancel = Completer();
+    await openCart(tester, api);
+    await tapVisible(tester, find.text('REMOVE'));
+    await tester.pump(const Duration(seconds: 20));
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('RETRY'), findsNothing);
+    expect(api.cancellations, hasLength(1));
+    api.delayedCancel!.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(api.statusRequests, 0);
+    expect(find.text('PAY'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('failed cancellation stays open and retries the same payment', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    api.failCancel = true;
+    await tapVisible(tester, find.text('REMOVE'));
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('Network error'), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    api.failCancel = false;
+    await tapVisible(tester, find.text('RETRY'));
+    expect(api.cancellations, [api.creates.single, api.creates.single]);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('PAY'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('payment confirmation during deletion preserves the paid cart', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    api.paidDuringCancel = true;
+    await tapVisible(tester, find.text('REMOVE'));
+    expect(find.text('✓ PAYMENT CONFIRMED'), findsOneWidget);
+    expect(find.text('Cola'), findsNWidgets(2));
+    expect(find.byType(QrImageView), findsNothing);
+    expect(api.statusRequests, 1);
+    final remove = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'REMOVE'),
+    );
+    expect(remove.onPressed, isNull);
+    await tapVisible(tester, find.text('CLOSE'));
+    expect(find.text('PAY'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('deletion uses item identity after another row is removed', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    await tapVisible(tester, find.text('CLOSE'));
+    await tapVisible(tester, find.text('Coffee'));
+    await tapVisible(tester, find.text('PAY'));
+    final buttons = find.widgetWithText(TextButton, 'REMOVE');
+    api.delayedUpdate = Completer();
+    final removeCola = tester.widget<TextButton>(buttons.first).onPressed!;
+    final removeCoffee = tester.widget<TextButton>(buttons.last).onPressed!;
+    removeCola();
+    // The request starts in the same turn; closing cannot leave a delayed edit.
+    expect(api.updates.last.single.itemId, 'coffee');
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing);
+    api.delayedUpdate!.complete(
+      api.payment(api.creates.single, api.updates.last, null),
+    );
+    await tester.pump();
+    expect(find.text('PAY 45,000 VND'), findsOneWidget);
+    removeCola(); // A stale callback cannot remove the remaining row.
+    expect(api.cancellations, isEmpty);
+    removeCoffee();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(api.cancellations, [api.creates.single]);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

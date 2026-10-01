@@ -134,7 +134,7 @@ class _MenuScreenState extends State<MenuScreen> {
       });
     }
     try {
-      final menu = await _api.menu().timeout(const Duration(seconds: 10));
+      final menu = await _api.menu();
       if (!mounted) return;
       final available = {
         for (final group in menu.groups)
