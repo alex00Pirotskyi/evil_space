@@ -311,8 +311,7 @@ void main() {
     await tester.pump();
     expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
     await tester.drag(handle, const Offset(0, 600));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.text('PAY: 30,000 VND'), findsOneWidget);
     expect(api.cancellations, isEmpty);
@@ -334,13 +333,13 @@ void main() {
     await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(0, 500));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     api.delayedUpdate!.complete(api.payment(api.creates.single, api.updates.last, null));
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(0, 500));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.text('PAY: 60,000 VND'), findsOneWidget);
     expect(tester.takeException(), isNull);

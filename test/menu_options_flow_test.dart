@@ -158,8 +158,7 @@ void main() {
     await tester.pump();
     expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
     await tester.drag(handle, const Offset(0, 600));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     expect(api.ordered, isNull);
