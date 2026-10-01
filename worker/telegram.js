@@ -1226,7 +1226,7 @@ async function sendAdminMenu(env, admin, chatId) {
   const summary = await todaySummary(env);
   await telegramApi(env, 'sendMessage', {
     chat_id: chatId,
-    text: `🗞 <b>EVIL SPACE ADMIN</b>\n\n${tr(lang, 'today')}: <b>${summary.occupied}/${summary.total}</b>\n${tr(lang, 'pendingBookings')}: <b>${summary.pending}</b>\n${tr(lang, 'income')}: <b>${formatMoney(summary.income)}</b>`,
+    text: `🗞 <b>EVIL SPACE ADMIN</b>\n\n${tr(lang, 'today')}: <b>${summary.occupied}/${summary.total}</b>\n${tr(lang, 'pendingBookings')}: <b>${summary.bookings}</b>\n${tr(lang, 'income')}: <b>${formatMoney(summary.income)}</b>`,
     parse_mode: 'HTML',
     reply_markup: adminMenuKeyboard(lang),
   });
@@ -1282,7 +1282,7 @@ async function sendToday(env, admin, chatId) {
     '',
     `${tr(lang, 'occupied')}: <b>${summary.occupied}/${summary.total}</b>`,
     `${tr(lang, 'income')}: <b>${formatMoney(summary.income)}</b>`,
-    `${tr(lang, 'pendingBookings')}: <b>${summary.pending}</b>`,
+    `${tr(lang, 'pendingBookings')}: <b>${summary.bookings}</b>`,
     '',
     ...(lines.length ? lines : [tr(lang, 'nobody')]),
   ].join('\n');
@@ -2004,20 +2004,20 @@ async function todaySummary(env) {
       SELECT
         COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
         (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS occupied,
-        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND service_day = ?) AS pending_today,
-        (SELECT COUNT(*) FROM booking_requests WHERE status = 'new' AND service_day = ?) AS pending_tomorrow,
+        (SELECT COUNT(*) FROM booking_requests WHERE status IN ('new', 'accepted') AND service_day = ?) AS bookings_today,
+        (SELECT COUNT(*) FROM booking_requests WHERE status IN ('new', 'accepted') AND service_day = ?) AS bookings_tomorrow,
         COALESCE((SELECT SUM(amount) FROM visits WHERE created_at >= ? AND created_at < ?), 0) AS income
     `)
     .bind(today, tomorrow, today, tomorrow, today, tomorrow)
     .first();
-  const pendingToday = Math.max(0, Number(row?.pending_today ?? 0));
-  const pendingTomorrow = Math.max(0, Number(row?.pending_tomorrow ?? 0));
+  const bookingsToday = Math.max(0, Number(row?.bookings_today ?? 0));
+  const bookingsTomorrow = Math.max(0, Number(row?.bookings_tomorrow ?? 0));
   return {
     total: Math.max(1, Number(row?.total ?? 10)),
     occupied: Math.max(0, Number(row?.occupied ?? 0)),
-    pending: pendingToday + pendingTomorrow,
-    pendingToday,
-    pendingTomorrow,
+    bookings: bookingsToday + bookingsTomorrow,
+    bookingsToday,
+    bookingsTomorrow,
     income: Math.max(0, Number(row?.income ?? 0)),
     tomorrowFree: Math.max(0, Number(row?.total ?? 10) - Number((await serviceDayCapacity(env, tomorrow)).occupied ?? 0)),
     end,
