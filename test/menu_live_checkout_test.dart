@@ -160,10 +160,10 @@ Future<void> openCart(
   await tester.tap(find.text('Cola'));
   await tester.pump();
   final view = language == AppLanguage.ru
-      ? 'ОТКРЫТЬ КОРЗИНУ'
+      ? 'ОПЛАТИТЬ'
       : language == AppLanguage.vi
-      ? 'XEM GIỎ HÀNG'
-      : 'VIEW CART';
+      ? 'THANH TOÁN'
+      : 'PAY';
   await tester.tap(find.text(view));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
@@ -176,6 +176,11 @@ void main() {
     (tester) async {
       final api = CheckoutApi()..delayedPromos = Completer();
       await openCart(tester, api);
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      final sheetBounds = tester.getRect(find.byType(BottomSheet));
+      expect(sheetBounds.bottom, closeTo(844, 1));
+      expect(sheetBounds.top, greaterThan(0));
       expect(api.creates, hasLength(1));
       expect(find.byType(QrImageView), findsOneWidget);
       expect(find.text('Create payment'), findsNothing);
@@ -223,7 +228,7 @@ void main() {
       expect(find.byType(QrImageView), findsOneWidget);
       await tapVisible(tester, find.text('CLOSE'));
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('VIEW CART'));
+      await tester.tap(find.text('PAY'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(api.creates, hasLength(1));
@@ -283,11 +288,40 @@ void main() {
   ) async {
     final api = CheckoutApi();
     await openCart(tester, api);
+    final surface = find.byKey(const ValueKey('menu-item-surface-cola'));
+    final selectedColor = tester.widget<Material>(surface).color!;
+    expect(selectedColor, isNot(Colors.transparent));
+    expect(selectedColor.a, lessThan(0.12));
     await tapVisible(tester, find.text('REMOVE'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(api.cancellations, [api.creates.single]);
-    expect(find.byType(Dialog), findsNothing);
-    expect(find.text('VIEW CART'), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('PAY'), findsNothing);
+    expect(tester.widget<Material>(surface).color, Colors.transparent);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('system back closes the sheet and preserves the selected cart', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    final reference = api.current!.paymentMessage;
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('PAY'), findsOneWidget);
+    expect(
+      tester.widget<Material>(
+        find.byKey(const ValueKey('menu-item-surface-cola')),
+      ).color,
+      isNot(Colors.transparent),
+    );
+    await tapVisible(tester, find.text('PAY'));
+    expect(api.creates, hasLength(1));
+    expect(api.current!.paymentMessage, reference);
+    expect(find.byType(QrImageView), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -307,7 +341,7 @@ void main() {
     expect(find.byIcon(Icons.remove), findsNothing);
     await tester.tapAt(Offset(bounds.right - 8, bounds.center.dy));
     await tester.pump();
-    await tapVisible(tester, find.text('VIEW CART'));
+    await tapVisible(tester, find.text('PAY'));
     expect(api.creates, hasLength(1));
     expect(api.updates.last.single.quantity, 2);
     expect(api.current!.paymentMessage, reference);

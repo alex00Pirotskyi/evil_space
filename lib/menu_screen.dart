@@ -28,6 +28,46 @@ const _menuPaperOverlay = WidgetStateProperty<Color>.fromMap({
   WidgetState.any: Colors.transparent,
 });
 
+Future<T?> _showMenuSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  bool dismissible = true,
+}) => showModalBottomSheet<T>(
+  context: context,
+  builder: builder,
+  isScrollControlled: true,
+  useSafeArea: true,
+  isDismissible: dismissible,
+  enableDrag: dismissible,
+  showDragHandle: dismissible,
+  backgroundColor: BrandPalette.paper,
+  constraints: const BoxConstraints(maxWidth: 560),
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  ),
+  clipBehavior: Clip.antiAlias,
+);
+
+class _MenuSheetBody extends StatelessWidget {
+  const _MenuSheetBody({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+    ),
+    child: SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(22),
+        child: child,
+      ),
+    ),
+  );
+}
+
 class MenuScreen extends StatefulWidget {
   const MenuScreen({
     super.key,
@@ -141,9 +181,9 @@ class _MenuScreenState extends State<MenuScreen> {
       return;
     }
 
-    final configured = await showDialog<_ConfiguredItem>(
-      context: context,
-      builder: (_) => _ItemOptionsDialog(
+    final configured = await _showMenuSheet<_ConfiguredItem>(
+      context,
+      builder: (_) => _ItemOptionsSheet(
         item: item,
         languageCode: widget.localization.language.code,
         addLabel: _copy('add_to_cart'),
@@ -186,10 +226,10 @@ class _MenuScreenState extends State<MenuScreen> {
       _error = null;
     });
     try {
-      final result = await showDialog<_LiveCheckoutResult>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _LiveCheckoutDialog(
+      final result = await _showMenuSheet<_LiveCheckoutResult>(
+        context,
+        dismissible: false,
+        builder: (_) => _LiveCheckoutSheet(
           api: _api,
           lines: _cartLines,
           languageCode: widget.localization.language.code,
@@ -345,10 +385,14 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _item(MenuItem item) {
     final language = widget.localization.language.code;
+    final inCart = _cart.any((line) => line.item.id == item.id);
     return Material(
-      color: Colors.transparent,
+      key: ValueKey('menu-item-surface-${item.id}'),
+      color: inCart ? const Color(0x0F1C1C1A) : Colors.transparent,
+      animationDuration: const Duration(milliseconds: 150),
       child: Semantics(
         button: true,
+        selected: inCart,
         enabled: !_checkingOut,
         hint: item.hasOptions ? _copy('customize') : _copy('add'),
         child: InkWell(
@@ -430,7 +474,7 @@ class _MenuScreenState extends State<MenuScreen> {
                     )
                   : const Icon(Icons.shopping_cart_checkout, size: 18),
               label: Text(
-                _checkingOut ? '…' : _copy('view_cart').toUpperCase(),
+                _checkingOut ? '…' : _copy('pay').toUpperCase(),
                 style: _mono(10, color: BrandPalette.paperLift),
               ),
             ),
@@ -469,8 +513,8 @@ class _ConfiguredItem {
   final int unitPriceVnd;
 }
 
-class _ItemOptionsDialog extends StatefulWidget {
-  const _ItemOptionsDialog({
+class _ItemOptionsSheet extends StatefulWidget {
+  const _ItemOptionsSheet({
     required this.item,
     required this.languageCode,
     required this.addLabel,
@@ -483,10 +527,10 @@ class _ItemOptionsDialog extends StatefulWidget {
   final String cancelLabel;
 
   @override
-  State<_ItemOptionsDialog> createState() => _ItemOptionsDialogState();
+  State<_ItemOptionsSheet> createState() => _ItemOptionsSheetState();
 }
 
-class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
+class _ItemOptionsSheetState extends State<_ItemOptionsSheet> {
   late final Map<String, dynamic> _selected;
 
   @override
@@ -552,73 +596,65 @@ class _ItemOptionsDialogState extends State<_ItemOptionsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: BrandPalette.paper,
-      shape: const RoundedRectangleBorder(),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return _MenuSheetBody(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.item.nameFor(widget.languageCode).toUpperCase(),
+            style: _mono(12),
+          ),
+          const SizedBox(height: 6),
+          Text(_money(_unitPrice), style: _serif(25)),
+          const SizedBox(height: 18),
+          for (final option in widget.item.options) ...[
+            _option(option),
+            const SizedBox(height: 18),
+          ],
+          Row(
             children: [
-              Text(
-                widget.item.nameFor(widget.languageCode).toUpperCase(),
-                style: _mono(12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BrandPalette.ink,
+                    side: const BorderSide(color: BrandPalette.ink),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: const RoundedRectangleBorder(),
+                  ).copyWith(overlayColor: _menuInkOverlay),
+                  child: Text(
+                    widget.cancelLabel.toUpperCase(),
+                    style: _mono(9),
+                  ),
+                ),
               ),
-              const SizedBox(height: 6),
-              Text(_money(_unitPrice), style: _serif(25)),
-              const SizedBox(height: 18),
-              for (final option in widget.item.options) ...[
-                _option(option),
-                const SizedBox(height: 18),
-              ],
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: BrandPalette.ink,
-                        side: const BorderSide(color: BrandPalette.ink),
-                        minimumSize: const Size.fromHeight(48),
-                        shape: const RoundedRectangleBorder(),
-                      ).copyWith(overlayColor: _menuInkOverlay),
-                      child: Text(
-                        widget.cancelLabel.toUpperCase(),
-                        style: _mono(9),
-                      ),
-                    ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: !_valid
+                      ? null
+                      : () => Navigator.pop(
+                          context,
+                          _ConfiguredItem(
+                            options: _normalizedSelection(),
+                            unitPriceVnd: _unitPrice,
+                          ),
+                        ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BrandPalette.ink,
+                    foregroundColor: BrandPalette.paperLift,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: const RoundedRectangleBorder(),
+                  ).copyWith(overlayColor: _menuPaperOverlay),
+                  child: Text(
+                    widget.addLabel.toUpperCase(),
+                    style: _mono(9, color: BrandPalette.paperLift),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: !_valid
-                          ? null
-                          : () => Navigator.pop(
-                              context,
-                              _ConfiguredItem(
-                                options: _normalizedSelection(),
-                                unitPriceVnd: _unitPrice,
-                              ),
-                            ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: BrandPalette.ink,
-                        foregroundColor: BrandPalette.paperLift,
-                        minimumSize: const Size.fromHeight(48),
-                        shape: const RoundedRectangleBorder(),
-                      ).copyWith(overlayColor: _menuPaperOverlay),
-                      child: Text(
-                        widget.addLabel.toUpperCase(),
-                        style: _mono(9, color: BrandPalette.paperLift),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -866,7 +902,7 @@ String _selectionKey(String itemId, Map<String, dynamic> options) {
 
 const _menuCopy = <String, Map<String, String>>{
   'en': {
-    'view_cart': 'View cart',
+    'pay': 'PAY',
     'your_cart': 'Your cart',
     'remove': 'Remove',
     'pay_now': 'Pay',
@@ -920,7 +956,7 @@ const _menuCopy = <String, Map<String, String>>{
     'cancel_view': 'Close',
   },
   'ru': {
-    'view_cart': 'Открыть корзину',
+    'pay': 'ОПЛАТИТЬ',
     'your_cart': 'Ваша корзина',
     'remove': 'Удалить',
     'pay_now': 'Оплатить',
@@ -974,7 +1010,7 @@ const _menuCopy = <String, Map<String, String>>{
     'cancel_view': 'Закрыть',
   },
   'vi': {
-    'view_cart': 'Xem giỏ hàng',
+    'pay': 'THANH TOÁN',
     'your_cart': 'Giỏ hàng của bạn',
     'remove': 'Xóa',
     'pay_now': 'Thanh toán',

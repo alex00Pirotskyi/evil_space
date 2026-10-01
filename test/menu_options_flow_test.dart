@@ -115,8 +115,11 @@ void main() {
     (tester) async {
       await openMenu(tester, OptionsApi());
       await tapVisible(tester, find.text('Americano'));
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(tester.getRect(find.byType(BottomSheet)).bottom, closeTo(844, 1));
       Finder dialogText(String text) =>
-          find.descendant(of: find.byType(Dialog), matching: find.text(text));
+          find.descendant(of: find.byType(BottomSheet), matching: find.text(text));
 
       expect(dialogText('40,000 VND'), findsOneWidget);
       expect(dialogText('30,000 VND'), findsNothing);
@@ -134,9 +137,9 @@ void main() {
   );
 
   for (final (language, add, viewCart) in [
-    (AppLanguage.en, 'ADD TO CART', 'VIEW CART'),
-    (AppLanguage.ru, 'В КОРЗИНУ', 'ОТКРЫТЬ КОРЗИНУ'),
-    (AppLanguage.vi, 'THÊM VÀO GIỎ', 'XEM GIỎ HÀNG'),
+    (AppLanguage.en, 'ADD TO CART', 'PAY'),
+    (AppLanguage.ru, 'В КОРЗИНУ', 'ОПЛАТИТЬ'),
+    (AppLanguage.vi, 'THÊM VÀO GIỎ', 'THANH TOÁN'),
   ]) {
     testWidgets(
       'tapping the drink name adds different configurations in ${language.code}',
@@ -147,6 +150,12 @@ void main() {
         await tapVisible(tester, find.text('With milk'));
         await tapVisible(tester, find.text(add));
         expect(find.text('Americano'), findsOneWidget);
+        expect(
+          tester.widget<Material>(
+            find.byKey(const ValueKey('menu-item-surface-americano')),
+          ).color,
+          isNot(Colors.transparent),
+        );
         expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
         expect(find.byIcon(Icons.tune), findsNothing);
 
