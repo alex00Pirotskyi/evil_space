@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/menu_api.dart';
 import 'package:evil_space/menu_screen.dart';
@@ -146,6 +148,26 @@ void main() {
     },
   );
 
+  testWidgets('mouse drag expands and dismisses configuration without adding', (
+    tester,
+  ) async {
+    final api = OptionsApi();
+    await openMenu(tester, api);
+    await tapVisible(tester, find.text('Americano'));
+    final initialHeight = tester.getSize(find.byType(BottomSheet)).height;
+    final handle = find.byKey(const ValueKey('menu-curtain-handle'));
+    await tester.drag(handle, const Offset(0, -130), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
+    await tester.drag(handle, const Offset(0, 600), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
+    expect(api.ordered, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final (language, add, viewCart) in [
     (AppLanguage.en, 'ADD TO CART', 'PAY'),
     (AppLanguage.ru, 'В КОРЗИНУ', 'ОПЛАТИТЬ'),
@@ -182,7 +204,8 @@ void main() {
         await tapVisible(tester, find.text(add));
         expect(find.text('Americano'), findsOneWidget);
         expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
-        await tapVisible(tester, find.text(viewCart));
+        expect(find.text('$viewCart: 85,000 VND'), findsOneWidget);
+        await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
         expect(api.ordered, hasLength(2));
         expect(api.ordered!.map((line) => line.quantity), [1, 1]);
         expect(api.ordered!.map((line) => line.options['milk']), [

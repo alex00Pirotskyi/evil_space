@@ -10,6 +10,11 @@ import 'package:qr_flutter/qr_flutter.dart';
 class CheckoutApi extends MenuApi {
   final creates = <String>[];
   final updates = <List<MenuCartRequestLine>>[];
+  final updateTokens = <String>[];
+  final statusTokens = <String>[];
+  String? canonicalToken;
+  bool missingSession = false;
+  bool failCreate = false;
   final cancellations = <String>[];
   MenuOrderPayment? current;
   Completer<MenuOrderPayment>? delayedUpdate;
@@ -77,7 +82,11 @@ class CheckoutApi extends MenuApi {
     String? paymentToken,
   }) async {
     creates.add(paymentToken!);
-    return current = payment(paymentToken, cart, promoGrantId);
+    if (failCreate) {
+      throw const MenuApiException('Network error', statusCode: 500);
+    }
+    missingSession = false;
+    return current = payment(canonicalToken ?? paymentToken, cart, promoGrantId);
   }
 
   @override
@@ -87,6 +96,10 @@ class CheckoutApi extends MenuApi {
     int? promoGrantId,
   }) async {
     updates.add(cart);
+    updateTokens.add(token);
+    if (missingSession || token != current?.token) {
+      throw const MenuApiException('Payment session not found.', statusCode: 404);
+    }
     if (paidDuringUpdate) {
       status = 'paid';
       throw const MenuApiException('Inactive', statusCode: 409);
@@ -117,6 +130,10 @@ class CheckoutApi extends MenuApi {
   @override
   Future<MenuOrderStatus> orderStatus(String token) async {
     statusRequests++;
+    statusTokens.add(token);
+    if (missingSession || token != current?.token) {
+      throw const MenuApiException('Order not found.', statusCode: 404);
+    }
     return MenuOrderStatus.fromJson({
       'status': status,
       'orderCode': current?.orderCode,
@@ -131,6 +148,9 @@ class CheckoutApi extends MenuApi {
   @override
   Future<void> cancelCartOrder(String token) async {
     cancellations.add(token);
+    if (missingSession || token != current?.token) {
+      throw const MenuApiException('Payment session not found.', statusCode: 404);
+    }
     if (paidDuringCancel) {
       status = 'paid';
       throw const MenuApiException('Already paid', statusCode: 409);
@@ -173,12 +193,7 @@ Future<void> openCart(
   await tester.pump();
   await tester.tap(find.text('Cola'));
   await tester.pump();
-  final view = language == AppLanguage.ru
-      ? 'ОПЛАТИТЬ'
-      : language == AppLanguage.vi
-      ? 'THANH TOÁN'
-      : 'PAY';
-  await tester.tap(find.text(view));
+  await tester.tap(find.byKey(const ValueKey('menu-pay')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pump();
@@ -203,6 +218,133 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('server token is used for updates, status, reopen and cancellation', (
+    tester,
+  ) async {
+    final api = CheckoutApi()..canonicalToken = 'server-canonical-token';
+    await openCart(tester, api);
+    expect(api.creates.single, isNot(api.canonicalToken));
+    await tapVisible(tester, find.byIcon(Icons.add));
+    expect(api.updateTokens, [api.canonicalToken]);
+    await tester.pump(const Duration(seconds: 2));
+    expect(api.statusTokens, everyElement(api.canonicalToken));
+    await tapVisible(tester, find.text('CLOSE'));
+    expect(find.text('PAY: 60,000 VND'), findsOneWidget);
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    expect(api.creates, hasLength(1));
+    expect(api.updateTokens, everyElement(api.canonicalToken));
+    await tapVisible(tester, find.text('REMOVE'));
+    expect(api.cancellations, [api.canonicalToken]);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('missing session recovers once using the same idempotency token', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    final token = api.creates.single;
+    api.missingSession = true;
+    await tapVisible(tester, find.byIcon(Icons.add));
+    expect(api.creates, [token, token]);
+    expect(api.current!.amountVnd, 60000);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(find.text('Payment session not found.'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('missing cached session is restored when reopening the curtain', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    final token = api.creates.single;
+    await tapVisible(tester, find.text('CLOSE'));
+    api.missingSession = true;
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    expect(api.creates, [token, token]);
+    expect(api.updateTokens, isEmpty);
+    expect(find.byType(QrImageView), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('failed session recovery offers retry without a create loop', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    final token = api.creates.single;
+    api.missingSession = true;
+    api.failCreate = true;
+    await tapVisible(tester, find.byIcon(Icons.add));
+    expect(api.creates, [token, token]);
+    expect(find.text('Network error'), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing);
+    await tester.pump(const Duration(seconds: 20));
+    expect(api.creates, hasLength(2));
+    api.failCreate = false;
+    await tapVisible(tester, find.text('RETRY'));
+    expect(api.creates, [token, token, token]);
+    expect(find.byType(QrImageView), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('swipe up opens and expands the curtain; swipe down saves the cart', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    final reference = api.current!.paymentMessage;
+    await tapVisible(tester, find.text('CLOSE'));
+    final pay = find.byKey(const ValueKey('menu-pay'));
+    expect(find.text('PAY: 30,000 VND'), findsOneWidget);
+    expect(tester.widget<TextButton>(pay).onPressed, isNotNull);
+    await tester.drag(find.byKey(const ValueKey('menu-pay-bar')), const Offset(0, -100));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BottomSheet), findsOneWidget);
+    final initialHeight = tester.getSize(find.byType(BottomSheet)).height;
+    final handle = find.byKey(const ValueKey('menu-curtain-handle'));
+    await tester.drag(handle, const Offset(0, -130));
+    await tester.pump();
+    expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
+    await tester.drag(handle, const Offset(0, 600));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('PAY: 30,000 VND'), findsOneWidget);
+    expect(api.cancellations, isEmpty);
+    await tapVisible(tester, pay);
+    expect(api.creates, hasLength(1));
+    expect(api.current!.paymentMessage, reference);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('swipe down waits for a cart update before allowing dismissal', (
+    tester,
+  ) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    api.delayedUpdate = Completer();
+    await tapVisible(tester, find.byIcon(Icons.add));
+    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(0, 500));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing);
+    api.delayedUpdate!.complete(api.payment(api.creates.single, api.updates.last, null));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(0, 500));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('PAY: 60,000 VND'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'quantity edits hide old QR immediately and update same reference',
@@ -244,7 +386,8 @@ void main() {
       expect(find.byType(QrImageView), findsOneWidget);
       await tapVisible(tester, find.text('CLOSE'));
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('PAY'));
+      expect(find.text('PAY: 20,000 VND'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('menu-pay')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(api.creates, hasLength(1));
@@ -313,7 +456,7 @@ void main() {
     expect(api.cancellations, [api.creates.single]);
     expect(api.statusRequests, 0);
     expect(find.byType(BottomSheet), findsNothing);
-    expect(find.text('PAY'), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     expect(tester.widget<Material>(surface).color, Colors.transparent);
     await tester.pumpWidget(const SizedBox());
   });
@@ -324,7 +467,7 @@ void main() {
     await tapVisible(tester, find.byIcon(Icons.remove));
     expect(api.cancellations, [api.creates.single]);
     expect(find.byType(BottomSheet), findsNothing);
-    expect(find.text('PAY'), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -343,7 +486,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(BottomSheet), findsNothing);
     expect(api.statusRequests, 0);
-    expect(find.text('PAY'), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -364,7 +507,7 @@ void main() {
     await tapVisible(tester, find.text('RETRY'));
     expect(api.cancellations, [api.creates.single, api.creates.single]);
     expect(find.byType(BottomSheet), findsNothing);
-    expect(find.text('PAY'), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -384,7 +527,7 @@ void main() {
     );
     expect(remove.onPressed, isNull);
     await tapVisible(tester, find.text('CLOSE'));
-    expect(find.text('PAY'), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -395,7 +538,7 @@ void main() {
     await openCart(tester, api);
     await tapVisible(tester, find.text('CLOSE'));
     await tapVisible(tester, find.text('Coffee'));
-    await tapVisible(tester, find.text('PAY'));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
     final buttons = find.widgetWithText(TextButton, 'REMOVE');
     api.delayedUpdate = Completer();
     final removeCola = tester.widget<TextButton>(buttons.first).onPressed!;
@@ -433,14 +576,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(BottomSheet), findsNothing);
-    expect(find.text('PAY'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-pay')), findsOneWidget);
     expect(
       tester.widget<Material>(
         find.byKey(const ValueKey('menu-item-surface-cola')),
       ).color,
       isNot(Colors.transparent),
     );
-    await tapVisible(tester, find.text('PAY'));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
     expect(api.creates, hasLength(1));
     expect(api.current!.paymentMessage, reference);
     expect(find.byType(QrImageView), findsOneWidget);
@@ -463,7 +606,8 @@ void main() {
     expect(find.byIcon(Icons.remove), findsNothing);
     await tester.tapAt(Offset(bounds.right - 8, bounds.center.dy));
     await tester.pump();
-    await tapVisible(tester, find.text('PAY'));
+    expect(find.text('PAY: 60,000 VND'), findsOneWidget);
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
     expect(api.creates, hasLength(1));
     expect(api.updates.last.single.quantity, 2);
     expect(api.current!.paymentMessage, reference);

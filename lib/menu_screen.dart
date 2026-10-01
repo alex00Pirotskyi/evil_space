@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -38,8 +39,9 @@ Future<T?> _showMenuSheet<T>(
   isScrollControlled: true,
   useSafeArea: true,
   isDismissible: dismissible,
-  enableDrag: dismissible,
-  showDragHandle: dismissible,
+  // The inner curtain owns dragging so checkout closes with its cart result.
+  enableDrag: false,
+  showDragHandle: false,
   backgroundColor: BrandPalette.paper,
   constraints: const BoxConstraints(maxWidth: 560),
   shape: const RoundedRectangleBorder(
@@ -48,21 +50,103 @@ Future<T?> _showMenuSheet<T>(
   clipBehavior: Clip.antiAlias,
 );
 
-class _MenuSheetBody extends StatelessWidget {
-  const _MenuSheetBody({required this.child});
+class _MenuSheetBody extends StatefulWidget {
+  const _MenuSheetBody({
+    required this.child,
+    this.onDismiss,
+    this.dismissible = true,
+  });
 
   final Widget child;
+  final VoidCallback? onDismiss;
+  final bool dismissible;
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.sizeOf(context).height * 0.9,
-    ),
-    child: SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(22),
-        child: child,
+  State<_MenuSheetBody> createState() => _MenuSheetBodyState();
+}
+
+class _MenuSheetBodyState extends State<_MenuSheetBody> {
+  final _controller = DraggableScrollableController();
+  bool _handlingDismiss = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool _extentChanged(DraggableScrollableNotification notification) {
+    if (notification.depth != 0 || _handlingDismiss ||
+        notification.extent > notification.minExtent + 0.001) return false;
+    _handlingDismiss = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (widget.dismissible) {
+        final dismiss = widget.onDismiss;
+        if (dismiss != null) {
+          dismiss();
+        } else {
+          Navigator.of(context).pop();
+        }
+        return; // Ignore further drag notifications during the exit animation.
+      } else if (_controller.isAttached) {
+        // An unfinished cart mutation must finish before the sheet can close.
+        await _controller.animateTo(
+          0.72,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      }
+      _handlingDismiss = false;
+    });
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<DraggableScrollableNotification>(
+    onNotification: _extentChanged,
+    child: DraggableScrollableSheet(
+      controller: _controller,
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      shouldCloseOnMinExtent: false,
+      builder: (context, scrollController) => SafeArea(
+        top: false,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              ...ScrollConfiguration.of(context).dragDevices,
+              PointerDeviceKind.mouse,
+            },
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  key: const ValueKey('menu-curtain-handle'),
+                  height: 36,
+                  child: Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: BrandPalette.inkMuted,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+                widget.child,
+              ],
+            ),
+          ),
+        ),
       ),
     ),
   );
@@ -88,6 +172,8 @@ class _MenuScreenState extends State<MenuScreen> {
   late final MenuApi _api;
   MenuOrderPayment? _pendingOrder;
   String? _paymentToken;
+  String? _pendingCartFingerprint;
+  double _cartSwipeDistance = 0;
   final List<_CartLine> _cart = [];
   MenuCatalog? _menu;
   String? _error;
@@ -215,8 +301,14 @@ class _MenuScreenState extends State<MenuScreen> {
 
   List<_CartLine> get _cartLines => List.unmodifiable(_cart);
 
-  int get _cartCount => _cart.fold(0, (sum, line) => sum + line.quantity);
   int get _cartTotal => _cart.fold(0, (sum, line) => sum + line.total);
+  String get _cartFingerprint => jsonEncode([
+    for (final line in _cart) [line.key, line.quantity, line.unitPriceVnd],
+  ]);
+  int get _payTotal => _pendingOrder != null &&
+          _pendingCartFingerprint == _cartFingerprint
+      ? _pendingOrder!.amountVnd
+      : _cartTotal;
 
   Future<void> _checkout() async {
     if (_checkingOut || _cart.isEmpty) return;
@@ -243,6 +335,9 @@ class _MenuScreenState extends State<MenuScreen> {
           ..clear()
           ..addAll(result.paid ? const [] : result.lines);
         _pendingOrder = result.paid ? null : result.order;
+        _pendingCartFingerprint = result.synced && !result.paid
+            ? _cartFingerprint
+            : null;
         _paymentToken = result.paid || result.lines.isEmpty
             ? null
             : result.paymentToken;
@@ -440,57 +535,41 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _cartBar() => Material(
     color: BrandPalette.paperLift,
-    elevation: 12,
     child: SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: BrandPalette.ink)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${_copy('cart')} · $_cartCount', style: _mono(10)),
-                  const SizedBox(height: 3),
-                  Text(_money(_cartTotal), style: _serif(21)),
-                ],
-              ),
+      child: GestureDetector(
+        key: const ValueKey('menu-pay-bar'),
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragStart: (_) => _cartSwipeDistance = 0,
+        onVerticalDragUpdate: (details) =>
+            _cartSwipeDistance += details.primaryDelta ?? 0,
+        onVerticalDragEnd: (details) {
+          if (_cartSwipeDistance < -40 ||
+              (details.primaryVelocity ?? 0) < -250) {
+            unawaited(_checkout());
+          }
+        },
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: BrandPalette.ink)),
+          ),
+          child: TextButton(
+            key: const ValueKey('menu-pay'),
+            onPressed: _checkingOut ? null : _checkout,
+            style: TextButton.styleFrom(
+              foregroundColor: BrandPalette.ink,
+              minimumSize: const Size(double.infinity, 64),
+              shape: const RoundedRectangleBorder(),
+            ).copyWith(overlayColor: _menuInkOverlay),
+            child: Text(
+              '${_copy('pay')}: ${_money(_payTotal)}',
+              style: _mono(12),
             ),
-            FilledButton.icon(
-              onPressed: _checkingOut ? null : _checkout,
-              style: _filledButtonStyle(minWidth: 150),
-              icon: _checkingOut
-                  ? const SizedBox.square(
-                      dimension: 15,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: BrandPalette.paperLift,
-                      ),
-                    )
-                  : const Icon(Icons.shopping_cart_checkout, size: 18),
-              label: Text(
-                _checkingOut ? '…' : _copy('pay').toUpperCase(),
-                style: _mono(10, color: BrandPalette.paperLift),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     ),
   );
-
-  ButtonStyle _filledButtonStyle({double minWidth = 96}) =>
-      FilledButton.styleFrom(
-        foregroundColor: BrandPalette.paperLift,
-        backgroundColor: BrandPalette.ink,
-        minimumSize: Size(minWidth, 48),
-        shape: const RoundedRectangleBorder(),
-      ).copyWith(overlayColor: _menuPaperOverlay);
 
   Widget _empty() => Container(
     padding: const EdgeInsets.all(24),
