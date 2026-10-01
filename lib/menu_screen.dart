@@ -100,7 +100,7 @@ class _MenuSheetBodyState extends State<_MenuSheetBody> {
           key: const ValueKey('menu-curtain'),
           width: width,
           duration: const Duration(milliseconds: 180),
-          decoration: const BoxDecoration(color: BrandPalette.paper,
+          decoration: const BoxDecoration(
             border: Border(left: BorderSide(color: BrandPalette.rule))),
           child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             SizedBox(key: const ValueKey('menu-curtain-handle'), width: 24,
@@ -389,10 +389,10 @@ class _MenuScreenState extends State<MenuScreen> {
     decoration: const BoxDecoration(
       border: Border(bottom: BorderSide(color: BrandPalette.ink)),
     ),
-    child: LayoutBuilder(builder: (context, constraints) => Row(
+    child: Row(
       children: [
-        EvilCoworkingLogo(width: constraints.maxWidth < 300 ? 80 : 108),
-        const Spacer(),
+        const Expanded(child: Align(alignment: Alignment.centerLeft,
+          child: EvilCoworkingLogo(width: 108))),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: AppLanguage.values
@@ -402,7 +402,8 @@ class _MenuScreenState extends State<MenuScreen> {
                   onPressed: () => widget.localization.setLanguage(language),
                   style: TextButton.styleFrom(
                     foregroundColor: BrandPalette.ink,
-                    minimumSize: const Size(32, 40),
+                    minimumSize: const Size(44, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     shape: const RoundedRectangleBorder(),
                     side: selected
@@ -430,7 +431,7 @@ class _MenuScreenState extends State<MenuScreen> {
             label: Text(_copy('back'), style: _mono(10)),
           ),
       ],
-    )),
+    ),
   );
 
   Widget _group(MenuGroup group) {

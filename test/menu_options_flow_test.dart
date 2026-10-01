@@ -117,7 +117,6 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.tap(finder);
   await tester.pump();
-  // The menu's checkout button keeps spinning behind the open cart dialog.
   await tester.pump(const Duration(milliseconds: 300));
 }
 
@@ -157,7 +156,7 @@ void main() {
     final initialWidth = tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width;
     final handle = find.byKey(const ValueKey('menu-curtain-handle'));
     await tester.drag(handle, const Offset(-130, 0), kind: PointerDeviceKind.mouse);
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
     expect(tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width, greaterThan(initialWidth + 20));
     await tester.drag(handle, const Offset(600, 0), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();

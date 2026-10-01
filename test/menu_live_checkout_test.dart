@@ -309,7 +309,7 @@ void main() {
     final initialWidth = tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width;
     final handle = find.byKey(const ValueKey('menu-curtain-handle'));
     await tester.drag(handle, const Offset(-130, 0));
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
     expect(tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width, greaterThan(initialWidth + 20));
     await tester.drag(handle, const Offset(600, 0));
     await tester.pumpAndSettle();
@@ -520,7 +520,8 @@ void main() {
     api.paidDuringCancel = true;
     await tapVisible(tester, find.text('REMOVE'));
     expect(find.text('✓ PAYMENT CONFIRMED'), findsOneWidget);
-    expect(find.text('Cola'), findsNWidgets(2));
+    expect(find.text('Cola'), findsOneWidget);
+    expect(find.text('Cola × 1'), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     expect(api.statusRequests, 1);
     final remove = tester.widget<TextButton>(
