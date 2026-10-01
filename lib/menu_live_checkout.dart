@@ -57,6 +57,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   bool _loadingPromos = false;
   bool _cashSelected = false;
   bool _cancelling = false;
+  bool _closing = false;
   bool _resumed = true;
   int _revision = 0;
   int _promoRequest = 0;
@@ -66,7 +67,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   bool get _paid => _status == 'paid';
   bool get _inactive => _status == 'expired' || _status == 'cancelled';
   bool get _busy => _initializing || _syncing || _cancelling;
-  bool get _editable => !_busy && !_paid && !_inactive;
+  bool get _editable => !_closing && !_busy && !_paid && !_inactive;
   bool get _paymentReady =>
       !_dirty &&
       !_busy &&
@@ -270,7 +271,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   }
 
   Future<void> _poll() async {
-    if (!_resumed ||
+    if (_closing ||
+        !_resumed ||
         _order == null ||
         _busy ||
         _polling ||
@@ -283,7 +285,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     final token = _paymentToken;
     try {
       final status = await widget.api.orderStatus(token);
-      if (!mounted || _busy || token != _paymentToken) return;
+      if (!mounted || _closing || _busy || token != _paymentToken) return;
       if (!status.pending) {
         setState(() {
           _applyStatus(status);
@@ -439,7 +441,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   }
 
   void _close() {
-    if (_busy || _lines.isEmpty && _error != null) return;
+    if (_closing || _busy || _lines.isEmpty && _error != null) return;
+    _closing = true;
     Navigator.of(context).pop(
       _LiveCheckoutResult(
         lines: List.unmodifiable(_lines),

@@ -88,6 +88,7 @@ class _MenuSheetBodyState extends State<_MenuSheetBody> {
         } else {
           Navigator.of(context).pop();
         }
+        return; // Ignore further drag notifications during the exit animation.
       } else if (_controller.isAttached) {
         // An unfinished cart mutation must finish before the sheet can close.
         await _controller.animateTo(
