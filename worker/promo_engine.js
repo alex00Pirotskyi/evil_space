@@ -331,12 +331,17 @@ export async function releasePromoForMenuOrder(env, orderId, now = nowSeconds())
 
 export async function releaseExpiredPromoReservations(env, now = nowSeconds()) {
   const expired = await env.evil_space.prepare(`
-    SELECT id, order_type, order_id FROM promo_redemptions
-    WHERE status = 'reserved' AND expires_at <= ? ORDER BY id LIMIT 100
+    SELECT r.id, r.order_type, r.order_id FROM promo_redemptions r
+    WHERE r.status = 'reserved' AND (
+      (r.order_type != 'menu' AND r.expires_at <= ?) OR
+      (r.order_type = 'menu' AND EXISTS (
+        SELECT 1 FROM menu_orders o WHERE o.id = r.order_id
+          AND o.status IN ('paid', 'cancelled', 'expired')))
+    ) ORDER BY r.id LIMIT 100
   `).bind(now).all();
   for (const row of expired.results ?? []) {
-    // A staff confirmation may precede consumption by one await. Never return
-    // a paid order's promo just because the expiry cleaner runs in that gap.
+    // Menu reservations follow terminal order status, never a deadline.
+    // These idempotent helpers also repair a missed post-payment consumption.
     if (row.order_type === 'menu') {
       await consumePromoForMenuOrder(env, Number(row.order_id), now);
       await releasePromoForMenuOrder(env, Number(row.order_id), now);
@@ -412,9 +417,9 @@ async function handleEligiblePromos(request, env) {
     const order = await env.evil_space.prepare(`
       SELECT id FROM menu_orders
       WHERE public_token_hash = ? AND customer_id = ?
-        AND status = 'pending' AND expires_at > ?
+        AND status = 'pending'
       LIMIT 1
-    `).bind(await hashToken(body.paymentToken), Number(customer.id), now).first();
+    `).bind(await hashToken(body.paymentToken), Number(customer.id)).first();
     ownOrderId = order?.id ?? null;
   }
   await grantEveryonePromos(env, Number(customer.id), now);

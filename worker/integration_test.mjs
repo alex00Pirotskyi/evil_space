@@ -621,6 +621,23 @@ async function runLiveCartFlow(adminCookie) {
   assert.equal(result.response.status, 201, JSON.stringify(result.data));
   const initial = result.data.order;
   assert.equal(initial.amountVnd, 50000);
+  assert.equal(initial.expiresAt, 0);
+
+  // Legacy pending payments and their promo reservation remain valid even
+  // after their old deadline. No data migration or recreation is required.
+  const tokenHash = createHash('sha256').update(token).digest('base64url');
+  const legacyFile = path.join(persistDir, 'legacy-checkout-expiry.sql');
+  writeFileSync(legacyFile, `
+    UPDATE menu_orders SET expires_at = 1 WHERE public_token_hash = ${sqlString(tokenHash)};
+    UPDATE promo_redemptions SET expires_at = 1 WHERE order_type = 'menu'
+      AND order_id IN (SELECT id FROM menu_orders WHERE public_token_hash = ${sqlString(tokenHash)});
+  `);
+  await runWrangler(['d1', 'execute', 'evil-space', '--local', '--persist-to', persistDir, '--file', legacyFile]);
+  const oldStatus = await http(`/api/public/menu/order?token=${encodeURIComponent(token)}`);
+  assert.equal(oldStatus.status, 200);
+  const oldOrder = (await oldStatus.json()).order;
+  assert.equal(oldOrder.status, 'pending');
+  assert.equal(oldOrder.expiresAt, 0);
   assert.equal((await grant(9201)).reservedUses, 1);
 
   // A lost create response/retry updates the same order and never reserves twice.
@@ -682,7 +699,8 @@ async function runLiveCartFlow(adminCookie) {
   assert.equal(response.status, 200);
   result = await post('order/update', {token, items: [{itemId: 'cola', quantity: 4}], promoGrantId: 9202});
   assert.equal(result.response.status, 409);
-  await post('order/cancel', {token});
+  result = await post('order/cancel', {token});
+  assert.equal(result.response.status, 409);
   assert.equal((await grant(9201)).usedUses, 1);
   assert.equal((await grant(9201)).reservedUses, 0);
   const paid = await adminOrder(initial.orderCode);
@@ -693,7 +711,11 @@ async function runLiveCartFlow(adminCookie) {
   const cancelToken = randomBytes(32).toString('base64url');
   result = await post('order', {token: cancelToken, items, promoGrantId: 9202});
   assert.equal(result.response.status, 201);
-  await Promise.all([post('order/cancel', {token: cancelToken}), post('order/cancel', {token: cancelToken})]);
+  const cancelled = await Promise.all([post('order/cancel', {token: cancelToken}), post('order/cancel', {token: cancelToken})]);
+  assert.deepEqual(cancelled.map(r => r.response.status), [200, 200]);
+  assert.equal((await adminOrder(result.data.order.orderCode)).status, 'cancelled');
+  result = await post('order/cancel', {token: randomBytes(32).toString('base64url')});
+  assert.equal(result.response.status, 404);
   assert.equal((await grant(9202)).reservedUses, 0);
   assert.equal((await grant(9202)).remainingUses, 1);
   result = await post('order/update', {token: cancelToken, items});
@@ -711,6 +733,44 @@ async function runLiveCartFlow(adminCookie) {
     promoGrantId: winner.promoGrantId}, winnerCookie);
   assert.equal(result.response.status, 200); // Own reservation isn't the campaign cap.
   await post('order/cancel', {token: winner.token}, winnerCookie);
+
+  // If the post-payment promo consumption was interrupted, wallet cleanup
+  // repairs the paid reservation by status, without waiting for a deadline.
+  const recoveryToken = randomBytes(32).toString('base64url');
+  result = await post('order', {token: recoveryToken, items, promoGrantId: 9202});
+  assert.equal(result.response.status, 201);
+  const recoveryHash = createHash('sha256').update(recoveryToken).digest('base64url');
+  const recoveryFile = path.join(persistDir, 'paid-promo-recovery.sql');
+  writeFileSync(recoveryFile, `UPDATE menu_orders SET status = 'paid',
+    paid_at = ${Math.floor(Date.now() / 1000)} WHERE public_token_hash = ${sqlString(recoveryHash)};`);
+  await runWrangler(['d1', 'execute', 'evil-space', '--local', '--persist-to', persistDir, '--file', recoveryFile]);
+  await Promise.all([wallet(), wallet()]);
+  assert.equal((await grant(9202)).reservedUses, 0);
+  assert.equal((await grant(9202)).usedUses, 1);
+
+  // Deleting a configured line keeps the other variant and reprices the
+  // existing payment; removing the final line cancels it.
+  const variants = [
+    {itemId: 'americano', quantity: 2, options: {extras: ['milk']}},
+    {itemId: 'americano', quantity: 1, options: {extras: []}},
+  ];
+  result = await post('order', {items: variants});
+  assert.equal(result.response.status, 201);
+  const variantsOrder = result.data.order;
+  assert.equal(variantsOrder.items.length, 2);
+  assert.equal(variantsOrder.amountVnd, 145000);
+  result = await post('order/update', {token: variantsOrder.token, items: [variants[1]]});
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.order.paymentMessage, variantsOrder.paymentMessage);
+  assert.equal(result.data.order.items.length, 1);
+  assert.equal(result.data.order.amountVnd, 45000);
+  assert.deepEqual(result.data.order.items[0].selection.extras, []);
+  const remainingOrder = await adminOrder(variantsOrder.orderCode);
+  assert.equal(remainingOrder.amountVnd, 45000);
+  assert.doesNotMatch(remainingOrder.itemName, /Milk/);
+  result = await post('order/cancel', {token: variantsOrder.token});
+  assert.equal(result.response.status, 200);
+  assert.equal((await adminOrder(variantsOrder.orderCode)).status, 'cancelled');
 
   const snapshotResponse = await http('/api/admin/menu', {headers: {Cookie: adminCookie}});
   const allOrders = (await snapshotResponse.json()).snapshot.orders;

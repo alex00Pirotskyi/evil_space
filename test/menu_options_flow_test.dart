@@ -61,17 +61,27 @@ class OptionsApi extends MenuApi {
     String? paymentToken,
   }) async {
     ordered = cart;
+    final subtotal = cart.fold(0, (sum, line) => sum + line.quantity *
+        (30000 + ((line.options['shots'] as int? ?? 2) - 1) * 10000 +
+            (line.options['milk'] == 'milk' ? 5000 : 0)));
     return MenuOrderPayment.fromJson({
       'token': paymentToken,
       'orderCode': 'ABC234',
       'paymentMessage': 'EVIL ABC234',
-      'amountVnd': 85000,
-      'originalAmountVnd': 85000,
+      'amountVnd': subtotal,
+      'originalAmountVnd': subtotal,
       'status': 'pending',
       'qrPayload': 'test-qr',
       'expiresAt': 2000000000,
     });
   }
+
+  @override
+  Future<MenuOrderPayment> updateCartOrder(
+    String token,
+    List<MenuCartRequestLine> cart, {
+    int? promoGrantId,
+  }) => createCartOrder(cart, paymentToken: token, promoGrantId: promoGrantId);
 
   @override
   Future<List<PromoPreview>> eligiblePromos(
@@ -184,6 +194,14 @@ void main() {
           find.text('Americano · Without milk · Shots 2/3'),
           findsOneWidget,
         );
+        if (language == AppLanguage.en) {
+          await tapVisible(tester, find.text('REMOVE').first);
+          expect(api.ordered, hasLength(1));
+          expect(api.ordered!.single.options['milk'], 'none');
+          expect(find.text('Americano · With milk · Shots 2/3'), findsNothing);
+          expect(find.text('Americano · Without milk · Shots 2/3'), findsOneWidget);
+          expect(find.text('PAY 40,000 VND'), findsOneWidget);
+        }
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       },

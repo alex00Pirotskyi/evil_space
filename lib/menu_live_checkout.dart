@@ -45,7 +45,6 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   List<PromoPreview> _promos = const [];
   MenuOrderPayment? _order;
   Timer? _pollTimer;
-  Timer? _syncTimer;
   int? _selectedGrantId;
   String _status = 'pending';
   String? _error;
@@ -104,7 +103,6 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
-    _syncTimer?.cancel();
     super.dispose();
   }
 
@@ -112,9 +110,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     if (!mounted) return;
     if (_order != null) {
       try {
-        final status = await widget.api
-            .orderStatus(_paymentToken)
-            .timeout(const Duration(seconds: 8));
+        final status = await widget.api.orderStatus(_paymentToken);
         if (!mounted) return;
         _status = status.status;
         if (!status.pending) {
@@ -139,9 +135,10 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     final revision = _revision;
     setState(() => _loadingPromos = true);
     try {
-      final promos = await widget.api
-          .eligiblePromos(_requests, paymentToken: _order?.token)
-          .timeout(const Duration(seconds: 8));
+      final promos = await widget.api.eligiblePromos(
+        _requests,
+        paymentToken: _order?.token,
+      );
       if (!mounted || requestId != _promoRequest || revision != _revision) {
         return;
       }
@@ -156,25 +153,20 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     }
   }
 
-  void _scheduleSync({bool immediate = false}) {
+  void _syncCart() {
     _revision++;
     _promoRequest++;
-    _syncTimer?.cancel();
     setState(() {
       _dirty = true;
       _error = null;
       _promos = const [];
       _loadingPromos = false;
     });
-    _syncTimer = Timer(
-      immediate ? Duration.zero : const Duration(milliseconds: 420),
-      () => unawaited(_syncPayment()),
-    );
+    unawaited(_syncPayment());
   }
 
   Future<void> _syncPayment() async {
     if (!mounted || _busy || _lines.isEmpty || _paid || _inactive) return;
-    _syncTimer?.cancel();
     final revision = _revision;
     final requests = _requests;
     final grantId = _selectedGrantId;
@@ -185,16 +177,16 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     });
     try {
       final next = creating
-          ? await widget.api
-                .createCartOrder(
-                  requests,
-                  promoGrantId: grantId,
-                  paymentToken: _paymentToken,
-                )
-                .timeout(const Duration(seconds: 12))
-          : await widget.api
-                .updateCartOrder(_paymentToken, requests, promoGrantId: grantId)
-                .timeout(const Duration(seconds: 12));
+          ? await widget.api.createCartOrder(
+              requests,
+              promoGrantId: grantId,
+              paymentToken: _paymentToken,
+            )
+          : await widget.api.updateCartOrder(
+              _paymentToken,
+              requests,
+              promoGrantId: grantId,
+            );
       if (!mounted) return;
       setState(() {
         _order = next;
@@ -215,7 +207,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
         }
       });
       if (_dirty) {
-        _scheduleSync(immediate: true);
+        unawaited(_syncPayment());
       } else {
         unawaited(_refreshPromos());
       }
@@ -223,9 +215,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       if (!mounted) return;
       if (error.statusCode == 409 || error.statusCode == 404) {
         try {
-          final status = await widget.api
-              .orderStatus(_paymentToken)
-              .timeout(const Duration(seconds: 6));
+          final status = await widget.api.orderStatus(_paymentToken);
           if (!mounted) return;
           if (!status.pending) {
             setState(() {
@@ -267,12 +257,9 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     _polling = true;
     final revision = _revision;
     try {
-      final status = await widget.api
-          .orderStatus(_paymentToken)
-          .timeout(const Duration(seconds: 6));
-      if (!mounted) return;
+      final status = await widget.api.orderStatus(_paymentToken);
+      if (!mounted || _busy) return;
       if (!status.pending) {
-        _syncTimer?.cancel();
         setState(() {
           _applyStatus(status);
           _dirty = false;
@@ -319,8 +306,10 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     }
   }
 
-  void _changeQuantity(int index, int delta) {
+  void _changeQuantity(String key, int delta) {
     if (!_editable) return;
+    final index = _lines.indexWhere((line) => line.key == key);
+    if (index < 0) return;
     final line = _lines[index];
     final quantity = (line.quantity + delta).clamp(0, 20).toInt();
     if (quantity == line.quantity) return;
@@ -334,51 +323,71 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     if (_lines.isEmpty) {
       unawaited(_cancelEmptyCart());
     } else {
-      _scheduleSync();
+      _syncCart();
     }
   }
 
-  void _removeLine(int index) {
+  void _removeLine(String key) {
     if (!_editable) return;
+    final index = _lines.indexWhere((line) => line.key == key);
+    if (index < 0) return;
     setState(() => _lines.removeAt(index));
     if (_lines.isEmpty) {
       unawaited(_cancelEmptyCart());
     } else {
-      _scheduleSync();
+      _syncCart();
     }
   }
 
   void _selectPromo(int? id) {
     if (!_editable || id == _selectedGrantId) return;
     setState(() => _selectedGrantId = id);
-    _scheduleSync(immediate: true);
+    _syncCart();
   }
 
   Future<void> _cancelEmptyCart() async {
-    _syncTimer?.cancel();
     setState(() {
       _cancelling = true;
       _dirty = true;
       _error = null;
     });
     try {
-      await widget.api
-          .cancelCartOrder(_paymentToken)
-          .timeout(const Duration(seconds: 8));
-      final status = await widget.api
-          .orderStatus(_paymentToken)
-          .timeout(const Duration(seconds: 6));
-      _status = status.status;
+      await widget.api.cancelCartOrder(_paymentToken);
+      // A successful cancellation is final; another status request must not
+      // block removing the last line on a slow or disconnected network.
+      _status = 'cancelled';
+      _order = null;
     } on MenuApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 409) {
+        try {
+          final status = await widget.api.orderStatus(_paymentToken);
+          if (!mounted) return;
+          if (!status.pending) {
+            setState(() {
+              _applyStatus(status);
+              _cancelling = false;
+              _dirty = false;
+              _error = null;
+            });
+            if (!status.paid) {
+              _order = null;
+              _close();
+            }
+            return;
+          }
+        } catch (_) {}
+      }
+      if (!mounted) return;
       if (error.statusCode != 404) {
-        if (mounted) {
-          setState(() {
-            _cancelling = false;
-            _error = error.message;
-          });
-        }
+        setState(() {
+          _cancelling = false;
+          _error = error.message;
+        });
         return;
       }
+      _status = 'cancelled';
+      _order = null;
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -401,12 +410,11 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       _status = 'pending';
       _selectedGrantId = null;
     });
-    _scheduleSync(immediate: true);
+    _syncCart();
   }
 
   void _close() {
     if (_busy || _lines.isEmpty && _error != null) return;
-    _syncTimer?.cancel();
     Navigator.of(context).pop(
       _LiveCheckoutResult(
         lines: List.unmodifiable(_lines),
@@ -562,6 +570,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   Widget _cartLine(int i) {
     final line = _lines[i];
     return Padding(
+      key: ValueKey(line.key),
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -580,7 +589,9 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                   IconButton(
                     tooltip: '-',
                     style: const ButtonStyle(overlayColor: _menuInkOverlay),
-                    onPressed: _editable ? () => _changeQuantity(i, -1) : null,
+                    onPressed: _editable
+                        ? () => _changeQuantity(line.key, -1)
+                        : null,
                     icon: const Icon(Icons.remove, size: 18),
                   ),
                   Text('${line.quantity}', style: _mono(11)),
@@ -588,7 +599,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                     tooltip: '+',
                     style: const ButtonStyle(overlayColor: _menuInkOverlay),
                     onPressed: _editable && line.quantity < 20
-                        ? () => _changeQuantity(i, 1)
+                        ? () => _changeQuantity(line.key, 1)
                         : null,
                     icon: const Icon(Icons.add, size: 18),
                   ),
@@ -596,7 +607,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
               ),
               Text(_money(line.total), style: _mono(10)),
               TextButton(
-                onPressed: _editable ? () => _removeLine(i) : null,
+                onPressed: _editable ? () => _removeLine(line.key) : null,
                 style: const ButtonStyle(overlayColor: _menuInkOverlay),
                 child: Text(_copy('remove').toUpperCase(), style: _mono(8.5)),
               ),
