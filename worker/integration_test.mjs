@@ -603,7 +603,12 @@ async function runLiveCartFlow(adminCookie) {
   const items = [{itemId: 'cola', quantity: 2}];
   const token = randomBytes(32).toString('base64url');
   async function post(endpoint, body, who = headers) {
-    const response = await jsonRequest(`/api/public/menu/${endpoint}`, body, who);
+    // Separate these fixtures from earlier legacy checkout scenarios. A fast
+    // local run must not exhaust the six-creates-per-minute production limit.
+    const testIp = who.Cookie === customerCookie ? '192.0.2.101'
+      : who.Cookie === otherCookie ? '192.0.2.102' : '192.0.2.103';
+    const response = await jsonRequest(`/api/public/menu/${endpoint}`, body,
+      {...who, 'CF-Connecting-IP': testIp});
     const data = await response.json();
     return {response, data};
   }

@@ -13,7 +13,9 @@ class _LiveCheckoutResult {
     required this.order,
     required this.paid,
     required this.paymentToken,
+    required this.synced,
   });
+  final bool synced;
   final List<_CartLine> lines;
   final MenuOrderPayment? order;
   final bool paid;
@@ -84,7 +86,10 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _lines = widget.lines.map((line) => line.copyWith()).toList();
-    _paymentToken = widget.paymentToken;
+    final storedToken = widget.initialOrder?.token;
+    _paymentToken = storedToken != null && storedToken.isNotEmpty
+        ? storedToken
+        : widget.paymentToken;
     _order = widget.initialOrder;
     _syncedLines = List.of(_lines);
     _selectedGrantId = _order?.promoGrantId;
@@ -121,6 +126,9 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
           });
           return;
         }
+      } on MenuApiException catch (error) {
+        if (!mounted) return;
+        if (error.statusCode == 404) _order = null;
       } catch (_) {}
     }
     setState(() => _initializing = false);
@@ -165,7 +173,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     unawaited(_syncPayment());
   }
 
-  Future<void> _syncPayment() async {
+  Future<void> _syncPayment({bool recoverMissing = true}) async {
     if (!mounted || _busy || _lines.isEmpty || _paid || _inactive) return;
     final revision = _revision;
     final requests = _requests;
@@ -190,6 +198,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       if (!mounted) return;
       setState(() {
         _order = next;
+        // Older servers may return a canonical token different from our hint.
+        if (next.token.isNotEmpty) _paymentToken = next.token;
         _status = next.status;
         _syncing = false;
         _dirty = revision != _revision;
@@ -213,6 +223,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       }
     } on MenuApiException catch (error) {
       if (!mounted) return;
+      var missingSession = false;
       if (error.statusCode == 409 || error.statusCode == 404) {
         try {
           final status = await widget.api.orderStatus(_paymentToken);
@@ -225,9 +236,22 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
             });
             return;
           }
+        } on MenuApiException catch (statusError) {
+          missingSession = error.statusCode == 404 && statusError.statusCode == 404;
         } catch (_) {}
       }
       if (!mounted) return;
+      if (missingSession && !creating && recoverMissing) {
+        setState(() {
+          _order = null;
+          _syncing = false;
+          _dirty = true;
+        });
+        // Reuse the same token for the server's idempotent create endpoint.
+        // Never rotate it after an ambiguous network failure.
+        await _syncPayment(recoverMissing: false);
+        return;
+      }
       setState(() {
         _syncing = false;
         _dirty = true;
@@ -256,9 +280,10 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     }
     _polling = true;
     final revision = _revision;
+    final token = _paymentToken;
     try {
-      final status = await widget.api.orderStatus(_paymentToken);
-      if (!mounted || _busy) return;
+      final status = await widget.api.orderStatus(token);
+      if (!mounted || _busy || token != _paymentToken) return;
       if (!status.pending) {
         setState(() {
           _applyStatus(status);
@@ -421,6 +446,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
         order: _order,
         paid: _paid,
         paymentToken: _paymentToken,
+        synced: !_dirty && _error == null,
       ),
     );
   }
@@ -432,6 +458,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       if (!didPop) _close();
     },
     child: _MenuSheetBody(
+      onDismiss: _close,
+      dismissible: !_busy && !(_lines.isEmpty && _error != null),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

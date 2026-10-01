@@ -146,6 +146,27 @@ void main() {
     },
   );
 
+  testWidgets('configuration curtain expands up and dismisses down without adding', (
+    tester,
+  ) async {
+    final api = OptionsApi();
+    await openMenu(tester, api);
+    await tapVisible(tester, find.text('Americano'));
+    final initialHeight = tester.getSize(find.byType(BottomSheet)).height;
+    final handle = find.byKey(const ValueKey('menu-curtain-handle'));
+    await tester.drag(handle, const Offset(0, -130));
+    await tester.pump();
+    expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
+    await tester.drag(handle, const Offset(0, 600));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
+    expect(api.ordered, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final (language, add, viewCart) in [
     (AppLanguage.en, 'ADD TO CART', 'PAY'),
     (AppLanguage.ru, 'В КОРЗИНУ', 'ОПЛАТИТЬ'),
@@ -182,7 +203,8 @@ void main() {
         await tapVisible(tester, find.text(add));
         expect(find.text('Americano'), findsOneWidget);
         expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
-        await tapVisible(tester, find.text(viewCart));
+        expect(find.text('$viewCart: 85,000 VND'), findsOneWidget);
+        await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
         expect(api.ordered, hasLength(2));
         expect(api.ordered!.map((line) => line.quantity), [1, 1]);
         expect(api.ordered!.map((line) => line.options['milk']), [
