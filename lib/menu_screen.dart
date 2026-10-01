@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -112,29 +113,37 @@ class _MenuSheetBodyState extends State<_MenuSheetBody> {
       shouldCloseOnMinExtent: false,
       builder: (context, scrollController) => SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          controller: scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                key: const ValueKey('menu-curtain-handle'),
-                height: 36,
-                child: Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: BrandPalette.inkMuted,
-                      borderRadius: BorderRadius.circular(2),
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              ...ScrollConfiguration.of(context).dragDevices,
+              PointerDeviceKind.mouse,
+            },
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  key: const ValueKey('menu-curtain-handle'),
+                  height: 36,
+                  child: Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: BrandPalette.inkMuted,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              widget.child,
-            ],
+                widget.child,
+              ],
+            ),
           ),
         ),
       ),
