@@ -167,6 +167,20 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('configuration accepts only one result during its exit animation', (tester) async {
+    await openMenu(tester, OptionsApi());
+    await tapVisible(tester, find.text('Americano'));
+    final add = find.text('ADD TO CART');
+    await tester.tap(add);
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(find.text('Americano × 1'), findsOneWidget);
+    expect(find.text('PAY: 40,000 VND'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('menu removal chooses a configuration and subtracts one unit', (tester) async {
     final api = OptionsApi();
     await openMenu(tester, api);
@@ -178,7 +192,10 @@ void main() {
     expect(find.text('Americano × 2'), findsOneWidget);
     await tapVisible(tester, find.byKey(const ValueKey('menu-remove-americano')));
     expect(find.text('Remove one drink'), findsOneWidget);
-    await tapVisible(tester, find.text('Americano · With milk · Shots 2/3 × 1'));
+    final selected = find.text('Americano · With milk · Shots 2/3 × 1');
+    await tester.tap(selected);
+    await tester.tap(selected);
+    await tester.pumpAndSettle();
     expect(find.text('Americano × 1'), findsOneWidget);
     expect(find.text('PAY: 40,000 VND'), findsOneWidget);
     await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));

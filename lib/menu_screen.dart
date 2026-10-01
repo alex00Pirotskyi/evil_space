@@ -464,7 +464,14 @@ class _MenuScreenState extends State<MenuScreen> {
     String? key = variants.length == 1 ? variants.first.key : null;
     if (variants.length > 1) {
       setState(() => _editingItem = true);
+      var closing = false;
+      void finish(BuildContext sheetContext, [String? selection]) {
+        if (closing) return;
+        closing = true;
+        Navigator.of(sheetContext).pop(selection);
+      }
       key = await _showMenuSheet<String>(context, builder: (context) => _MenuSheetBody(
+        onDismiss: () => finish(context),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(_copy('choose_remove'), style: _serif(28)),
           const SizedBox(height: 16),
@@ -472,10 +479,10 @@ class _MenuScreenState extends State<MenuScreen> {
             key: ValueKey('menu-remove-variant-${line.key}'),
             style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
               padding: const EdgeInsets.symmetric(vertical: 18)).copyWith(overlayColor: _menuInkOverlay),
-            onPressed: () => Navigator.of(context).pop(line.key),
+            onPressed: () => finish(context, line.key),
             child: Text('${line.label(widget.localization.language.code)} × ${line.quantity}',
               style: _serif(19))),
-          TextButton(onPressed: () => Navigator.of(context).pop(),
+          TextButton(onPressed: () => finish(context),
             child: Text(_copy('cancel'), style: _mono(11))),
         ])));
       if (!mounted) return;
@@ -599,6 +606,13 @@ class _ItemOptionsSheet extends StatefulWidget {
 
 class _ItemOptionsSheetState extends State<_ItemOptionsSheet> {
   late final Map<String, dynamic> _selected;
+  bool _closing = false;
+
+  void _finish([_ConfiguredItem? configured]) {
+    if (_closing) return;
+    setState(() => _closing = true);
+    Navigator.of(context).pop(configured);
+  }
 
   @override
   void initState() {
@@ -664,7 +678,9 @@ class _ItemOptionsSheetState extends State<_ItemOptionsSheet> {
   @override
   Widget build(BuildContext context) {
     return _MenuSheetBody(
-      child: Column(
+      onDismiss: () => _finish(),
+      dismissible: !_closing,
+      child: AbsorbPointer(absorbing: _closing, child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
@@ -682,7 +698,7 @@ class _ItemOptionsSheetState extends State<_ItemOptionsSheet> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => _finish(),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: BrandPalette.ink,
                     side: const BorderSide(color: BrandPalette.ink),
@@ -698,10 +714,9 @@ class _ItemOptionsSheetState extends State<_ItemOptionsSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: !_valid
+                  onPressed: !_valid || _closing
                       ? null
-                      : () => Navigator.pop(
-                          context,
+                      : () => _finish(
                           _ConfiguredItem(
                             options: _normalizedSelection(),
                             unitPriceVnd: _unitPrice,
@@ -722,7 +737,7 @@ class _ItemOptionsSheetState extends State<_ItemOptionsSheet> {
             ],
           ),
         ],
-      ),
+      )),
     );
   }
 
