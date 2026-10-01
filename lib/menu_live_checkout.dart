@@ -20,8 +20,8 @@ class _LiveCheckoutResult {
   final String paymentToken;
 }
 
-class _LiveCheckoutDialog extends StatefulWidget {
-  const _LiveCheckoutDialog({
+class _LiveCheckoutSheet extends StatefulWidget {
+  const _LiveCheckoutSheet({
     required this.api,
     required this.lines,
     required this.languageCode,
@@ -34,10 +34,10 @@ class _LiveCheckoutDialog extends StatefulWidget {
   final String paymentToken;
   final MenuOrderPayment? initialOrder;
   @override
-  State<_LiveCheckoutDialog> createState() => _LiveCheckoutDialogState();
+  State<_LiveCheckoutSheet> createState() => _LiveCheckoutSheetState();
 }
 
-class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog>
+class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     with WidgetsBindingObserver {
   late final List<_CartLine> _lines;
   late String _paymentToken;
@@ -423,130 +423,138 @@ class _LiveCheckoutDialogState extends State<_LiveCheckoutDialog>
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) _close();
     },
-    child: Dialog(
-      backgroundColor: BrandPalette.paper,
-      shape: const RoundedRectangleBorder(),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    child: _MenuSheetBody(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Text(_copy('your_cart').toUpperCase(), style: _mono(12)),
-              const SizedBox(height: 12),
-              for (var i = 0; i < _lines.length; i++) _cartLine(i),
-              if (!_paid && !_inactive && _lines.isNotEmpty) ...[
-                const Divider(color: BrandPalette.ink, height: 28),
-                Text(_copy('your_promos').toUpperCase(), style: _mono(10)),
-                _promoTile(null, _copy('without_promo')),
-                if (_selectedGrantId != null &&
-                    !_promos.any((p) => p.grantId == _selectedGrantId))
-                  _promoTile(
-                    _selectedGrantId,
-                    _order?.promoName ?? _copy('promo'),
-                  ),
-                for (final promo in _promos)
-                  _promoTile(
-                    promo.grantId,
-                    promo.name,
-                    '-${_money(promo.discountVnd)} · ${promo.remainingUses} ${_copy('uses_left')}',
-                  ),
-                if (_loadingPromos)
-                  Text(
-                    _copy('loading_promos'),
-                    style: _mono(8.5, color: BrandPalette.inkMuted),
-                  ),
-              ],
-              const Divider(color: BrandPalette.ink),
-              _priceRow(_copy('subtotal'), _subtotal),
-              if (_discount > 0)
-                _priceRow(_order?.promoName ?? _copy('promo'), -_discount),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(_copy('total').toUpperCase(), style: _mono(11)),
-                  ),
-                  Flexible(child: Text(_money(_total), style: _serif(24))),
-                ],
-              ),
-              const SizedBox(height: 24),
-              if (_paid) ...[
-                Text(
-                  _copy('payment_confirmed'),
-                  textAlign: TextAlign.center,
+              Expanded(
+                child: Text(
+                  _copy('your_cart').toUpperCase(),
                   style: _mono(12),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  _copy(
-                    _order?.hasPromo == true
-                        ? 'payment_thanks_promo'
-                        : 'payment_thanks',
-                  ),
-                  style: _serif(18),
-                ),
-              ] else if (_inactive) ...[
-                Text(_copy('payment_expired'), style: _mono(12)),
-                const SizedBox(height: 12),
-                Text(_copy('payment_inactive'), style: _serif(16)),
-                const SizedBox(height: 12),
-                _button(_copy('refresh_payment'), _newPayment),
-              ] else if (_paymentReady) ...[
-                Text(
-                  '${_copy('pay_now').toUpperCase()} ${_money(_total)}',
-                  textAlign: TextAlign.center,
-                  style: _mono(13),
-                ),
-                const SizedBox(height: 16),
-                if (_cashSelected) _cashView() else _qrView(),
-              ] else if (_error == null) ...[
-                const SizedBox(height: 26),
-                const Center(
-                  child: SizedBox.square(
-                    dimension: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: BrandPalette.ink,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _copy(
-                    _order == null ? 'preparing_payment' : 'updating_payment',
-                  ),
-                  textAlign: TextAlign.center,
-                  style: _serif(15),
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 14),
-                Text(_error!, style: _serif(15)),
-                const SizedBox(height: 12),
-                _button(
-                  _copy('retry'),
-                  _busy
-                      ? null
-                      : () {
-                          if (_lines.isEmpty) {
-                            unawaited(_cancelEmptyCart());
-                          } else {
-                            unawaited(_syncPayment());
-                          }
-                        },
-                ),
-              ],
-              const SizedBox(height: 20),
-              _button(
-                _copy('close'),
-                _busy || _lines.isEmpty && _error != null ? null : _close,
+              ),
+              IconButton(
+                tooltip: _copy('close'),
+                style: const ButtonStyle(overlayColor: _menuInkOverlay),
+                onPressed: _busy || _lines.isEmpty && _error != null
+                    ? null
+                    : _close,
+                icon: const Icon(Icons.close, size: 20),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < _lines.length; i++) _cartLine(i),
+          if (!_paid && !_inactive && _lines.isNotEmpty) ...[
+            const Divider(color: BrandPalette.ink, height: 28),
+            Text(_copy('your_promos').toUpperCase(), style: _mono(10)),
+            _promoTile(null, _copy('without_promo')),
+            if (_selectedGrantId != null &&
+                !_promos.any((p) => p.grantId == _selectedGrantId))
+              _promoTile(
+                _selectedGrantId,
+                _order?.promoName ?? _copy('promo'),
+              ),
+            for (final promo in _promos)
+              _promoTile(
+                promo.grantId,
+                promo.name,
+                '-${_money(promo.discountVnd)} · ${promo.remainingUses} ${_copy('uses_left')}',
+              ),
+            if (_loadingPromos)
+              Text(
+                _copy('loading_promos'),
+                style: _mono(8.5, color: BrandPalette.inkMuted),
+              ),
+          ],
+          const Divider(color: BrandPalette.ink),
+          _priceRow(_copy('subtotal'), _subtotal),
+          if (_discount > 0)
+            _priceRow(_order?.promoName ?? _copy('promo'), -_discount),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(_copy('total').toUpperCase(), style: _mono(11)),
+              ),
+              Flexible(child: Text(_money(_total), style: _serif(24))),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (_paid) ...[
+            Text(
+              _copy('payment_confirmed'),
+              textAlign: TextAlign.center,
+              style: _mono(12),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _copy(
+                _order?.hasPromo == true
+                    ? 'payment_thanks_promo'
+                    : 'payment_thanks',
+              ),
+              style: _serif(18),
+            ),
+          ] else if (_inactive) ...[
+            Text(_copy('payment_expired'), style: _mono(12)),
+            const SizedBox(height: 12),
+            Text(_copy('payment_inactive'), style: _serif(16)),
+            const SizedBox(height: 12),
+            _button(_copy('refresh_payment'), _newPayment),
+          ] else if (_paymentReady) ...[
+            Text(
+              '${_copy('pay_now').toUpperCase()} ${_money(_total)}',
+              textAlign: TextAlign.center,
+              style: _mono(13),
+            ),
+            const SizedBox(height: 16),
+            if (_cashSelected) _cashView() else _qrView(),
+          ] else if (_error == null) ...[
+            const SizedBox(height: 26),
+            const Center(
+              child: SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: BrandPalette.ink,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _copy(
+                _order == null ? 'preparing_payment' : 'updating_payment',
+              ),
+              textAlign: TextAlign.center,
+              style: _serif(15),
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            Text(_error!, style: _serif(15)),
+            const SizedBox(height: 12),
+            _button(
+              _copy('retry'),
+              _busy
+                  ? null
+                  : () {
+                      if (_lines.isEmpty) {
+                        unawaited(_cancelEmptyCart());
+                      } else {
+                        unawaited(_syncPayment());
+                      }
+                    },
+            ),
+          ],
+          const SizedBox(height: 20),
+          _button(
+            _copy('close'),
+            _busy || _lines.isEmpty && _error != null ? null : _close,
+          ),
+        ],
       ),
     ),
   );
