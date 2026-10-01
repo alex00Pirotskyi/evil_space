@@ -182,10 +182,7 @@ class _DailyScreenState extends State<DailyScreen>
   bool _sameStatus(SiteStatus? a, SiteStatus? b) {
     if (identical(a, b)) return true;
     if (a == null || b == null) return false;
-    return a.total == b.total &&
-        a.occupied == b.occupied &&
-        a.tomorrowOccupied == b.tomorrowOccupied &&
-        a.todayPrice == b.todayPrice &&
+    return a.todayPrice == b.todayPrice &&
         a.tomorrowPrice == b.tomorrowPrice &&
         a.todayDate == b.todayDate &&
         a.tomorrowDate == b.tomorrowDate &&
@@ -425,7 +422,7 @@ class _DailyScreenState extends State<DailyScreen>
                                       localization: widget.localization,
                                     ),
                                     const SizedBox(height: 32),
-                                    _availability(compact),
+                                    _bookingSection(),
                                     const SizedBox(height: 50),
                                     _prices(compact),
                                     const SizedBox(height: 50),
@@ -529,7 +526,7 @@ class _DailyScreenState extends State<DailyScreen>
     );
   }
 
-  Widget _availability(bool compact) {
+  Widget _bookingSection() {
     final status = _liveStatus ?? _content.status;
     final todayDate = status.todayDate.isEmpty
         ? _serviceDateForOffset(0)
@@ -545,35 +542,6 @@ class _DailyScreenState extends State<DailyScreen>
       children: [
         _sectionKicker(widget.localization.t('availability_kicker')),
         const SizedBox(height: 20),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              '${status.free}',
-              style: _serif(compact ? 86 : 116, height: 0.78),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Text(
-                  widget.localization.t(
-                    status.free == 1 ? 'desk_free' : 'desks_free',
-                  ),
-                  style: _serif(compact ? 23 : 30, height: 0.96),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        _OccupancyMarks(total: status.total, occupied: status.occupied),
-        const SizedBox(height: 12),
-        Text(
-          '${status.occupied} / ${status.total} ${widget.localization.t('occupied')}  ·  ${_updatedLabel(status.updated)}',
-          style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 0.55),
-        ),
-        const SizedBox(height: 26),
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -585,7 +553,7 @@ class _DailyScreenState extends State<DailyScreen>
                   icon: Icons.today_outlined,
                   filled: true,
                   onPressed:
-                      _bookingBusy || todayBooking != null || status.free <= 0
+                      _bookingBusy || todayBooking != null
                       ? null
                       : () => _requestDesk(todayDate),
                 ),
@@ -595,12 +563,11 @@ class _DailyScreenState extends State<DailyScreen>
                   label: widget.localization.t('booking_tomorrow'),
                   detail: _bookingBusy
                       ? '…'
-                      : '${_moneyLabel(status.tomorrowPrice)} · ${status.tomorrowFree} ${widget.localization.t('free_short')}',
+                      : _moneyLabel(status.tomorrowPrice),
                   icon: Icons.event_outlined,
                   onPressed:
                       _bookingBusy ||
-                          tomorrowBooking != null ||
-                          status.tomorrowFree <= 0
+                          tomorrowBooking != null
                       ? null
                       : () => _requestDesk(tomorrowDate),
                 ),
@@ -1118,19 +1085,6 @@ class _DailyScreenState extends State<DailyScreen>
     style: _mono(10.5, color: BrandPalette.inkMuted, spacing: 1.05),
   );
 
-  String _updatedLabel(String raw) {
-    final parsed = DateTime.tryParse(raw);
-    if (parsed == null) return widget.localization.t('local_data');
-    final today = _nhaTrangNow();
-    final localParsed = parsed.toUtc().add(const Duration(hours: 7));
-    if (localParsed.year == today.year &&
-        localParsed.month == today.month &&
-        localParsed.day == today.day) {
-      return widget.localization.t('updated_today');
-    }
-    return '${widget.localization.t('updated')} ${localParsed.day.toString().padLeft(2, '0')} ${_months[localParsed.month - 1]}';
-  }
-
   DateTime _nhaTrangNow() =>
       DateTime.now().toUtc().add(const Duration(hours: 7));
 
@@ -1315,35 +1269,6 @@ class _Section extends StatelessWidget {
         Text(title, style: _mono(11, spacing: 1.05)),
         child,
       ],
-    );
-  }
-}
-
-class _OccupancyMarks extends StatelessWidget {
-  const _OccupancyMarks({required this.total, required this.occupied});
-
-  final int total;
-  final int occupied;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 7,
-      runSpacing: 7,
-      children: List.generate(total, (index) {
-        final filled = index < occupied;
-        return Semantics(
-          label: filled ? 'Occupied desk' : 'Free desk',
-          child: Container(
-            width: 17,
-            height: 17,
-            decoration: BoxDecoration(
-              color: filled ? BrandPalette.ink : Colors.transparent,
-              border: Border.all(color: BrandPalette.ink, width: 1.2),
-            ),
-          ),
-        );
-      }),
     );
   }
 }

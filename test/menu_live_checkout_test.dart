@@ -206,10 +206,11 @@ void main() {
       final api = CheckoutApi()..delayedPromos = Completer();
       await openCart(tester, api);
       expect(find.byType(Dialog), findsNothing);
-      expect(find.byType(BottomSheet), findsOneWidget);
-      final sheetBounds = tester.getRect(find.byType(BottomSheet));
+      expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
+      final sheetBounds = tester.getRect(find.byKey(const ValueKey('menu-curtain')));
       expect(sheetBounds.bottom, closeTo(844, 1));
-      expect(sheetBounds.top, greaterThan(0));
+      expect(sheetBounds.right, closeTo(390, 1));
+      expect(sheetBounds.left, greaterThan(0));
       expect(api.creates, hasLength(1));
       expect(find.byType(QrImageView), findsOneWidget);
       expect(find.text('Create payment'), findsNothing);
@@ -236,7 +237,7 @@ void main() {
     expect(api.updateTokens, everyElement(api.canonicalToken));
     await tapVisible(tester, find.text('REMOVE'));
     expect(api.cancellations, [api.canonicalToken]);
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -291,7 +292,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('swipe up opens and expands the curtain; swipe down saves the cart', (
+  testWidgets('swipe left opens and expands the curtain; swipe right saves the cart', (
     tester,
   ) async {
     final api = CheckoutApi();
@@ -301,18 +302,18 @@ void main() {
     final pay = find.byKey(const ValueKey('menu-pay'));
     expect(find.text('PAY: 30,000 VND'), findsOneWidget);
     expect(tester.widget<TextButton>(pay).onPressed, isNotNull);
-    await tester.drag(find.byKey(const ValueKey('menu-pay-bar')), const Offset(0, -100));
+    await tester.drag(find.byKey(const ValueKey('menu-pay-bar')), const Offset(-100, 0));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(BottomSheet), findsOneWidget);
-    final initialHeight = tester.getSize(find.byType(BottomSheet)).height;
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
+    final initialWidth = tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width;
     final handle = find.byKey(const ValueKey('menu-curtain-handle'));
-    await tester.drag(handle, const Offset(0, -130));
-    await tester.pump();
-    expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
-    await tester.drag(handle, const Offset(0, 600));
+    await tester.drag(handle, const Offset(-130, 0));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width, greaterThan(initialWidth + 20));
+    await tester.drag(handle, const Offset(600, 0));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.text('PAY: 30,000 VND'), findsOneWidget);
     expect(api.cancellations, isEmpty);
     await tapVisible(tester, pay);
@@ -323,24 +324,24 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('swipe down waits for a cart update before allowing dismissal', (
+  testWidgets('swipe right waits for a cart update before allowing dismissal', (
     tester,
   ) async {
     final api = CheckoutApi();
     await openCart(tester, api);
     api.delayedUpdate = Completer();
     await tapVisible(tester, find.byIcon(Icons.add));
-    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(0, 500));
+    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(500, 0));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     api.delayedUpdate!.complete(api.payment(api.creates.single, api.updates.last, null));
     await tester.pumpAndSettle();
-    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(0, 500));
+    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(500, 0));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.text('PAY: 60,000 VND'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
@@ -455,7 +456,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(api.cancellations, [api.creates.single]);
     expect(api.statusRequests, 0);
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     expect(tester.widget<Material>(surface).color, Colors.transparent);
     await tester.pumpWidget(const SizedBox());
@@ -466,7 +467,7 @@ void main() {
     await openCart(tester, api);
     await tapVisible(tester, find.byIcon(Icons.remove));
     expect(api.cancellations, [api.creates.single]);
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
@@ -478,13 +479,13 @@ void main() {
     await openCart(tester, api);
     await tapVisible(tester, find.text('REMOVE'));
     await tester.pump(const Duration(seconds: 20));
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
     expect(find.text('RETRY'), findsNothing);
     expect(api.cancellations, hasLength(1));
     api.delayedCancel!.complete();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(api.statusRequests, 0);
     expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
@@ -497,16 +498,16 @@ void main() {
     await openCart(tester, api);
     api.failCancel = true;
     await tapVisible(tester, find.text('REMOVE'));
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
     expect(find.text('Network error'), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
     api.failCancel = false;
     await tapVisible(tester, find.text('RETRY'));
     expect(api.cancellations, [api.creates.single, api.creates.single]);
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
@@ -519,7 +520,8 @@ void main() {
     api.paidDuringCancel = true;
     await tapVisible(tester, find.text('REMOVE'));
     expect(find.text('✓ PAYMENT CONFIRMED'), findsOneWidget);
-    expect(find.text('Cola'), findsNWidgets(2));
+    expect(find.text('Cola'), findsOneWidget);
+    expect(find.text('Cola × 1'), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     expect(api.statusRequests, 1);
     final remove = tester.widget<TextButton>(
@@ -548,7 +550,7 @@ void main() {
     expect(api.updates.last.single.itemId, 'coffee');
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     api.delayedUpdate!.complete(
       api.payment(api.creates.single, api.updates.last, null),
@@ -561,7 +563,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(api.cancellations, [api.creates.single]);
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -575,7 +577,7 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsOneWidget);
     expect(
       tester.widget<Material>(
@@ -599,7 +601,7 @@ void main() {
     await tapVisible(tester, find.text('CLOSE'));
     final row = find.byKey(const ValueKey('menu-item-cola'));
     final bounds = tester.getRect(row);
-    expect(bounds.width, greaterThan(300));
+    expect(bounds.width, greaterThan(200));
     expect(bounds.height, greaterThanOrEqualTo(72));
     expect(find.text('ADD'), findsNothing);
     expect(find.byIcon(Icons.add), findsNothing);
@@ -613,6 +615,76 @@ void main() {
     expect(api.current!.paymentMessage, reference);
     expect(find.text('PAY 60,000 VND'), findsOneWidget);
     expect(find.byType(QrImageView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('menu counter and 20 percent REMOVE reduce exactly one unit', (tester) async {
+    final api = CheckoutApi();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home: MenuScreen(
+      localization: LocalizationController(AppLanguage.en), onBack: () {}, api: api)));
+    await tester.pumpAndSettle();
+    final add = find.byKey(const ValueKey('menu-item-cola'));
+    await tapVisible(tester, add);
+    await tapVisible(tester, add);
+    expect(find.text('Cola × 2'), findsOneWidget);
+    final remove = find.byKey(const ValueKey('menu-remove-cola'));
+    expect(tester.getSize(add).width / tester.getSize(remove).width, closeTo(4, 0.01));
+    final rail = tester.getRect(find.byKey(const ValueKey('menu-pay-bar')));
+    expect(rail.right, closeTo(390, 1));
+    expect(rail.width, 56);
+    await tapVisible(tester, remove);
+    expect(find.text('Cola × 1'), findsOneWidget);
+    expect(find.text('PAY: 30,000 VND'), findsOneWidget);
+    await tapVisible(tester, remove);
+    expect(find.text('Cola'), findsOneWidget);
+    expect(remove, findsNothing);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
+    expect(api.creates, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('menu REMOVE preserves canonical session and promo then cancels last unit', (tester) async {
+    final api = CheckoutApi()..canonicalToken = 'canonical-menu-removal';
+    await openCart(tester, api);
+    await tapVisible(tester, find.byIcon(Icons.add));
+    await tapVisible(tester, find.text('SAVE10'));
+    await tapVisible(tester, find.text('CLOSE'));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-remove-cola')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cola × 1'), findsOneWidget);
+    expect(find.text('PAY: 20,000 VND'), findsOneWidget);
+    expect(api.updateTokens, everyElement(api.canonicalToken));
+    expect(api.updates.last.single.quantity, 1);
+    expect(api.creates, hasLength(1));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-remove-cola')));
+    await tester.pumpAndSettle();
+    expect(api.cancellations, [api.canonicalToken]);
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
+    expect(find.text('Cola'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('menu REMOVE cannot discard a failed cancellation', (tester) async {
+    final api = CheckoutApi();
+    await openCart(tester, api);
+    await tapVisible(tester, find.text('CLOSE'));
+    api.failCancel = true;
+    await tapVisible(tester, find.byKey(const ValueKey('menu-remove-cola')));
+    await tester.drag(find.byKey(const ValueKey('menu-curtain-handle')), const Offset(500, 0));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
+    expect(find.text('Network error'), findsOneWidget);
+    api.failCancel = false;
+    await tapVisible(tester, find.text('RETRY'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

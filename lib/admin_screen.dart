@@ -313,6 +313,11 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
+  Future<void> _cancelBooking(BookingRequestRecord booking) async {
+    await _apply(() => widget.api.cancelBooking(booking.id),
+      success: t('БРОНЬ ОТМЕНЕНА', 'BOOKING CANCELLED'));
+  }
+
   Future<void> _declineBooking(BookingRequestRecord booking) async {
     await _apply(
       () => widget.api.declineBooking(booking.id),
@@ -691,17 +696,13 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
           const SizedBox(width: 10),
           if (booking.accepted)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: BrandPalette.ink,
-                border: Border.all(color: BrandPalette.ink),
-              ),
-              child: Text(
-                t('ПРИНЯТО', 'ACCEPTED'),
-                style: _mono(9, color: BrandPalette.paperLift),
-              ),
-            )
+            OutlinedButton(
+              onPressed: _busy ? null : () => _cancelBooking(booking),
+              style: OutlinedButton.styleFrom(foregroundColor: BrandPalette.ink,
+                minimumSize: const Size(0, 44),
+                shape: const RoundedRectangleBorder()),
+              child: Text(t('ОТМЕНИТЬ', 'CANCEL'), style: _mono(9)),
+           )
           else
             Wrap(
               spacing: 7,

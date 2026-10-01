@@ -983,7 +983,7 @@ AND (status = 'new' OR (status = 'accepted' AND service_day >= ?))
         ORDER BY service_day ASC, created_at DESC, id DESC
         LIMIT 100
       `)
-      .bind(start, end + 86400, end)
+      .bind(start, end + 86400, start)
       .all(),
     env.evil_space
       .prepare(`

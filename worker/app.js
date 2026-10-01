@@ -20,6 +20,7 @@ const FEATURE_ROUTES = new Set([
   'POST /api/admin/telegram/preferences',
   'GET /api/admin/operations',
   'POST /api/admin/booking/accept',
+  'POST /api/admin/booking/cancel',
   'POST /api/admin/booking/decline',
   'POST /api/admin/purchases',
 ]);

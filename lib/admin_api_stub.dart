@@ -68,6 +68,8 @@ class AdminApi {
 
   Future<OperationsSnapshot> acceptBooking(int id) async => _webOnly();
 
+  Future<OperationsSnapshot> cancelBooking(int id) async => _webOnly();
+
   Future<OperationsSnapshot> declineBooking(int id) async => _webOnly();
 
   Future<OperationsSnapshot> updateCustomer(CustomerRecord customer) async =>

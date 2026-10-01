@@ -1,6 +1,8 @@
 import legacyWorker from './index.js';
 import {
   createCustomerTelegramLink,
+  acceptBooking,
+  handleWebCancelBooking,
   handleAdminTelegramDisconnect,
   handleAdminTelegramLink,
   handleAdminTelegramPreferences,
@@ -80,6 +82,11 @@ export default {
     ) {
       if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
       return handleAdminTelegramPreferences(request, env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/booking/cancel') {
+      if (!isSameOrigin(request, url)) return jsonError('Invalid origin.', 403);
+      return handleWebCancelBooking(request, env, ctx);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/admin/operations') {
@@ -204,20 +211,7 @@ function constantTimeEqual(a, b) {
 
 async function handlePublicStatus(env) {
   const now = nowSeconds();
-  const { today, tomorrow, end } = bookingWindow(now);
-  const row = await env.evil_space
-    .prepare(`
-      SELECT
-        COALESCE((SELECT total_desks FROM site_state WHERE id = 1), 10) AS total,
-        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS today_occupied,
-        (SELECT COUNT(*) FROM visits WHERE created_at >= ? AND created_at < ?) AS tomorrow_occupied
-    `)
-    .bind(today, tomorrow, tomorrow, end)
-    .first();
-
-  const total = Math.max(1, Number(row?.total ?? 10));
-  const occupied = Math.min(total, Math.max(0, Number(row?.today_occupied ?? 0)));
-  const tomorrowOccupied = Math.min(total, Math.max(0, Number(row?.tomorrow_occupied ?? 0)));
+  const { today, tomorrow } = bookingWindow(now);
   const [todayPricing, tomorrowPricing] = await Promise.all([
     resolvePricing(env, today, now),
     resolvePricing(env, tomorrow, now),
@@ -225,9 +219,6 @@ async function handlePublicStatus(env) {
   return json({
     ok: true,
     status: {
-      total,
-      occupied,
-      free: Math.max(0, total - occupied),
       updated: new Date(today * 1000).toISOString(),
       todayDate: serviceDateKey(today),
       tomorrowDate: serviceDateKey(tomorrow),
@@ -238,8 +229,6 @@ async function handlePublicStatus(env) {
       tomorrowPrice: tomorrowPricing.dayPassVnd,
       todayPromoDescription: todayPricing.promotion?.description ?? '',
       tomorrowPromoDescription: tomorrowPricing.promotion?.description ?? '',
-      tomorrowOccupied,
-      tomorrowFree: Math.max(0, total - tomorrowOccupied),
     },
   });
 }
@@ -300,13 +289,22 @@ async function handlePublicBooking(request, env, ctx) {
       INSERT INTO booking_requests
         (name, contact_type, contact_value, status, created_at, client_token_hash,
          service_day, amount_vnd)
-      VALUES (?, ?, ?, 'new', ?, ?, ?, ?)
+      SELECT ?, ?, ?, 'new', ?, ?, ?, ?
+      WHERE NOT EXISTS (SELECT 1 FROM booking_requests
+        WHERE service_day = ? AND contact_type = ?
+          AND lower(contact_value) = lower(?) AND status IN ('new', 'processing', 'accepted'))
       RETURNING id
     `)
-    .bind(name, contactType, contactValue, now, tokenHash, serviceDay, amountVnd)
+    .bind(name, contactType, contactValue, now, tokenHash, serviceDay, amountVnd,
+      serviceDay, contactType, contactValue)
     .first();
 
-  if (!created?.id) return jsonError('Could not create desk request.', 500);
+  if (!created?.id) return jsonError('You already have an active booking for this day.', 409);
+  try {
+    await acceptBooking(env, created.id);
+  } catch (error) {
+    return jsonError(error.message || 'Could not reserve a desk.', error.status || 500);
+  }
 
   let telegramLinkUrl = null;
   if (contactType === 'telegram') {
@@ -323,12 +321,12 @@ async function handlePublicBooking(request, env, ctx) {
     {
       ok: true,
       token,
-      status: 'pending',
+      status: 'accepted',
       serviceDate: serviceDateKey(serviceDay),
       amountVnd,
       telegramLinkUrl,
       telegramLinked: false,
-      message: 'Desk request sent. Evil Space staff can now see it.',
+      message: 'Your desk booking is confirmed.',
     },
     201,
   );

@@ -23,6 +23,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('OCCUPIED'), findsNothing);
+    expect(find.bySemanticsLabel('Occupied desk'), findsNothing);
+    expect(find.bySemanticsLabel('Free desk'), findsNothing);
+    expect(find.text('TOMORROW'), findsOneWidget);
+
     final todayButton = find.text('TODAY');
     expect(todayButton, findsOneWidget);
     await tester.ensureVisible(todayButton);
