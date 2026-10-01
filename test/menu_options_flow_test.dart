@@ -128,10 +128,10 @@ void main() {
       await openMenu(tester, OptionsApi());
       await tapVisible(tester, find.text('Americano'));
       expect(find.byType(Dialog), findsNothing);
-      expect(find.byType(BottomSheet), findsOneWidget);
-      expect(tester.getRect(find.byType(BottomSheet)).bottom, closeTo(844, 1));
+      expect(find.byKey(const ValueKey('menu-curtain')), findsOneWidget);
+      expect(tester.getRect(find.byKey(const ValueKey('menu-curtain'))).bottom, closeTo(844, 1));
       Finder dialogText(String text) =>
-          find.descendant(of: find.byType(BottomSheet), matching: find.text(text));
+          find.descendant(of: find.byKey(const ValueKey('menu-curtain')), matching: find.text(text));
 
       expect(dialogText('40,000 VND'), findsOneWidget);
       expect(dialogText('30,000 VND'), findsNothing);
@@ -154,16 +154,37 @@ void main() {
     final api = OptionsApi();
     await openMenu(tester, api);
     await tapVisible(tester, find.text('Americano'));
-    final initialHeight = tester.getSize(find.byType(BottomSheet)).height;
+    final initialWidth = tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width;
     final handle = find.byKey(const ValueKey('menu-curtain-handle'));
-    await tester.drag(handle, const Offset(0, -130), kind: PointerDeviceKind.mouse);
-    await tester.pump();
-    expect(tester.getSize(find.byType(BottomSheet)).height, greaterThan(initialHeight + 60));
-    await tester.drag(handle, const Offset(0, 600), kind: PointerDeviceKind.mouse);
+    await tester.drag(handle, const Offset(-130, 0), kind: PointerDeviceKind.mouse);
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(tester.getSize(find.byKey(const ValueKey('menu-curtain'))).width, greaterThan(initialWidth + 20));
+    await tester.drag(handle, const Offset(600, 0), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
     expect(api.ordered, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('menu removal chooses a configuration and subtracts one unit', (tester) async {
+    final api = OptionsApi();
+    await openMenu(tester, api);
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-americano')));
+    await tapVisible(tester, find.text('With milk'));
+    await tapVisible(tester, find.text('ADD TO CART'));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-americano')));
+    await tapVisible(tester, find.text('ADD TO CART'));
+    expect(find.text('Americano × 2'), findsOneWidget);
+    await tapVisible(tester, find.byKey(const ValueKey('menu-remove-americano')));
+    expect(find.text('Remove one drink'), findsOneWidget);
+    await tapVisible(tester, find.text('Americano · With milk · Shots 2/3 × 1'));
+    expect(find.text('Americano × 1'), findsOneWidget);
+    expect(find.text('PAY: 40,000 VND'), findsOneWidget);
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    expect(api.ordered, hasLength(1));
+    expect(api.ordered!.single.options['milk'], 'none');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -181,7 +202,7 @@ void main() {
         await tapVisible(tester, find.text('Americano'));
         await tapVisible(tester, find.text('With milk'));
         await tapVisible(tester, find.text(add));
-        expect(find.text('Americano'), findsOneWidget);
+        expect(find.text('Americano × 1'), findsOneWidget);
         expect(
           tester.widget<Material>(
             find.byKey(const ValueKey('menu-item-surface-americano')),
@@ -191,7 +212,7 @@ void main() {
         expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
         expect(find.byIcon(Icons.tune), findsNothing);
 
-        await tapVisible(tester, find.text('Americano'));
+        await tapVisible(tester, find.byKey(const ValueKey('menu-item-americano')));
         // Each new drink starts from menu defaults, not the previous drink.
         expect(
           tester
@@ -202,7 +223,7 @@ void main() {
           'none',
         );
         await tapVisible(tester, find.text(add));
-        expect(find.text('Americano'), findsOneWidget);
+        expect(find.text('Americano × 2'), findsOneWidget);
         expect(find.widgetWithText(FilledButton, 'Americano'), findsNothing);
         expect(find.text('$viewCart: 85,000 VND'), findsOneWidget);
         await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));

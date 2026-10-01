@@ -167,6 +167,11 @@ class AdminApi {
     return operations();
   }
 
+  Future<OperationsSnapshot> cancelBooking(int id) async {
+    await _request('POST', '/api/admin/booking/cancel', body: {'id': id});
+    return operations();
+  }
+
   Future<OperationsSnapshot> declineBooking(int id) async {
     await _request('POST', '/api/admin/booking/decline', body: {'id': id});
     return operations();

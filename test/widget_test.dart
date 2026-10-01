@@ -111,9 +111,9 @@ void main() {
   });
 
   group('site content', () {
-    test('parses occupancy, prices, openings, and announcements', () {
+    test('parses booking prices, openings, and announcements', () {
       final content = SiteContent.fromJson({
-        'status': {'updated': '2026-08-21', 'total': 12, 'occupied': 5},
+        'status': {'updated': '2026-08-21', 'todayPrice': 150000, 'tomorrowPrice': 200000},
         'prices': [
           {'label_key': 'price_day_pass', 'price': '200K'},
         ],
@@ -132,9 +132,8 @@ void main() {
         ],
       });
 
-      expect(content.status.total, 12);
-      expect(content.status.occupied, 5);
-      expect(content.status.free, 7);
+      expect(content.status.todayPrice, 150000);
+      expect(content.status.tomorrowPrice, 200000);
       expect(content.status.updated, '2026-08-21');
       expect(content.prices.single.price, '200K');
       expect(content.announcements.single.textFor('ru'), 'ПРИВЕТ');
@@ -144,19 +143,9 @@ void main() {
       expect(content.openings.single.isOpen, isFalse);
     });
 
-    test('normalizes malformed occupancy into safe bounds', () {
-      final content = SiteContent.fromJson({
-        'status': {'total': -4, 'occupied': 5000},
-      });
-
-      expect(content.status.total, 1);
-      expect(content.status.occupied, 1);
-      expect(content.status.free, 0);
-    });
-
     test('uses safe demo data when sections are empty', () {
       final content = SiteContent.fromJson(const {});
-      expect(content.status.total, greaterThan(0));
+      expect(content.status.todayPrice, greaterThan(0));
       expect(content.prices, isNotEmpty);
       expect(content.announcements, isNotEmpty);
       expect(content.openings, isNotEmpty);

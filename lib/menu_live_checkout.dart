@@ -29,12 +29,14 @@ class _LiveCheckoutSheet extends StatefulWidget {
     required this.languageCode,
     required this.paymentToken,
     this.initialOrder,
+    this.initialRemoveKey,
   });
   final MenuApi api;
   final List<_CartLine> lines;
   final String languageCode;
   final String paymentToken;
   final MenuOrderPayment? initialOrder;
+  final String? initialRemoveKey;
   @override
   State<_LiveCheckoutSheet> createState() => _LiveCheckoutSheetState();
 }
@@ -133,6 +135,25 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       } catch (_) {}
     }
     setState(() => _initializing = false);
+    final removeKey = widget.initialRemoveKey;
+    if (removeKey != null) {
+      final index = _lines.indexWhere((line) => line.key == removeKey);
+      if (index >= 0) {
+        setState(() {
+          final line = _lines[index];
+          if (line.quantity == 1) { _lines.removeAt(index); }
+          else { _lines[index] = line.copyWith(quantity: line.quantity - 1); }
+          _revision++;
+          _dirty = true;
+        });
+      }
+      if (_lines.isEmpty) { await _cancelEmptyCart(); }
+      else {
+        await _syncPayment();
+        if (mounted && !_paid && !_busy && _error == null && !_dirty) _close();
+      }
+      return;
+    }
     // Promo lookup never delays the first QR.
     unawaited(_refreshPromos());
     await _syncPayment();

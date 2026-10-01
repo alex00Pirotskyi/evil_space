@@ -55,3 +55,21 @@ test('one-tap Telegram booking uses the verified Telegram identity', () => {
     { name: 'Alex P', contact: 'Alex P' },
   );
 });
+
+
+test('automatically accepted Telegram bookings offer cancellation', () => {
+  for (const language of ['en', 'ru', 'vi']) {
+    const keyboard = telegramTest.bookingAdminKeyboard(42, language, 'accepted');
+    assert.equal(keyboard.inline_keyboard[0][0].callback_data, 'bc:42');
+    assert.equal(keyboard.inline_keyboard.flat().some(b => b.callback_data === 'ba:42'), false);
+    const text = telegramTest.bookingAdminText({name: 'Guest', contact_type: 'phone',
+      contact_value: '0123456', amount_vnd: 200000, service_day: 1788109200,
+      created_at: 1788109200}, 'accepted', 'automatic', language);
+    assert.match(text, /automatic/);
+  }
+});
+
+test('cancelled Telegram bookings have no further booking actions', () => {
+  const keyboard = telegramTest.bookingAdminKeyboard(42, 'en', 'cancelled');
+  assert.equal(keyboard.inline_keyboard.flat().some(b => b.callback_data), false);
+});

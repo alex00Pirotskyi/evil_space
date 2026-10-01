@@ -33,123 +33,92 @@ Future<T?> _showMenuSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
   bool dismissible = true,
-}) => showModalBottomSheet<T>(
+}) => showGeneralDialog<T>(
   context: context,
-  builder: builder,
-  isScrollControlled: true,
-  useSafeArea: true,
-  isDismissible: dismissible,
-  // The inner curtain owns dragging so checkout closes with its cart result.
-  enableDrag: false,
-  showDragHandle: false,
-  backgroundColor: BrandPalette.paper,
-  constraints: const BoxConstraints(maxWidth: 560),
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  barrierDismissible: dismissible,
+  barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+  barrierColor: Colors.black38,
+  transitionDuration: const Duration(milliseconds: 240),
+  pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
+    child: Align(alignment: Alignment.centerRight,
+      child: Material(color: BrandPalette.paper, elevation: 12,
+        child: builder(context))),
   ),
-  clipBehavior: Clip.antiAlias,
+  transitionBuilder: (context, animation, secondaryAnimation, child) =>
+    SlideTransition(position: Tween<Offset>(begin: const Offset(1, 0),
+      end: Offset.zero).animate(CurvedAnimation(parent: animation,
+        curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic)),
+      child: child),
 );
 
 class _MenuSheetBody extends StatefulWidget {
-  const _MenuSheetBody({
-    required this.child,
-    this.onDismiss,
-    this.dismissible = true,
-  });
-
+  const _MenuSheetBody({required this.child, this.onDismiss,
+    this.dismissible = true});
   final Widget child;
   final VoidCallback? onDismiss;
   final bool dismissible;
-
   @override
   State<_MenuSheetBody> createState() => _MenuSheetBodyState();
 }
 
 class _MenuSheetBodyState extends State<_MenuSheetBody> {
-  final _controller = DraggableScrollableController();
+  double _distance = 0;
+  bool _expanded = false;
   bool _handlingDismiss = false;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  bool _extentChanged(DraggableScrollableNotification notification) {
-    if (notification.depth != 0 || _handlingDismiss ||
-        notification.extent > notification.minExtent + 0.001) return false;
-    _handlingDismiss = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
+  void _dragEnd(DragEndDetails details) {
+    if (_handlingDismiss) return;
+    if (_distance > 65 || (details.primaryVelocity ?? 0) > 350) {
       if (widget.dismissible) {
+        _handlingDismiss = true;
         final dismiss = widget.onDismiss;
-        if (dismiss != null) {
-          dismiss();
-        } else {
-          Navigator.of(context).pop();
-        }
-        return; // Ignore further drag notifications during the exit animation.
-      } else if (_controller.isAttached) {
-        // An unfinished cart mutation must finish before the sheet can close.
-        await _controller.animateTo(
-          0.72,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-        );
+        if (dismiss != null) { dismiss(); } else { Navigator.of(context).pop(); }
+        return;
       }
-      _handlingDismiss = false;
-    });
-    return false;
+    } else if (_distance < -35 || (details.primaryVelocity ?? 0) < -250) {
+      _expanded = true;
+    }
+    setState(() => _distance = 0);
   }
 
   @override
-  Widget build(BuildContext context) => NotificationListener<DraggableScrollableNotification>(
-    onNotification: _extentChanged,
-    child: DraggableScrollableSheet(
-      controller: _controller,
-      expand: false,
-      initialChildSize: 0.72,
-      minChildSize: 0.3,
-      maxChildSize: 0.92,
-      shouldCloseOnMinExtent: false,
-      builder: (context, scrollController) => SafeArea(
-        top: false,
-        child: ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(
-            dragDevices: {
-              ...ScrollConfiguration.of(context).dragDevices,
-              PointerDeviceKind.mouse,
-            },
-          ),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  key: const ValueKey('menu-curtain-handle'),
-                  height: 36,
-                  child: Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: BrandPalette.inkMuted,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                ),
-                widget.child,
-              ],
-            ),
-          ),
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final width = _expanded ? min(screenWidth, 760.0) : min(screenWidth * 0.88, 560.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) { if (!_handlingDismiss) _distance = 0; },
+      onHorizontalDragUpdate: (details) {
+        if (_handlingDismiss) return;
+        setState(() => _distance += details.primaryDelta ?? 0);
+      },
+      onHorizontalDragEnd: _dragEnd,
+      onHorizontalDragCancel: () { if (!_handlingDismiss) setState(() => _distance = 0); },
+      child: Transform.translate(
+        offset: Offset(widget.dismissible ? max(0.0, _distance) : 0, 0),
+        child: AnimatedContainer(
+          key: const ValueKey('menu-curtain'),
+          width: width,
+          duration: const Duration(milliseconds: 180),
+          decoration: const BoxDecoration(color: BrandPalette.paper,
+            border: Border(left: BorderSide(color: BrandPalette.rule))),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SizedBox(key: const ValueKey('menu-curtain-handle'), width: 24,
+              child: Center(child: Container(width: 4, height: 42,
+                decoration: BoxDecoration(color: BrandPalette.inkMuted,
+                  borderRadius: BorderRadius.circular(2))))),
+            Expanded(child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(dragDevices: {
+                ...ScrollConfiguration.of(context).dragDevices, PointerDeviceKind.mouse,
+              }),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(0, 22, 20, 22),
+                child: widget.child))),
+          ]),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class MenuScreen extends StatefulWidget {
@@ -179,6 +148,7 @@ class _MenuScreenState extends State<MenuScreen> {
   String? _error;
   bool _loading = true;
   bool _checkingOut = false;
+  bool _editingItem = false;
 
   @override
   void initState() {
@@ -242,7 +212,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Future<void> _addItem(MenuItem item) async {
-    if (_checkingOut) return;
+    if (_checkingOut || _editingItem) return;
     if (!item.hasOptions) {
       final existing = _cart.indexWhere(
         (line) => line.item.id == item.id && line.options.isEmpty,
@@ -267,6 +237,7 @@ class _MenuScreenState extends State<MenuScreen> {
       return;
     }
 
+    setState(() => _editingItem = true);
     final configured = await _showMenuSheet<_ConfiguredItem>(
       context,
       builder: (_) => _ItemOptionsSheet(
@@ -276,7 +247,9 @@ class _MenuScreenState extends State<MenuScreen> {
         cancelLabel: _copy('cancel'),
       ),
     );
-    if (configured == null || !mounted) return;
+    if (!mounted) return;
+    setState(() => _editingItem = false);
+    if (configured == null) return;
 
     final key = _selectionKey(item.id, configured.options);
     final existing = _cart.indexWhere((line) => line.key == key);
@@ -310,7 +283,7 @@ class _MenuScreenState extends State<MenuScreen> {
       ? _pendingOrder!.amountVnd
       : _cartTotal;
 
-  Future<void> _checkout() async {
+  Future<void> _checkout({String? removeKey}) async {
     if (_checkingOut || _cart.isEmpty) return;
     _paymentToken ??= _newPaymentToken();
     setState(() {
@@ -326,6 +299,7 @@ class _MenuScreenState extends State<MenuScreen> {
           lines: _cartLines,
           languageCode: widget.localization.language.code,
           initialOrder: _pendingOrder,
+          initialRemoveKey: removeKey,
           paymentToken: _paymentToken!,
         ),
       );
@@ -352,10 +326,11 @@ class _MenuScreenState extends State<MenuScreen> {
     final menu = _menu;
     return Scaffold(
       backgroundColor: BrandPalette.paper,
-      bottomNavigationBar: _cart.isEmpty ? null : _cartBar(),
       body: BrandPaper(
         child: SafeArea(
-          child: Column(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [Expanded(child: Column(
             children: [
               _header(),
               Expanded(
@@ -399,6 +374,9 @@ class _MenuScreenState extends State<MenuScreen> {
                 ),
               ),
             ],
+          )),
+          if (_cart.isNotEmpty) _cartBar(),
+          ],
           ),
         ),
       ),
@@ -411,9 +389,9 @@ class _MenuScreenState extends State<MenuScreen> {
     decoration: const BoxDecoration(
       border: Border(bottom: BorderSide(color: BrandPalette.ink)),
     ),
-    child: Row(
+    child: LayoutBuilder(builder: (context, constraints) => Row(
       children: [
-        const EvilCoworkingLogo(width: 108),
+        EvilCoworkingLogo(width: constraints.maxWidth < 300 ? 80 : 108),
         const Spacer(),
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -424,7 +402,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   onPressed: () => widget.localization.setLanguage(language),
                   style: TextButton.styleFrom(
                     foregroundColor: BrandPalette.ink,
-                    minimumSize: const Size(40, 40),
+                    minimumSize: const Size(32, 40),
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     shape: const RoundedRectangleBorder(),
                     side: selected
@@ -452,7 +430,7 @@ class _MenuScreenState extends State<MenuScreen> {
             label: Text(_copy('back'), style: _mono(10)),
           ),
       ],
-    ),
+    )),
   );
 
   Widget _group(MenuGroup group) {
@@ -478,98 +456,107 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
-  Widget _item(MenuItem item) {
-    final language = widget.localization.language.code;
-    final inCart = _cart.any((line) => line.item.id == item.id);
-    return Material(
-      key: ValueKey('menu-item-surface-${item.id}'),
-      color: inCart ? const Color(0x0F1C1C1A) : Colors.transparent,
-      animationDuration: const Duration(milliseconds: 150),
-      child: Semantics(
-        button: true,
-        selected: inCart,
-        enabled: !_checkingOut,
-        hint: item.hasOptions ? _copy('customize') : _copy('add'),
-        child: InkWell(
-          key: ValueKey('menu-item-${item.id}'),
-          onTap: _checkingOut ? null : () => _addItem(item),
-          overlayColor: _menuInkOverlay,
-          mouseCursor: WidgetStateMouseCursor.clickable,
-          hoverDuration: const Duration(milliseconds: 150),
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 72),
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.nameFor(language), style: _serif(25)),
-                if (item.descriptionFor(language) case final description?) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    description,
-                    style: _serif(
-                      15,
-                      color: BrandPalette.inkMuted,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Text(
-                  item.hasVariablePrice
-                      ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
-                      : _money(item.priceVnd),
-                  style: _mono(12),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  Future<void> _removeItem(MenuItem item) async {
+    if (_checkingOut || _editingItem) return;
+    final variants = _cart.where((line) => line.item.id == item.id).toList();
+    if (variants.isEmpty) return;
+    String? key = variants.length == 1 ? variants.first.key : null;
+    if (variants.length > 1) {
+      setState(() => _editingItem = true);
+      key = await _showMenuSheet<String>(context, builder: (context) => _MenuSheetBody(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(_copy('choose_remove'), style: _serif(28)),
+          const SizedBox(height: 16),
+          for (final line in variants) TextButton(
+            key: ValueKey('menu-remove-variant-${line.key}'),
+            style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
+              padding: const EdgeInsets.symmetric(vertical: 18)).copyWith(overlayColor: _menuInkOverlay),
+            onPressed: () => Navigator.of(context).pop(line.key),
+            child: Text('${line.label(widget.localization.language.code)} × ${line.quantity}',
+              style: _serif(19))),
+          TextButton(onPressed: () => Navigator.of(context).pop(),
+            child: Text(_copy('cancel'), style: _mono(11))),
+        ])));
+      if (!mounted) return;
+      setState(() => _editingItem = false);
+    }
+    if (key == null || !mounted) return;
+    if (_pendingOrder != null || _paymentToken != null) {
+      await _checkout(removeKey: key);
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.key == key);
+    if (index < 0) return;
+    setState(() {
+      final line = _cart[index];
+      if (line.quantity == 1) { _cart.removeAt(index); }
+      else { _cart[index] = line.copyWith(quantity: line.quantity - 1); }
+    });
   }
 
-  Widget _cartBar() => Material(
+  Widget _item(MenuItem item) {
+    final language = widget.localization.language.code;
+    final quantity = _cart.where((line) => line.item.id == item.id)
+      .fold(0, (sum, line) => sum + line.quantity);
+    final enabled = !_checkingOut && !_editingItem;
+    final add = Semantics(button: true, selected: quantity > 0, enabled: enabled,
+      hint: item.hasOptions ? _copy('customize') : _copy('add'),
+      child: InkWell(key: ValueKey('menu-item-${item.id}'),
+        onTap: enabled ? () => _addItem(item) : null,
+        overlayColor: _menuInkOverlay,
+        mouseCursor: WidgetStateMouseCursor.clickable,
+        hoverDuration: const Duration(milliseconds: 150),
+        child: Container(constraints: const BoxConstraints(minHeight: 72),
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(quantity > 0 ? 12 : 0, 18, 8, 18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${item.nameFor(language)}${quantity > 0 ? ' × $quantity' : ''}', style: _serif(25)),
+            if (item.descriptionFor(language) case final description?) ...[
+              const SizedBox(height: 5),
+              Text(description, style: _serif(15, color: BrandPalette.inkMuted, height: 1.3)),
+            ],
+            const SizedBox(height: 8),
+            Text(item.hasVariablePrice
+              ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
+              : _money(item.priceVnd), style: _mono(12)),
+          ]))));
+    return Material(key: ValueKey('menu-item-surface-${item.id}'),
+      color: quantity > 0 ? const Color(0x0F1C1C1A) : Colors.transparent,
+      animationDuration: const Duration(milliseconds: 150),
+      child: Container(decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: BrandPalette.rule))),
+        child: IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (quantity > 0) Expanded(flex: 2, child: Material(color: const Color(0x171C1C1A),
+              child: InkWell(key: ValueKey('menu-remove-${item.id}'),
+                overlayColor: _menuInkOverlay,
+                onTap: enabled ? () => _removeItem(item) : null,
+                child: Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: FittedBox(fit: BoxFit.scaleDown, child: Text(_copy('remove'), style: _mono(9)))))))),
+            Expanded(flex: 8, child: add),
+          ]))));
+  }
+
+  Widget _cartBar() => SizedBox(width: 56, child: Material(
     color: BrandPalette.paperLift,
-    child: SafeArea(
-      top: false,
-      child: GestureDetector(
-        key: const ValueKey('menu-pay-bar'),
-        behavior: HitTestBehavior.opaque,
-        onVerticalDragStart: (_) => _cartSwipeDistance = 0,
-        onVerticalDragUpdate: (details) =>
-            _cartSwipeDistance += details.primaryDelta ?? 0,
-        onVerticalDragEnd: (details) {
-          if (_cartSwipeDistance < -40 ||
-              (details.primaryVelocity ?? 0) < -250) {
-            unawaited(_checkout());
-          }
-        },
-        child: Container(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: BrandPalette.ink)),
-          ),
-          child: TextButton(
-            key: const ValueKey('menu-pay'),
-            onPressed: _checkingOut ? null : _checkout,
-            style: TextButton.styleFrom(
-              foregroundColor: BrandPalette.ink,
-              minimumSize: const Size(double.infinity, 64),
-              shape: const RoundedRectangleBorder(),
-            ).copyWith(overlayColor: _menuInkOverlay),
-            child: Text(
-              '${_copy('pay')}: ${_money(_payTotal)}',
-              style: _mono(12),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
+    child: GestureDetector(key: const ValueKey('menu-pay-bar'),
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) => _cartSwipeDistance = 0,
+      onHorizontalDragUpdate: (details) => _cartSwipeDistance += details.primaryDelta ?? 0,
+      onHorizontalDragEnd: (details) {
+        if (_cartSwipeDistance < -35 || (details.primaryVelocity ?? 0) < -250) {
+          unawaited(_checkout());
+        }
+      },
+      child: Container(decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: BrandPalette.ink))),
+        child: TextButton(key: const ValueKey('menu-pay'),
+          onPressed: _checkingOut || _editingItem ? null : () => _checkout(),
+          style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
+            padding: EdgeInsets.zero, shape: const RoundedRectangleBorder())
+            .copyWith(overlayColor: _menuInkOverlay),
+          child: RotatedBox(quarterTurns: 3,
+            child: Text('${_copy('pay')}: ${_money(_payTotal)}', style: _mono(12))))))));
 
   Widget _empty() => Container(
     padding: const EdgeInsets.all(24),
@@ -984,6 +971,7 @@ const _menuCopy = <String, Map<String, String>>{
     'pay': 'PAY',
     'your_cart': 'Your cart',
     'remove': 'Remove',
+    'choose_remove': 'Remove one drink',
     'pay_now': 'Pay',
     'loading_promos': 'Loading promos…',
     'preparing_payment': 'Preparing your QR…',
@@ -1038,6 +1026,7 @@ const _menuCopy = <String, Map<String, String>>{
     'pay': 'ОПЛАТИТЬ',
     'your_cart': 'Ваша корзина',
     'remove': 'Удалить',
+    'choose_remove': 'Убрать один напиток',
     'pay_now': 'Оплатить',
     'loading_promos': 'Загружаем промо…',
     'preparing_payment': 'Создаём QR…',
@@ -1092,6 +1081,7 @@ const _menuCopy = <String, Map<String, String>>{
     'pay': 'THANH TOÁN',
     'your_cart': 'Giỏ hàng của bạn',
     'remove': 'Xóa',
+    'choose_remove': 'Bớt một đồ uống',
     'pay_now': 'Thanh toán',
     'loading_promos': 'Đang tải khuyến mãi…',
     'preparing_payment': 'Đang tạo mã QR…',

@@ -507,7 +507,9 @@ async function runFlow() {
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.equal(payload.ok, true);
-  assert.ok(Number(payload.status.total) > 0);
+  assert.ok(Number(payload.status.todayPrice) > 0);
+  assert.equal('occupied' in payload.status, false);
+  assert.equal('total' in payload.status, false);
 
   const contactValue = `@integration_${randomBytes(6).toString('hex')}`;
   response = await jsonRequest('/api/public/book', {
@@ -520,7 +522,7 @@ async function runFlow() {
   assert.equal(response.status, 201);
   const booking = await response.json();
   assert.equal(booking.ok, true);
-  assert.equal(booking.status, 'pending');
+  assert.equal(booking.status, 'accepted');
   assert.ok(typeof booking.token === 'string' && booking.token.length >= 32);
 
   response = await http(
@@ -528,7 +530,7 @@ async function runFlow() {
   );
   assert.equal(response.status, 200);
   payload = await response.json();
-  assert.equal(payload.status, 'pending');
+  assert.equal(payload.status, 'accepted');
 
   response = await http('/api/admin/operations', {
     headers: { Cookie: cookie },
@@ -554,10 +556,7 @@ async function runFlow() {
   payload = await response.json();
   assert.equal(payload.status, 'accepted');
 
-  response = await http('/api/public/status');
-  assert.equal(response.status, 200);
-  payload = await response.json();
-  assert.ok(Number(payload.status.occupied) >= 1);
+  await runBookingFlow(cookie, booking, requestRow.id, contactValue);
 
   const reviewToken = reviewApprovalToken;
   response = await http(
@@ -594,6 +593,68 @@ async function runFlow() {
   assert.equal(response.status, 200);
   payload = await response.json();
   assert.equal(payload.authenticated, false);
+}
+
+async function runBookingFlow(cookie, booking, bookingId, contactValue) {
+  const adminHeaders = {Cookie: cookie};
+  const snapshot = async () => {
+    const response = await http('/api/admin/operations', {headers: adminHeaders});
+    assert.equal(response.status, 200);
+    return (await response.json()).snapshot;
+  };
+  const before = await snapshot();
+  assert.ok(before.today_visits.some(v => v.name === 'Integration Test'));
+  let response = await jsonRequest('/api/public/book', {
+    name: 'Duplicate', contactType: 'telegram', contactValue,
+    serviceDate: nhaTrangDateKey(),
+  });
+  assert.equal(response.status, 409);
+  response = await jsonRequest('/api/admin/booking/cancel', {id: bookingId});
+  assert.equal(response.status, 401);
+  for (let i = 0; i < 2; i++) {
+    response = await jsonRequest('/api/admin/booking/cancel', {id: bookingId}, adminHeaders);
+    assert.equal(response.status, 200);
+  }
+  response = await http(`/api/public/booking?token=${encodeURIComponent(booking.token)}`);
+  assert.equal((await response.json()).status, 'cancelled');
+  const after = await snapshot();
+  assert.equal(after.today_visits.length, before.today_visits.length - 1);
+
+  async function sql(text) {
+    const file = path.join(persistDir, 'booking-fixture.sql');
+    writeFileSync(file, text);
+    await runWrangler(['d1', 'execute', 'evil-space', '--local', '--persist-to', persistDir, '--file', file]);
+  }
+  // Tomorrow has one desk. Two simultaneous requests must reserve only one.
+  await sql('UPDATE site_state SET total_desks = 1 WHERE id = 1;');
+  const tomorrow = nhaTrangDateKey(1);
+  const request = (contact) => jsonRequest('/api/public/book', {
+    name: 'Tomorrow guest', contactType: 'phone', contactValue: contact,
+    serviceDate: tomorrow, language: 'vi',
+  });
+  const results = await Promise.all([request('+84900001111'), request('+84900002222')]);
+  assert.deepEqual(results.map(r => r.status).sort(), [201, 409]);
+  const winner = await results.find(r => r.status === 201).json();
+  assert.equal(winner.status, 'accepted');
+  assert.equal(winner.serviceDate, tomorrow);
+  const cancel = await jsonRequest('/api/public/booking/delete', {token: winner.token});
+  assert.equal(cancel.status, 200);
+  const replacement = await request('+84900003333');
+  assert.equal(replacement.status, 201);
+  const replacementBooking = await replacement.json();
+  response = await jsonRequest('/api/public/booking/delete', {token: replacementBooking.token});
+  assert.equal(response.status, 200);
+  response = await jsonRequest('/api/public/book', {
+    name: 'Wrong day', contactType: 'phone', contactValue: '+84900004444',
+    serviceDate: nhaTrangDateKey(2),
+  });
+  assert.equal(response.status, 400);
+  // Concurrent duplicate contacts are rejected even when capacity is available.
+  await sql('UPDATE site_state SET total_desks = 10 WHERE id = 1;');
+  const duplicateResults = await Promise.all([request('+84900005555'), request('+84900005555')]);
+  assert.deepEqual(duplicateResults.map(r => r.status).sort(), [201, 409]);
+  const duplicateWinner = await duplicateResults.find(r => r.status === 201).json();
+  await jsonRequest('/api/public/booking/delete', {token: duplicateWinner.token});
 }
 
 async function runLiveCartFlow(adminCookie) {
@@ -835,8 +896,8 @@ async function removePathWithRetry(target, { required = false } = {}) {
   }
 }
 
-function nhaTrangDateKey() {
-  return new Date(Date.now() + 7 * 60 * 60 * 1000)
+function nhaTrangDateKey(offset = 0) {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000 + offset * 86400000)
     .toISOString()
     .slice(0, 10);
 }
