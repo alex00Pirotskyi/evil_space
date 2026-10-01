@@ -331,20 +331,30 @@ export async function releasePromoForMenuOrder(env, orderId, now = nowSeconds())
 
 export async function releaseExpiredPromoReservations(env, now = nowSeconds()) {
   const expired = await env.evil_space.prepare(`
-    SELECT id, order_type, order_id FROM promo_redemptions
-    WHERE status = 'reserved' AND order_type != 'menu' AND expires_at <= ? ORDER BY id LIMIT 100
+    SELECT r.id, r.order_type, r.order_id FROM promo_redemptions r
+    WHERE r.status = 'reserved' AND (
+      (r.order_type != 'menu' AND r.expires_at <= ?) OR
+      (r.order_type = 'menu' AND EXISTS (
+        SELECT 1 FROM menu_orders o WHERE o.id = r.order_id
+          AND o.status IN ('paid', 'cancelled', 'expired')))
+    ) ORDER BY r.id LIMIT 100
   `).bind(now).all();
-  // Menu reservations follow the order's status, without a checkout deadline.
-  // Booking reservations retain their existing expiry rules.
   for (const row of expired.results ?? []) {
-    await env.evil_space.batch([
-      env.evil_space.prepare(`UPDATE customer_promo_grants SET reserved_uses = reserved_uses - 1
-        WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
-          WHERE id = ? AND status = 'reserved' AND expires_at <= ?)`)
-        .bind(Number(row.id), now),
-      env.evil_space.prepare(`UPDATE promo_redemptions SET status = 'released', released_at = ?
-        WHERE id = ? AND status = 'reserved' AND expires_at <= ?`).bind(now, Number(row.id), now),
-    ]);
+    // Menu reservations follow terminal order status, never a deadline.
+    // These idempotent helpers also repair a missed post-payment consumption.
+    if (row.order_type === 'menu') {
+      await consumePromoForMenuOrder(env, Number(row.order_id), now);
+      await releasePromoForMenuOrder(env, Number(row.order_id), now);
+    } else {
+      await env.evil_space.batch([
+        env.evil_space.prepare(`UPDATE customer_promo_grants SET reserved_uses = reserved_uses - 1
+          WHERE id IN (SELECT customer_promo_id FROM promo_redemptions
+            WHERE id = ? AND status = 'reserved' AND expires_at <= ?)`)
+          .bind(Number(row.id), now),
+        env.evil_space.prepare(`UPDATE promo_redemptions SET status = 'released', released_at = ?
+          WHERE id = ? AND status = 'reserved' AND expires_at <= ?`).bind(now, Number(row.id), now),
+      ]);
+    }
   }
 }
 

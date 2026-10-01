@@ -734,6 +734,20 @@ async function runLiveCartFlow(adminCookie) {
   assert.equal(result.response.status, 200); // Own reservation isn't the campaign cap.
   await post('order/cancel', {token: winner.token}, winnerCookie);
 
+  // If the post-payment promo consumption was interrupted, wallet cleanup
+  // repairs the paid reservation by status, without waiting for a deadline.
+  const recoveryToken = randomBytes(32).toString('base64url');
+  result = await post('order', {token: recoveryToken, items, promoGrantId: 9202});
+  assert.equal(result.response.status, 201);
+  const recoveryHash = createHash('sha256').update(recoveryToken).digest('base64url');
+  const recoveryFile = path.join(persistDir, 'paid-promo-recovery.sql');
+  writeFileSync(recoveryFile, `UPDATE menu_orders SET status = 'paid',
+    paid_at = ${Math.floor(Date.now() / 1000)} WHERE public_token_hash = ${sqlString(recoveryHash)};`);
+  await runWrangler(['d1', 'execute', 'evil-space', '--local', '--persist-to', persistDir, '--file', recoveryFile]);
+  await Promise.all([wallet(), wallet()]);
+  assert.equal((await grant(9202)).reservedUses, 0);
+  assert.equal((await grant(9202)).usedUses, 1);
+
   // Deleting a configured line keeps the other variant and reprices the
   // existing payment; removing the final line cancels it.
   const variants = [
@@ -750,7 +764,7 @@ async function runLiveCartFlow(adminCookie) {
   assert.equal(result.data.order.paymentMessage, variantsOrder.paymentMessage);
   assert.equal(result.data.order.items.length, 1);
   assert.equal(result.data.order.amountVnd, 45000);
-  assert.deepEqual(result.data.order.items[0].options.extras, []);
+  assert.deepEqual(result.data.order.items[0].selection.extras, []);
   const remainingOrder = await adminOrder(variantsOrder.orderCode);
   assert.equal(remainingOrder.amountVnd, 45000);
   assert.doesNotMatch(remainingOrder.itemName, /Milk/);
