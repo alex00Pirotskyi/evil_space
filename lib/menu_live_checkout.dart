@@ -658,10 +658,12 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                 ],
               ),
               Text(_money(line.total), style: _mono(10)),
-              TextButton(
-                onPressed: _editable ? () => _removeLine(line.key) : null,
-                style: const ButtonStyle(overlayColor: _menuInkOverlay),
-                child: Text(_copy('remove').toUpperCase(), style: _mono(8.5)),
+              SizedBox(
+                width: 64,
+                child: _MenuRemoveAction(
+                  label: _copy('remove').toUpperCase(),
+                  onPressed: _editable ? () => _removeLine(line.key) : null,
+                ),
               ),
             ],
           ),
