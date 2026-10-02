@@ -121,6 +121,45 @@ class _MenuSheetBodyState extends State<_MenuSheetBody> {
   }
 }
 
+class _MenuRemoveAction extends StatelessWidget {
+  const _MenuRemoveAction({super.key, required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(44, 64),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    ).copyWith(overlayColor: _menuInkOverlay),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Ink(
+          height: 44,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: onPressed == null ? BrandPalette.paperDeep : BrandPalette.ink,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Icon(
+            Icons.delete_outline,
+            size: 24,
+            color: onPressed == null ? BrandPalette.inkFaint : BrandPalette.paperLift,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(label.toUpperCase(), style: _mono(8.5,
+          color: onPressed == null ? BrandPalette.inkFaint : BrandPalette.inkMuted)),
+      ],
+    ),
+  );
+}
+
 class MenuScreen extends StatefulWidget {
   const MenuScreen({
     super.key,
@@ -528,21 +567,33 @@ class _MenuScreenState extends State<MenuScreen> {
               ? '${_copy('from').toUpperCase()} ${_money(item.priceVnd)}'
               : _money(item.priceVnd), style: _mono(12)),
           ]))));
-    return Material(key: ValueKey('menu-item-surface-${item.id}'),
+    final surface = Material(
+      key: ValueKey('menu-item-surface-${item.id}'),
       color: quantity > 0 ? const Color(0x0F1C1C1A) : Colors.transparent,
       animationDuration: const Duration(milliseconds: 150),
-      child: Container(decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: BrandPalette.rule))),
-        child: IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: add,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (quantity > 0) Expanded(flex: 2, child: Material(color: const Color(0x171C1C1A),
-              child: InkWell(key: ValueKey('menu-remove-${item.id}'),
-                overlayColor: _menuInkOverlay,
-                onTap: enabled ? () => _removeItem(item) : null,
-                child: Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: FittedBox(fit: BoxFit.scaleDown, child: Text(_copy('remove'), style: _mono(9)))))))),
-            Expanded(flex: 8, child: add),
-          ]))));
+            if (quantity > 0) ...[
+              Expanded(flex: 2, child: Center(child: _MenuRemoveAction(
+                key: ValueKey('menu-remove-${item.id}'),
+                label: _copy('remove'),
+                onPressed: enabled ? () => _removeItem(item) : null,
+              ))),
+              const SizedBox(width: 8),
+            ],
+            Expanded(flex: 8, child: surface),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _cartBar() => SizedBox(width: 56, child: Material(
