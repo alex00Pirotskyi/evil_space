@@ -153,7 +153,7 @@ class _MenuRemoveAction extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 5),
-        Text(label.toUpperCase(), style: _mono(8.5,
+        Text(label, style: _mono(8.5,
           color: onPressed == null ? BrandPalette.inkFaint : BrandPalette.inkMuted)),
       ],
     ),

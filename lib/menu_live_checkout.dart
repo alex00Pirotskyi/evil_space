@@ -661,7 +661,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
               SizedBox(
                 width: 64,
                 child: _MenuRemoveAction(
-                  label: _copy('remove'),
+                  label: _copy('remove').toUpperCase(),
                   onPressed: _editable ? () => _removeLine(line.key) : null,
                 ),
               ),
