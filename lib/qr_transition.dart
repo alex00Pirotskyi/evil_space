@@ -212,8 +212,9 @@ class _QrTransitionPainter extends CustomPainter {
     final transition = preparedViewCurve.transform(reveal.value);
     if (reveal.value == 1) return; // Final QR owns painting after the handoff.
     final side = math.min(480.0, size.width * 0.9);
+    // Keep the preview below the scan slot, including on short viewports.
     final preview = Rect.fromLTWH((size.width - side) / 2,
-      56 + math.min(80.0, size.height * 0.12), side, side);
+      56 + 80, side, side);
     final rect = Rect.lerp(preview, destination ?? preview, transition)!;
     final handoff = const Interval(0.85, 1).transform(reveal.value);
     final opacity = hasPayment

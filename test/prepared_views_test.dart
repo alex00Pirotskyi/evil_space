@@ -218,6 +218,10 @@ void main() {
   });
 
   testWidgets('payment rise keeps bars anchored and QR settles before scanning', (tester) async {
+    tester.view.physicalSize = const Size(390, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = PreparationApi()..paymentGate = Completer();
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
