@@ -496,7 +496,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       },
       child: Material(color: BrandPalette.paper,
         child: Column(children: [
-          SizedBox(height: 52, width: double.infinity,
+          SizedBox(height: 56, width: double.infinity,
             child: DecoratedBox(decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: BrandPalette.rule))),
               child: TextButton.icon(
