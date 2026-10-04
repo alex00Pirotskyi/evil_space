@@ -412,19 +412,39 @@ class _MenuScreenState extends State<MenuScreen>
               builder: (context, menuChild) {
                 final progress = Curves.easeInOutCubic.transform(_paymentTransition.value);
                 return Stack(fit: StackFit.expand, children: [
-                  Offstage(offstage: _paymentTransition.isCompleted,
-                    child: IgnorePointer(ignoring: _checkingOut,
-                      child: ExcludeSemantics(excluding: _checkingOut,
-                        child: Opacity(opacity: 1 - progress,
-                          child: menuChild))))),
-                  if (_checkoutLines != null)
-                    Offstage(offstage: _paymentTransition.isDismissed,
-                      child: IgnorePointer(ignoring: !_paymentTransition.isCompleted,
-                        child: ExcludeSemantics(excluding: !_paymentTransition.isCompleted,
-                          child: Opacity(opacity: progress,
-                            child: FractionalTranslation(
-                              translation: Offset(0, 0.02 * (1 - progress)),
-                              child: payment)))))),
+                  Offstage(
+                    offstage: _paymentTransition.isCompleted,
+                    child: IgnorePointer(
+                      ignoring: _checkingOut,
+                      child: ExcludeFocus(
+                        excluding: _checkingOut,
+                        child: ExcludeSemantics(
+                          excluding: _checkingOut,
+                          child: Opacity(opacity: 1 - progress, child: menuChild),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (payment != null)
+                    Offstage(
+                      offstage: _paymentTransition.isDismissed,
+                      child: IgnorePointer(
+                        ignoring: !_paymentTransition.isCompleted,
+                        child: ExcludeFocus(
+                          excluding: !_paymentTransition.isCompleted,
+                          child: ExcludeSemantics(
+                            excluding: !_paymentTransition.isCompleted,
+                            child: Opacity(
+                              opacity: progress,
+                              child: FractionalTranslation(
+                                translation: Offset(0, 0.02 * (1 - progress)),
+                                child: payment,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ]);
               },
             )),

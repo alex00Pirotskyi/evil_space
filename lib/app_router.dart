@@ -29,6 +29,7 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
 
   final LocalizationController localization;
   AppRoute _currentRoute = AppRoute.home;
+  final _navigatorKey = GlobalKey<NavigatorState>();
 
   AppRoute get currentRoute => _currentRoute;
 
@@ -97,6 +98,7 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
     }
 
     return Navigator(
+      key: _navigatorKey,
       pages: [activePage],
       onDidRemovePage: (_) {},
     );
@@ -109,16 +111,18 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
   }
 
   @override
-  Future<bool> popRoute() {
+  Future<bool> popRoute() async {
+    // Let checkout, configuration and other in-page back handlers finish first.
+    if (await _navigatorKey.currentState?.maybePop() ?? false) return true;
     if (_currentRoute == AppRoute.home) {
-      return SynchronousFuture(false);
+      return false;
     }
     if (_currentRoute == AppRoute.adminMenu) {
       navigate(AppRoute.admin);
-      return SynchronousFuture(true);
+      return true;
     }
     navigate(AppRoute.home);
-    return SynchronousFuture(true);
+    return true;
   }
 }
 

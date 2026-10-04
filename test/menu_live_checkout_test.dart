@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/app_route.dart';
+import 'package:evil_space/app_router.dart';
 import 'package:evil_space/menu_api.dart';
 import 'package:evil_space/menu_screen.dart';
 import 'package:flutter/material.dart';
@@ -201,6 +203,38 @@ Future<void> openCart(
 }
 
 void main() {
+  testWidgets('site router lets payment handle back before leaving the menu', (tester) async {
+    final localization = LocalizationController();
+    final delegate = EvilSpaceRouterDelegate(localization: localization);
+    final api = CheckoutApi();
+    await tester.pumpWidget(MaterialApp.router(routerDelegate: delegate,
+      routeInformationParser: const EvilSpaceRouteParser()));
+    await tester.pumpAndSettle();
+    delegate.navigate(AppRoute.menu);
+    await tester.pumpAndSettle();
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(navigator.push<void>(MaterialPageRoute(builder: (_) => MenuScreen(
+      localization: localization, onBack: () {}, api: api))));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Cola'));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    expect(await delegate.popRoute(), isTrue);
+    await tester.pumpAndSettle();
+    expect(delegate.currentRoute, AppRoute.menu);
+    expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
+    expect(find.text('Cola × 1'), findsOneWidget);
+    expect(api.cancellations, isEmpty);
+    expect(await delegate.popRoute(), isTrue);
+    await tester.pumpAndSettle();
+    expect(await delegate.popRoute(), isTrue);
+    await tester.pumpAndSettle();
+    expect(delegate.currentRoute, AppRoute.home);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    delegate.dispose();
+    localization.dispose();
+  });
+
   testWidgets('PAY layers preserve the header, scroll and cart without hidden sessions', (tester) async {
     final api = CheckoutApi();
     tester.view.physicalSize = const Size(320, 400);
