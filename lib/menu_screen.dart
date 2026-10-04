@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'brand_logo.dart';
 import 'brand_surface.dart';
+import 'language_icon.dart';
 import 'localization.dart';
 import 'menu_api.dart';
 
@@ -434,7 +435,10 @@ class _MenuScreenState extends State<MenuScreen> {
           child: EvilCoworkingLogo(width: 108))),
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: AppLanguage.values
+          children: [
+            const LanguageIcon(),
+            const SizedBox(width: 6),
+            ...AppLanguage.values
               .map((language) {
                 final selected = widget.localization.language == language;
                 return TextButton(
@@ -453,6 +457,7 @@ class _MenuScreenState extends State<MenuScreen> {
                 );
               })
               .toList(growable: false),
+          ],
         ),
         const SizedBox(width: 8),
         if (MediaQuery.sizeOf(context).width < 480)
