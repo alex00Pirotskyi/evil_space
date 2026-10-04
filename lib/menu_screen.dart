@@ -41,9 +41,8 @@ Future<T?> _showMenuSheet<T>(
   barrierColor: Colors.black38,
   transitionDuration: const Duration(milliseconds: 240),
   pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
-    child: Align(alignment: Alignment.centerRight,
-      child: Material(color: BrandPalette.paper, elevation: 12,
-        child: builder(context))),
+    child: ClipRect(child: Align(alignment: Alignment.centerRight,
+      child: builder(context))),
   ),
   transitionBuilder: (context, animation, secondaryAnimation, child) =>
     SlideTransition(position: Tween<Offset>(begin: const Offset(1, 0),
@@ -97,7 +96,12 @@ class _MenuSheetBodyState extends State<_MenuSheetBody> {
       onHorizontalDragCancel: () { if (!_handlingDismiss) setState(() => _distance = 0); },
       child: Transform.translate(
         offset: Offset(widget.dismissible ? max(0.0, _distance) : 0, 0),
-        child: AnimatedContainer(
+        child: Material(
+          key: const ValueKey('menu-curtain-surface'),
+          color: BrandPalette.paper,
+          elevation: 12,
+          clipBehavior: Clip.hardEdge,
+          child: AnimatedContainer(
           key: const ValueKey('menu-curtain'),
           width: width,
           duration: const Duration(milliseconds: 180),
@@ -116,6 +120,7 @@ class _MenuSheetBodyState extends State<_MenuSheetBody> {
                 padding: const EdgeInsets.fromLTRB(0, 22, 20, 22),
                 child: widget.child))),
           ]),
+          ),
         ),
       ),
     );
@@ -177,12 +182,21 @@ class MenuScreen extends StatefulWidget {
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends State<MenuScreen> {
+class _MenuScreenState extends State<MenuScreen>
+    with SingleTickerProviderStateMixin {
   late final MenuApi _api;
   MenuOrderPayment? _pendingOrder;
   String? _paymentToken;
   String? _pendingCartFingerprint;
   double _cartSwipeDistance = 0;
+  final _menuScroll = ScrollController();
+  final _checkoutKey = GlobalKey<_LiveCheckoutSheetState>();
+  late final AnimationController _paymentTransition;
+  Completer<_LiveCheckoutResult?>? _checkoutCompleter;
+  List<_CartLine>? _checkoutLines;
+  MenuOrderPayment? _checkoutOrder;
+  String? _checkoutRemoveKey;
+  String? _checkoutToken;
   final List<_CartLine> _cart = [];
   MenuCatalog? _menu;
   String? _error;
@@ -194,6 +208,8 @@ class _MenuScreenState extends State<MenuScreen> {
   void initState() {
     super.initState();
     _api = widget.api ?? MenuApi();
+    _paymentTransition = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 240));
     widget.localization.addListener(_languageChanged);
     _load();
   }
@@ -210,6 +226,9 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   void dispose() {
     widget.localization.removeListener(_languageChanged);
+    if (_checkoutCompleter?.isCompleted == false) _checkoutCompleter!.complete(null);
+    _paymentTransition.dispose();
+    _menuScroll.dispose();
     super.dispose();
   }
 
@@ -326,23 +345,19 @@ class _MenuScreenState extends State<MenuScreen> {
   Future<void> _checkout({String? removeKey}) async {
     if (_checkingOut || _cart.isEmpty) return;
     _paymentToken ??= _newPaymentToken();
+    final completion = Completer<_LiveCheckoutResult?>();
     setState(() {
       _checkingOut = true;
       _error = null;
+      _checkoutCompleter = completion;
+      _checkoutLines = _cartLines;
+      _checkoutOrder = _pendingOrder;
+      _checkoutRemoveKey = removeKey;
+      _checkoutToken = _paymentToken;
     });
+    unawaited(_paymentTransition.forward());
     try {
-      final result = await _showMenuSheet<_LiveCheckoutResult>(
-        context,
-        dismissible: false,
-        builder: (_) => _LiveCheckoutSheet(
-          api: _api,
-          lines: _cartLines,
-          languageCode: widget.localization.language.code,
-          initialOrder: _pendingOrder,
-          initialRemoveKey: removeKey,
-          paymentToken: _paymentToken!,
-        ),
-      );
+      final result = await completion.future;
       if (!mounted || result == null) return;
       setState(() {
         _cart
@@ -357,73 +372,119 @@ class _MenuScreenState extends State<MenuScreen> {
             : result.paymentToken;
       });
     } finally {
-      if (mounted) setState(() => _checkingOut = false);
+      if (mounted) {
+        try { await _paymentTransition.reverse().orCancel; }
+        on TickerCanceled { /* The screen was disposed during its transition. */ }
+        if (mounted) setState(() {
+          _checkingOut = false;
+          _checkoutLines = null;
+          _checkoutCompleter = null;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final menu = _menu;
+    final payment = _checkoutLines == null ? null : _LiveCheckoutSheet(
+      key: _checkoutKey,
+      api: _api,
+      lines: _checkoutLines!,
+      languageCode: widget.localization.language.code,
+      initialOrder: _checkoutOrder,
+      initialRemoveKey: _checkoutRemoveKey,
+      paymentToken: _checkoutToken!,
+      onClose: (result) {
+        final pending = _checkoutCompleter;
+        if (pending != null && !pending.isCompleted) pending.complete(result);
+      },
+    );
     return Scaffold(
       backgroundColor: BrandPalette.paper,
       body: BrandPaper(
         child: SafeArea(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Expanded(child: Column(
-            children: [
-              _header(),
-              Expanded(
-                child: RefreshIndicator(
-                  color: BrandPalette.ink,
-                  onRefresh: _load,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(18, 22, 18, 56),
-                    children: [
-                      Text(_copy('title'), style: _serif(44)),
-                      const SizedBox(height: 6),
-                      Text(
-                        _copy('subtitle'),
-                        style: _serif(
-                          16,
-                          color: BrandPalette.inkMuted,
-                          height: 1.35,
+          child: Column(children: [
+            _header(),
+            Expanded(child: AnimatedBuilder(
+              animation: _paymentTransition,
+              child: _menuView(menu),
+              builder: (context, menuChild) {
+                final progress = Curves.easeInOutCubic.transform(_paymentTransition.value);
+                return Stack(fit: StackFit.expand, children: [
+                  Offstage(
+                    offstage: _paymentTransition.isCompleted,
+                    child: IgnorePointer(
+                      ignoring: _checkingOut,
+                      child: ExcludeFocus(
+                        excluding: _checkingOut,
+                        child: ExcludeSemantics(
+                          excluding: _checkingOut,
+                          child: Opacity(opacity: 1 - progress, child: menuChild),
                         ),
                       ),
-                      const SizedBox(height: 22),
-                      if (_error != null) _errorBox(_error!),
-                      if (_loading && menu == null)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: BrandPalette.ink,
+                    ),
+                  ),
+                  if (payment != null)
+                    Offstage(
+                      offstage: _paymentTransition.isDismissed,
+                      child: IgnorePointer(
+                        ignoring: !_paymentTransition.isCompleted,
+                        child: ExcludeFocus(
+                          excluding: !_paymentTransition.isCompleted,
+                          child: ExcludeSemantics(
+                            excluding: !_paymentTransition.isCompleted,
+                            child: Opacity(
+                              opacity: progress,
+                              child: FractionalTranslation(
+                                translation: Offset(0, 0.02 * (1 - progress)),
+                                child: payment,
+                              ),
                             ),
                           ),
-                        )
-                      else if (menu == null || menu.groups.isEmpty)
-                        _empty()
-                      else
-                        for (final group in menu.groups) ...[
-                          _group(group),
-                          const SizedBox(height: 24),
-                        ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          )),
-          if (_cart.isNotEmpty) _cartBar(),
-          ],
-          ),
+                        ),
+                      ),
+                    ),
+                ]);
+              },
+            )),
+          ]),
         ),
       ),
     );
   }
 
+  Widget _menuView(MenuCatalog? menu) => Column(children: [
+    if (_cart.isNotEmpty) _cartBar(),
+    Expanded(child: RefreshIndicator(
+      color: BrandPalette.ink,
+      onRefresh: _load,
+      child: ListView(
+        key: const ValueKey('menu-list'),
+        controller: _menuScroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 56),
+        children: [
+          Text(_copy('title'), style: _serif(44)),
+          const SizedBox(height: 6),
+          Text(_copy('subtitle'), style: _serif(16,
+            color: BrandPalette.inkMuted, height: 1.35)),
+          const SizedBox(height: 22),
+          if (_error != null) _errorBox(_error!),
+          if (_loading && menu == null)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator(color: BrandPalette.ink)))
+          else if (menu == null || menu.groups.isEmpty) _empty()
+          else for (final group in menu.groups) ...[
+            _group(group), const SizedBox(height: 24),
+          ],
+        ],
+      ),
+    )),
+  ]);
+
   Widget _header() => Container(
+    key: const ValueKey('menu-app-bar'),
     height: 68,
     padding: const EdgeInsets.symmetric(horizontal: 14),
     decoration: const BoxDecoration(
@@ -462,21 +523,26 @@ class _MenuScreenState extends State<MenuScreen> {
         const SizedBox(width: 8),
         if (MediaQuery.sizeOf(context).width < 480)
           IconButton(
-            tooltip: _copy('back'),
-            onPressed: widget.onBack,
+            tooltip: _copy(_checkingOut ? 'return_menu' : 'back'),
+            onPressed: _back,
             style: const ButtonStyle(overlayColor: _menuInkOverlay),
             icon: const Icon(Icons.arrow_back, size: 18),
           )
         else
           TextButton.icon(
-            onPressed: widget.onBack,
+            onPressed: _back,
             style: const ButtonStyle(overlayColor: _menuInkOverlay),
             icon: const Icon(Icons.arrow_back, size: 18),
-            label: Text(_copy('back'), style: _mono(10)),
+            label: Text(_copy(_checkingOut ? 'return_menu' : 'back'), style: _mono(10)),
           ),
       ],
     ),
   );
+
+  void _back() {
+    if (_checkingOut) { _checkoutKey.currentState?._close(); }
+    else { widget.onBack(); }
+  }
 
   Widget _group(MenuGroup group) {
     final items = group.items
@@ -601,7 +667,7 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
-  Widget _cartBar() => SizedBox(width: 56, child: Material(
+  Widget _cartBar() => SizedBox(height: 52, width: double.infinity, child: Material(
     color: BrandPalette.paperLift,
     child: GestureDetector(key: const ValueKey('menu-pay-bar'),
       behavior: HitTestBehavior.opaque,
@@ -613,14 +679,13 @@ class _MenuScreenState extends State<MenuScreen> {
         }
       },
       child: Container(decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: BrandPalette.ink))),
+        border: Border(bottom: BorderSide(color: BrandPalette.rule))),
         child: TextButton(key: const ValueKey('menu-pay'),
           onPressed: _checkingOut || _editingItem ? null : () => _checkout(),
           style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
             padding: EdgeInsets.zero, shape: const RoundedRectangleBorder())
             .copyWith(overlayColor: _menuInkOverlay),
-          child: RotatedBox(quarterTurns: 3,
-            child: Text('${_copy('pay')}: ${_money(_payTotal)}', style: _mono(12))))))));
+          child: Text('${_copy('pay')}: ${_money(_payTotal)}', style: _mono(12)))))));
 
   Widget _empty() => Container(
     padding: const EdgeInsets.all(24),
@@ -1040,6 +1105,7 @@ String _selectionKey(String itemId, Map<String, dynamic> options) {
 
 const _menuCopy = <String, Map<String, String>>{
   'en': {
+    'return_menu': 'MENU',
     'pay': 'PAY',
     'your_cart': 'Your cart',
     'remove': 'Remove',
@@ -1095,6 +1161,7 @@ const _menuCopy = <String, Map<String, String>>{
     'cancel_view': 'Close',
   },
   'ru': {
+    'return_menu': 'МЕНЮ',
     'pay': 'ОПЛАТИТЬ',
     'your_cart': 'Ваша корзина',
     'remove': 'Удалить',
@@ -1150,6 +1217,7 @@ const _menuCopy = <String, Map<String, String>>{
     'cancel_view': 'Закрыть',
   },
   'vi': {
+    'return_menu': 'THỰC ĐƠN',
     'pay': 'THANH TOÁN',
     'your_cart': 'Giỏ hàng của bạn',
     'remove': 'Xóa',
