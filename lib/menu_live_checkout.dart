@@ -139,7 +139,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
 
   void _reportPresentation() {
     if (_paid || _inactive) _pollTimer?.cancel();
-    final payload = _paymentReady ? _order!.qrPayload : null;
+    final payload = _paymentReady && !_cashSelected ? _order!.qrPayload : null;
     if (payload != null && _encodedQr?.payload != payload) {
       _encodedQr = PaymentQrData(payload);
     }

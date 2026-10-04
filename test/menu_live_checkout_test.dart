@@ -5,6 +5,7 @@ import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_router.dart';
 import 'package:evil_space/menu_api.dart';
 import 'package:evil_space/menu_screen.dart';
+import 'package:evil_space/qr_transition.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -472,6 +473,7 @@ void main() {
       expect(api.current!.amountVnd, 20000);
       await tapVisible(tester, find.text('PAY CASH'));
       expect(find.byType(QrImageView), findsNothing);
+      expect(tester.widget<QrTransition>(find.byType(QrTransition)).paymentQr, isNull);
       expect(find.text('Pay cash at counter'), findsOneWidget);
       await tapVisible(tester, find.text('PAY BY QR INSTEAD'));
       expect(find.byType(QrImageView), findsOneWidget);

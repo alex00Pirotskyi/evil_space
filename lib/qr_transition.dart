@@ -209,7 +209,9 @@ class _QrTransitionPainter extends CustomPainter {
       56 + math.min(80.0, size.height * 0.12), side, side);
     final rect = Rect.lerp(preview, destination ?? preview, transition)!;
     final handoff = const Interval(0.85, 1).transform(reveal.value);
-    final opacity = (0.05 + 0.95 * transition) * (1 - handoff);
+    final opacity = hasPayment
+      ? (0.05 + 0.95 * transition) * (1 - handoff)
+      : 0.05 * (1 - transition);
     final paint = Paint()..isAntiAlias = false;
     canvas.save();
     canvas.clipRect(Offset.zero & size);
