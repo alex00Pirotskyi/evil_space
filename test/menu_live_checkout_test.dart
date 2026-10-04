@@ -573,7 +573,8 @@ void main() {
     await tapVisible(tester, find.text('REMOVE'));
     expect(find.text('✓ PAYMENT CONFIRMED'), findsOneWidget);
     expect(find.text('Cola'), findsOneWidget);
-    expect(find.text('Cola × 1'), findsOneWidget);
+    expect(find.text('Cola × 1'), findsNothing);
+    expect(find.text('Cola × 1', skipOffstage: false), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     expect(api.statusRequests, 1);
     final remove = tester.widget<TextButton>(

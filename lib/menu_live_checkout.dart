@@ -494,7 +494,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
       onHorizontalDragEnd: (details) {
         if (_swipeDistance > 65 || (details.primaryVelocity ?? 0) > 350) _close();
       },
-      child: ColoredBox(color: BrandPalette.paper,
+      child: Material(color: BrandPalette.paper,
         child: Column(children: [
           SizedBox(height: 52, width: double.infinity,
             child: DecoratedBox(decoration: const BoxDecoration(

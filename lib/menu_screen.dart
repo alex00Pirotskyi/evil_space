@@ -387,6 +387,19 @@ class _MenuScreenState extends State<MenuScreen>
   @override
   Widget build(BuildContext context) {
     final menu = _menu;
+    final payment = _checkoutLines == null ? null : _LiveCheckoutSheet(
+      key: _checkoutKey,
+      api: _api,
+      lines: _checkoutLines!,
+      languageCode: widget.localization.language.code,
+      initialOrder: _checkoutOrder,
+      initialRemoveKey: _checkoutRemoveKey,
+      paymentToken: _checkoutToken!,
+      onClose: (result) {
+        final pending = _checkoutCompleter;
+        if (pending != null && !pending.isCompleted) pending.complete(result);
+      },
+    );
     return Scaffold(
       backgroundColor: BrandPalette.paper,
       body: BrandPaper(
@@ -395,14 +408,15 @@ class _MenuScreenState extends State<MenuScreen>
             _header(),
             Expanded(child: AnimatedBuilder(
               animation: _paymentTransition,
-              builder: (context, _) {
+              child: _menuView(menu),
+              builder: (context, menuChild) {
                 final progress = Curves.easeInOutCubic.transform(_paymentTransition.value);
                 return Stack(fit: StackFit.expand, children: [
                   Offstage(offstage: _paymentTransition.isCompleted,
                     child: IgnorePointer(ignoring: _checkingOut,
                       child: ExcludeSemantics(excluding: _checkingOut,
                         child: Opacity(opacity: 1 - progress,
-                          child: _menuView(menu))))),
+                          child: menuChild))))),
                   if (_checkoutLines != null)
                     Offstage(offstage: _paymentTransition.isDismissed,
                       child: IgnorePointer(ignoring: !_paymentTransition.isCompleted,
@@ -410,19 +424,7 @@ class _MenuScreenState extends State<MenuScreen>
                           child: Opacity(opacity: progress,
                             child: FractionalTranslation(
                               translation: Offset(0, 0.02 * (1 - progress)),
-                              child: _LiveCheckoutSheet(
-                                key: _checkoutKey,
-                                api: _api,
-                                lines: _checkoutLines!,
-                                languageCode: widget.localization.language.code,
-                                initialOrder: _checkoutOrder,
-                                initialRemoveKey: _checkoutRemoveKey,
-                                paymentToken: _checkoutToken!,
-                                onClose: (result) {
-                                  final pending = _checkoutCompleter;
-                                  if (pending != null && !pending.isCompleted) pending.complete(result);
-                                },
-                              )))))),
+                              child: payment)))))),
                 ]);
               },
             )),
