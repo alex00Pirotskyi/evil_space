@@ -9,6 +9,7 @@ import 'package:evil_space/app_route.dart';
 import 'package:evil_space/brand_logo.dart';
 import 'package:evil_space/brand_surface.dart';
 import 'package:evil_space/coworking_model.dart';
+import 'package:evil_space/language_icon.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/public_account_bar.dart';
 import 'package:evil_space/public_desk.dart';
@@ -498,7 +499,10 @@ class _DailyScreenState extends State<DailyScreen>
       label: 'Language',
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: AppLanguage.values
+        children: [
+          const LanguageIcon(),
+          const SizedBox(width: 6),
+          ...AppLanguage.values
             .map((language) {
               final selected = widget.localization.language == language;
               return Padding(
@@ -522,6 +526,7 @@ class _DailyScreenState extends State<DailyScreen>
               );
             })
             .toList(growable: false),
+        ],
       ),
     );
   }
