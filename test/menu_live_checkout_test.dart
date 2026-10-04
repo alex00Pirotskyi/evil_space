@@ -706,7 +706,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('menu counter and 20 percent REMOVE reduce exactly one unit', (tester) async {
+  testWidgets('menu counter and right 30 percent REMOVE reduce exactly one unit', (tester) async {
     final api = CheckoutApi();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -720,12 +720,13 @@ void main() {
     await tapVisible(tester, add);
     expect(find.text('Cola × 2'), findsOneWidget);
     final remove = find.byKey(const ValueKey('menu-remove-cola'));
-    expect(tester.getSize(add).width / tester.getSize(remove).width, closeTo(4, 0.01));
+    expect(tester.getSize(add).width / tester.getSize(remove).width, closeTo(7 / 3, 0.01));
+    expect(tester.getRect(remove).left, closeTo(tester.getRect(add).right, 0.01));
     final rail = tester.getRect(find.byKey(const ValueKey('menu-pay-bar')));
     expect(rail.right, closeTo(390, 1));
     expect(rail.left, 0);
     expect(rail.width, 390);
-    expect(rail.height, 52);
+    expect(rail.height, 56);
     expect(rail.top, tester.getRect(find.byKey(const ValueKey('menu-app-bar'))).bottom);
     await tapVisible(tester, remove);
     expect(find.text('Cola × 1'), findsOneWidget);

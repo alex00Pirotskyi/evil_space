@@ -137,30 +137,22 @@ class _MenuRemoveAction extends StatelessWidget {
   Widget build(BuildContext context) => TextButton(
     onPressed: onPressed,
     style: TextButton.styleFrom(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       minimumSize: const Size(44, 64),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-    ).copyWith(overlayColor: _menuInkOverlay),
+      backgroundColor: BrandPalette.ink,
+      disabledBackgroundColor: BrandPalette.paperDeep,
+      foregroundColor: BrandPalette.paperLift,
+      disabledForegroundColor: BrandPalette.inkFaint,
+      shape: const RoundedRectangleBorder(),
+    ).copyWith(overlayColor: _menuPaperOverlay),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Ink(
-          height: 44,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: onPressed == null ? BrandPalette.paperDeep : BrandPalette.ink,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Icon(
-            Icons.delete_outline,
-            size: 24,
-            color: onPressed == null ? BrandPalette.inkFaint : BrandPalette.paperLift,
-          ),
-        ),
+        const Icon(Icons.delete_outline, size: 24),
         const SizedBox(height: 5),
         Text(label, style: _mono(8.5,
-          color: onPressed == null ? BrandPalette.inkFaint : BrandPalette.inkMuted)),
+          color: onPressed == null ? BrandPalette.inkFaint : BrandPalette.paperLift)),
       ],
     ),
   );
@@ -642,7 +634,7 @@ class _MenuScreenState extends State<MenuScreen>
       key: ValueKey('menu-item-surface-${item.id}'),
       color: quantity > 0 ? const Color(0x0F1C1C1A) : Colors.transparent,
       animationDuration: const Duration(milliseconds: 150),
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.zero,
       clipBehavior: Clip.antiAlias,
       child: add,
     );
@@ -652,23 +644,21 @@ class _MenuScreenState extends State<MenuScreen>
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (quantity > 0) ...[
-              Expanded(flex: 2, child: Center(child: _MenuRemoveAction(
+            Expanded(flex: 7, child: surface),
+            if (quantity > 0)
+              Expanded(flex: 3, child: _MenuRemoveAction(
                 key: ValueKey('menu-remove-${item.id}'),
                 label: _copy('remove'),
                 onPressed: enabled ? () => _removeItem(item) : null,
-              ))),
-              const SizedBox(width: 8),
-            ],
-            Expanded(flex: 8, child: surface),
+              )),
           ],
         ),
       ),
     );
   }
 
-  Widget _cartBar() => SizedBox(height: 52, width: double.infinity, child: Material(
-    color: BrandPalette.paperLift,
+  Widget _cartBar() => SizedBox(height: 56, width: double.infinity, child: Material(
+    color: BrandPalette.ink,
     child: GestureDetector(key: const ValueKey('menu-pay-bar'),
       behavior: HitTestBehavior.opaque,
       onHorizontalDragStart: (_) => _cartSwipeDistance = 0,
@@ -679,13 +669,14 @@ class _MenuScreenState extends State<MenuScreen>
         }
       },
       child: Container(decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: BrandPalette.rule))),
+        border: Border(bottom: BorderSide(color: BrandPalette.ink))),
         child: TextButton(key: const ValueKey('menu-pay'),
           onPressed: _checkingOut || _editingItem ? null : () => _checkout(),
-          style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
+          style: TextButton.styleFrom(foregroundColor: BrandPalette.paperLift,
             padding: EdgeInsets.zero, shape: const RoundedRectangleBorder())
-            .copyWith(overlayColor: _menuInkOverlay),
-          child: Text('${_copy('pay')}: ${_money(_payTotal)}', style: _mono(12)))))));
+            .copyWith(overlayColor: _menuPaperOverlay),
+          child: Text('${_copy('pay')}: ${_money(_payTotal)}',
+            style: _mono(14, color: BrandPalette.paperLift)))))));
 
   Widget _empty() => Container(
     padding: const EdgeInsets.all(24),
