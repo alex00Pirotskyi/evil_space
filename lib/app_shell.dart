@@ -22,11 +22,13 @@ class DailyScreen extends StatefulWidget {
     required this.currentRoute,
     required this.localization,
     required this.onNavigate,
+    this.isActive = true,
   });
 
   final AppRoute currentRoute;
   final LocalizationController localization;
   final AppRouteCallback onNavigate;
+  final bool isActive;
 
   @override
   State<DailyScreen> createState() => _DailyScreenState();
@@ -67,10 +69,7 @@ class _DailyScreenState extends State<DailyScreen>
     _bookings = _deskApi.savedBookings();
     unawaited(_loadContent());
     unawaited(_loadPublicState());
-    _statusTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => _pollPublicState(),
-    );
+    _updatePolling();
     _scheduleQrScrollIfNeeded();
   }
 
@@ -84,6 +83,10 @@ class _DailyScreenState extends State<DailyScreen>
     if (oldWidget.currentRoute != widget.currentRoute) {
       _qrScrollScheduled = false;
       _scheduleQrScrollIfNeeded();
+    }
+    if (oldWidget.isActive != widget.isActive) {
+      _updatePolling();
+      if (widget.isActive && _appActive) unawaited(_loadPublicState());
     }
   }
 
@@ -99,8 +102,15 @@ class _DailyScreenState extends State<DailyScreen>
   bool get _hasPendingBooking =>
       _bookings.any((booking) => booking.pending);
 
+  void _updatePolling() {
+    _statusTimer?.cancel();
+    _statusTimer = widget.isActive && _appActive
+        ? Timer.periodic(const Duration(seconds: 10), (_) => _pollPublicState())
+        : null;
+  }
+
   void _pollPublicState() {
-    if (!_appActive) return;
+    if (!_appActive || !widget.isActive) return;
     _statusPollTick += 1;
     if (_hasPendingBooking || _statusPollTick % 3 == 0) {
       unawaited(_loadPublicState());
@@ -112,7 +122,8 @@ class _DailyScreenState extends State<DailyScreen>
     final active = state == AppLifecycleState.resumed;
     if (active == _appActive) return;
     _appActive = active;
-    if (active) {
+    _updatePolling();
+    if (active && widget.isActive) {
       _statusPollTick = 0;
       unawaited(_loadPublicState());
     }
@@ -161,7 +172,7 @@ class _DailyScreenState extends State<DailyScreen>
       });
     } finally {
       _publicRefreshInFlight = false;
-      if (_publicRefreshQueued && mounted) {
+      if (_publicRefreshQueued && mounted && widget.isActive && _appActive) {
         _publicRefreshQueued = false;
         unawaited(_loadPublicState());
       }
@@ -420,6 +431,7 @@ class _DailyScreenState extends State<DailyScreen>
                                     _header(compact),
                                     const SizedBox(height: 24),
                                     PublicAccountBar(
+                                      isActive: widget.isActive,
                                       localization: widget.localization,
                                     ),
                                     const SizedBox(height: 32),

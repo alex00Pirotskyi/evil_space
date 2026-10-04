@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -6,8 +8,12 @@ import 'package:evil_space/admin_portal.dart' deferred as admin_portal;
 import 'package:evil_space/app_route.dart';
 import 'package:evil_space/app_shell.dart';
 import 'package:evil_space/localization.dart';
+import 'package:evil_space/menu_api.dart';
 import 'package:evil_space/menu_screen.dart' deferred as menu_screen;
 import 'package:evil_space/public_telegram_connector.dart';
+import 'package:evil_space/prepared_view_layers.dart';
+import 'package:evil_space/brand_logo.dart';
+import 'package:evil_space/brand_surface.dart';
 
 class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
   const EvilSpaceRouteParser();
@@ -25,9 +31,10 @@ class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
 
 class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
     with ChangeNotifier {
-  EvilSpaceRouterDelegate({required this.localization});
+  EvilSpaceRouterDelegate({required this.localization, this.menuApi});
 
   final LocalizationController localization;
+  final MenuApi? menuApi;
   AppRoute _currentRoute = AppRoute.home;
   final _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -67,32 +74,15 @@ class EvilSpaceRouterDelegate extends RouterDelegate<AppRoute>
           ),
         ),
       );
-    } else if (_currentRoute == AppRoute.menu) {
-      activePage = MaterialPage<void>(
-        key: const ValueKey('public-menu'),
-        name: AppRoute.menu.path,
-        child: _DeferredMenuScreen(
-          localization: localization,
-          onBack: () => navigate(AppRoute.home),
-        ),
-      );
     } else {
-      final publicRoute =
-          _currentRoute == AppRoute.qr ? AppRoute.qr : AppRoute.home;
       activePage = MaterialPage<void>(
-        key: ValueKey('public-${publicRoute.path}'),
-        name: publicRoute.path,
-        child: _PublicWithMenuButton(
+        key: const ValueKey('public-shell'),
+        name: _currentRoute.path,
+        child: _PublicViews(
+          route: _currentRoute,
           localization: localization,
-          onOpenMenu: () => navigate(AppRoute.menu),
-          child: PublicTelegramConnector(
-            localization: localization,
-            child: DailyScreen(
-              currentRoute: publicRoute,
-              localization: localization,
-              onNavigate: navigate,
-            ),
-          ),
+          onNavigate: navigate,
+          api: menuApi,
         ),
       );
     }
@@ -131,11 +121,15 @@ class _PublicWithMenuButton extends StatefulWidget {
     required this.localization,
     required this.onOpenMenu,
     required this.child,
+    this.preparing = false,
+    this.failed = false,
   });
 
   final LocalizationController localization;
   final VoidCallback onOpenMenu;
   final Widget child;
+  final bool preparing;
+  final bool failed;
 
   @override
   State<_PublicWithMenuButton> createState() => _PublicWithMenuButtonState();
@@ -193,9 +187,10 @@ class _PublicWithMenuButtonState extends State<_PublicWithMenuButton> {
               backgroundColor: const Color(0xFF1C1C1A),
               foregroundColor: const Color(0xFFF8F6EE),
               shape: const RoundedRectangleBorder(),
-              icon: const Icon(Icons.restaurant_menu, size: 18),
+              icon: Icon(widget.failed ? Icons.refresh : widget.preparing
+                  ? Icons.close : Icons.restaurant_menu, size: 18),
               label: Text(
-                _label,
+                widget.preparing ? '$_label…' : _label,
                 style: const TextStyle(
                   fontFamily: 'Courier New',
                   fontWeight: FontWeight.w700,
@@ -248,63 +243,138 @@ class _AdminWithMenuButton extends StatelessWidget {
   }
 }
 
-class _DeferredMenuScreen extends StatefulWidget {
-  const _DeferredMenuScreen({
-    required this.localization,
-    required this.onBack,
-  });
-
+// Keep the initial homepage frame independent of the deferred menu download.
+class _PublicViews extends StatefulWidget {
+  const _PublicViews({required this.route, required this.localization,
+    required this.onNavigate, this.api});
+  final AppRoute route;
   final LocalizationController localization;
-  final VoidCallback onBack;
-
+  final ValueChanged<AppRoute> onNavigate;
+  final MenuApi? api;
   @override
-  State<_DeferredMenuScreen> createState() => _DeferredMenuScreenState();
+  State<_PublicViews> createState() => _PublicViewsState();
 }
 
-class _DeferredMenuScreenState extends State<_DeferredMenuScreen> {
-  late Future<void> _loader = menu_screen.loadLibrary();
+class _PublicViewsState extends State<_PublicViews>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _transition;
+  late final MenuApi _api;
+  MenuCatalog? _catalog;
+  bool _preparing = false;
+  bool _failed = false;
+  bool _ready = false;
+  late final bool _directMenu;
+  AppRoute _homeRoute = AppRoute.home;
 
-  void _retry() {
-    setState(() => _loader = menu_screen.loadLibrary());
+  @override
+  void initState() {
+    super.initState();
+    _api = widget.api ?? MenuApi();
+    _directMenu = widget.route == AppRoute.menu;
+    _transition = AnimationController(vsync: this,
+      duration: const Duration(milliseconds: 400));
+    if (widget.route == AppRoute.qr) _homeRoute = AppRoute.qr;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_prepare());
+    });
+  }
+
+  Future<void> _prepare() async {
+    if (_preparing || _ready) return;
+    setState(() { _preparing = true; _failed = false; });
+    try {
+      final prepared = await Future.wait<Object>([
+        menu_screen.loadLibrary().then<Object>((_) => true), _api.menu(),
+      ]);
+      final catalog = prepared[1] as MenuCatalog;
+      if (!mounted) return;
+      setState(() { _catalog = catalog; });
+      // The hidden page receives a layout pass before it can be revealed.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() { _ready = true; _preparing = false; });
+        _navigateView();
+      });
+    } catch (_) {
+      if (mounted) setState(() { _failed = true; _preparing = false; });
+    }
+  }
+
+  void _navigateView() {
+    final showMenu = widget.route == AppRoute.menu && _ready;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _transition.value = showMenu ? 1 : 0;
+    } else if (showMenu) {
+      unawaited(_transition.forward());
+    } else {
+      unawaited(_transition.reverse());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PublicViews oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.route != AppRoute.menu) _homeRoute = widget.route;
+    if (oldWidget.route != widget.route) _navigateView();
+  }
+
+  @override
+  void dispose() {
+    _transition.dispose();
+    super.dispose();
+  }
+
+  void _menuAction() {
+    if (_failed) { unawaited(_prepare()); return; }
+    widget.onNavigate(widget.route == AppRoute.menu && !_ready
+      ? AppRoute.home : AppRoute.menu);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _loader,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done &&
-            snapshot.error == null) {
-          return menu_screen.MenuScreen(
-            localization: widget.localization,
-            onBack: widget.onBack,
-          );
-        }
-        if (snapshot.hasError) {
-          return Scaffold(
-            backgroundColor: const Color(0xFFF2F0E8),
-            body: Center(
-              child: OutlinedButton(
-                onPressed: _retry,
-                child: const Text('RETRY MENU'),
-              ),
-            ),
-          );
-        }
-        return const Scaffold(
-          backgroundColor: Color(0xFFF2F0E8),
-          body: Center(
-            child: SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        );
-      },
-    );
+    final pending = widget.route == AppRoute.menu && !_ready;
+    return ColoredBox(color: const Color(0xFFF2F0E8),
+      child: PreparedViewLayers(controller: _transition,
+        first: _PublicWithMenuButton(localization: widget.localization,
+          onOpenMenu: _menuAction, preparing: pending && !_failed,
+          failed: _failed,
+          child: _directMenu && !_ready && widget.route == AppRoute.menu
+            ? _MenuPreparationShell(localization: widget.localization,
+                failed: _failed, onRetry: _menuAction)
+            : PublicTelegramConnector(localization: widget.localization,
+            child: DailyScreen(currentRoute: _homeRoute,
+              isActive: widget.route != AppRoute.menu || !_ready,
+              localization: widget.localization, onNavigate: widget.onNavigate))),
+        second: _catalog == null ? null : menu_screen.MenuScreen(
+          key: const ValueKey('prepared-menu'), api: _api, initialMenu: _catalog,
+          isActive: widget.route == AppRoute.menu && _ready,
+          localization: widget.localization,
+          onBack: () => widget.onNavigate(AppRoute.home))));
   }
 }
 
+
+class _MenuPreparationShell extends StatelessWidget {
+  const _MenuPreparationShell({required this.localization,
+    required this.failed, required this.onRetry});
+  final LocalizationController localization;
+  final bool failed;
+  final VoidCallback onRetry;
+  @override
+  Widget build(BuildContext context) => SafeArea(child: Column(children: [
+    const SizedBox(height: 68, child: Align(alignment: Alignment.centerLeft,
+      child: Padding(padding: EdgeInsets.only(left: 14),
+        child: EvilCoworkingLogo(width: 108)))),
+    const SizedBox(height: 56, width: double.infinity,
+      child: ColoredBox(color: BrandPalette.paperDeep,
+        child: Center(child: Text('PAY: 0 VND')))),
+    if (failed) TextButton(onPressed: onRetry,
+      child: Text(switch (localization.language) {
+        AppLanguage.ru => 'ПОВТОРИТЬ', AppLanguage.vi => 'THỬ LẠI',
+        AppLanguage.en => 'RETRY MENU',
+      })),
+  ]));
+}
 
 class _DeferredAdminPortal extends StatefulWidget {
   const _DeferredAdminPortal({

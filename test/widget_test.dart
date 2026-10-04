@@ -8,6 +8,7 @@ import 'package:evil_space/coworking_model.dart';
 import 'package:evil_space/localization.dart';
 import 'package:evil_space/main.dart';
 import 'package:evil_space/menu_screen.dart';
+import 'menu_live_checkout_test.dart' show CheckoutApi;
 
 void main() {
   group('routing', () {
@@ -63,7 +64,10 @@ void main() {
     });
 
     testWidgets('the café amenity opens the existing menu', (tester) async {
-      await tester.pumpWidget(const EvilSpaceApp());
+      final localization = LocalizationController();
+      await tester.pumpWidget(MaterialApp.router(
+        routerDelegate: EvilSpaceRouterDelegate(localization: localization, menuApi: CheckoutApi()),
+        routeInformationParser: const EvilSpaceRouteParser()));
       await tester.pumpAndSettle();
 
       expect(find.text('01  /  COWORKING'), findsOneWidget);

@@ -9,35 +9,49 @@ import 'package:evil_space/localization.dart';
 import 'package:evil_space/public_promo_wallet.dart';
 
 class PublicAccountBar extends StatefulWidget {
-  const PublicAccountBar({super.key, required this.localization});
+  const PublicAccountBar({super.key, required this.localization, this.isActive = true});
 
   final LocalizationController localization;
+  final bool isActive;
 
   @override
   State<PublicAccountBar> createState() => _PublicAccountBarState();
 }
 
-class _PublicAccountBarState extends State<PublicAccountBar> {
+class _PublicAccountBarState extends State<PublicAccountBar> with WidgetsBindingObserver {
   final CustomerAccountApi _api = CustomerAccountApi();
   final TextEditingController _phoneInlineController = TextEditingController();
   CustomerAccountSnapshot? _snapshot;
   Timer? _refreshTimer;
   bool _busy = false;
+  bool _resumed = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.localization.addListener(_languageChanged);
     unawaited(_load());
-    _refreshTimer = Timer.periodic(
+    _updatePolling();
+  }
+
+  void _updatePolling() {
+    _refreshTimer?.cancel();
+    _refreshTimer = widget.isActive && _resumed ? Timer.periodic(
       const Duration(seconds: 60),
       (_) {
         if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
           unawaited(_load(silent: true));
         }
       },
-    );
+    ) : null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _resumed = state == AppLifecycleState.resumed;
+    _updatePolling();
   }
 
   @override
@@ -47,10 +61,12 @@ class _PublicAccountBarState extends State<PublicAccountBar> {
       oldWidget.localization.removeListener(_languageChanged);
       widget.localization.addListener(_languageChanged);
     }
+    if (oldWidget.isActive != widget.isActive) _updatePolling();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.localization.removeListener(_languageChanged);
     _refreshTimer?.cancel();
     _phoneInlineController.dispose();

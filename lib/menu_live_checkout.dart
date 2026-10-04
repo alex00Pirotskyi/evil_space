@@ -30,6 +30,10 @@ class _LiveCheckoutSheet extends StatefulWidget {
     required this.languageCode,
     required this.paymentToken,
     required this.onClose,
+    required this.onPresentation,
+    required this.reveal,
+    required this.qrSlotKey,
+    this.isActive = true,
     this.initialOrder,
     this.initialRemoveKey,
   });
@@ -38,6 +42,10 @@ class _LiveCheckoutSheet extends StatefulWidget {
   final String languageCode;
   final String paymentToken;
   final ValueChanged<_LiveCheckoutResult> onClose;
+  final void Function(PaymentQrData?, String?, bool) onPresentation;
+  final AnimationController reveal;
+  final GlobalKey qrSlotKey;
+  final bool isActive;
   final MenuOrderPayment? initialOrder;
   final String? initialRemoveKey;
   @override
@@ -67,6 +75,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   int _revision = 0;
   int _promoRequest = 0;
   double _swipeDistance = 0;
+  PaymentQrData? _encodedQr;
+  Object? _presentation;
 
   String _copy(String key) =>
       _menuCopy[widget.languageCode]?[key] ?? _menuCopy['en']![key]!;
@@ -101,14 +111,50 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     _syncedLines = List.of(_lines);
     _selectedGrantId = _order?.promoGrantId;
     _status = _order?.status ?? 'pending';
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _poll());
+    _updatePolling();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _resumed = state == AppLifecycleState.resumed;
-    if (_resumed) unawaited(_poll());
+    _updatePolling();
+    if (_resumed && widget.isActive) unawaited(_poll());
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveCheckoutSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive != widget.isActive) {
+      _updatePolling();
+      if (widget.isActive) unawaited(_poll());
+    }
+  }
+
+  void _updatePolling() {
+    _pollTimer?.cancel();
+    _pollTimer = widget.isActive && _resumed && !_closing && !_paid && !_inactive
+      ? Timer.periodic(const Duration(seconds: 2), (_) => _poll()) : null;
+  }
+
+  void _reportPresentation() {
+    if (_paid || _inactive) _pollTimer?.cancel();
+    final payload = _paymentReady ? _order!.qrPayload : null;
+    if (payload != null && _encodedQr?.payload != payload) {
+      _encodedQr = PaymentQrData(payload);
+    }
+    final snapshot = (payload, _error, _status, _busy);
+    if (_presentation == snapshot) return;
+    _presentation = snapshot;
+    final qr = payload == null ? null : _encodedQr;
+    final error = _error;
+    final reveal = _paymentReady || _paid || _inactive || _cancelling ||
+      widget.initialRemoveKey != null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_closing && _presentation == snapshot) {
+        widget.onPresentation(qr, error, reveal);
+      }
+    });
   }
 
   @override
@@ -297,6 +343,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
 
   Future<void> _poll() async {
     if (_closing ||
+        !widget.isActive ||
         !_resumed ||
         _order == null ||
         _busy ||
@@ -481,10 +528,12 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: false,
+  Widget build(BuildContext context) {
+    _reportPresentation();
+    return PopScope(
+    canPop: !widget.isActive,
     onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) _close();
+      if (!didPop && widget.isActive) _close();
     },
     child: GestureDetector(
       key: const ValueKey('menu-payment-view'),
@@ -505,7 +554,11 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                 style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
                   shape: const RoundedRectangleBorder()).copyWith(overlayColor: _menuInkOverlay),
                 icon: const Icon(Icons.arrow_back, size: 18),
-                label: Text(_copy('return_menu'), style: _mono(12)),
+                label: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(_copy('return_menu'), style: _mono(12)),
+                  const SizedBox(width: 12),
+                  Flexible(child: Text(_money(_total), style: _mono(12))),
+                ]),
               ))),
           Expanded(child: LayoutBuilder(builder: (context, constraints) =>
             ScrollConfiguration(
@@ -524,10 +577,18 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
         ])),
     ),
   );
+  }
 
   Widget _content() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_paymentReady) ...[
+            Text('${_copy('pay_now').toUpperCase()} ${_money(_total)}',
+              textAlign: TextAlign.center, style: _mono(13)),
+            const SizedBox(height: 16),
+            if (_cashSelected) _cashView() else _qrView(),
+            const SizedBox(height: 24),
+          ],
           Text(_copy('your_cart').toUpperCase(), style: _mono(12)),
           const SizedBox(height: 12),
           for (var i = 0; i < _lines.length; i++) _cartLine(i),
@@ -588,25 +649,9 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
             Text(_copy('payment_inactive'), style: _serif(16)),
             const SizedBox(height: 12),
             _button(_copy('refresh_payment'), _newPayment),
-          ] else if (_paymentReady) ...[
-            Text(
-              '${_copy('pay_now').toUpperCase()} ${_money(_total)}',
-              textAlign: TextAlign.center,
-              style: _mono(13),
-            ),
-            const SizedBox(height: 16),
-            if (_cashSelected) _cashView() else _qrView(),
-          ] else if (_error == null) ...[
+          ] else if (!_paymentReady && _error == null) ...[
             const SizedBox(height: 26),
-            const Center(
-              child: SizedBox.square(
-                dimension: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: BrandPalette.ink,
-                ),
-              ),
-            ),
+            const Center(child: Icon(Icons.more_horiz, color: BrandPalette.inkMuted)),
             const SizedBox(height: 12),
             Text(
               _copy(
@@ -739,18 +784,27 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     children: [
       LayoutBuilder(
         builder: (_, constraints) => Center(
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(12),
-            child: QrImageView(
-              data: _order!.qrPayload,
-              version: QrVersions.auto,
-              size: min(260, constraints.maxWidth - 24),
-              backgroundColor: Colors.white,
-              eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
-              dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink),
-            ),
-          ),
+          child: Builder(builder: (context) {
+            final qr = _encodedQr!;
+            final side = min(300.0, constraints.maxWidth);
+            final margin = side * 4 / (qr.matrix.count + 8);
+            return Container(key: widget.qrSlotKey,
+              width: side, height: side,
+              child: FadeTransition(
+                opacity: widget.reveal.drive(CurveTween(curve: const Interval(0.85, 1))),
+                child: TweenAnimationBuilder<double>(
+                  key: ValueKey(qr.payload),
+                  duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero : const Duration(milliseconds: 300),
+                  tween: Tween(begin: 0, end: 1),
+                  builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),
+                  child: QrImageView.withQr(qr: qr.code, size: side,
+                    padding: EdgeInsets.all(margin), backgroundColor: Colors.white,
+                    eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
+                    dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink)),
+                ),
+              ));
+          }),
         ),
       ),
       const SizedBox(height: 18),

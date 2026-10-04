@@ -117,7 +117,7 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.tap(finder);
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 void main() {
@@ -191,7 +191,7 @@ void main() {
     await tester.drag(handle, const Offset(600, 0), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('menu-curtain')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-pay')), findsNothing);
+    expect(tester.widget<TextButton>(find.byKey(const ValueKey('menu-pay'))).onPressed, isNull);
     expect(api.ordered, isNull);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
