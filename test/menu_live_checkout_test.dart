@@ -176,8 +176,7 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   await tester.pump();
   await tester.tap(finder);
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 500));
-  await tester.pump();
+  await tester.pumpAndSettle();
 }
 
 Future<void> openCart(
@@ -261,6 +260,7 @@ void main() {
     await tester.pump();
     final position = list.controller!.offset;
     await tester.tap(find.byKey(const ValueKey('menu-pay')));
+    await tester.pump();
     await tester.pump();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 90));

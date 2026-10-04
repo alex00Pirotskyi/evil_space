@@ -79,6 +79,8 @@ class _QrTransitionState extends State<QrTransition>
   late QrMatrix _to;
   late List<_CellPath> _paths;
   final _canvasKey = GlobalKey();
+  Rect? _destination;
+  bool _geometryScheduled = false;
 
   @override
   void initState() {
@@ -87,11 +89,39 @@ class _QrTransitionState extends State<QrTransition>
       duration: const Duration(milliseconds: 450));
     _from = _to = widget.paymentQr?.matrix ?? QrMatrix.preview(widget.fingerprint);
     _paths = _groupPaths(_from, _to);
+    widget.reveal.addStatusListener(_revealStatusChanged);
+  }
+
+  void _revealStatusChanged(AnimationStatus _) => _scheduleGeometry();
+
+  void _scheduleGeometry() {
+    if (_geometryScheduled || widget.paymentQr == null) return;
+    _geometryScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _geometryScheduled = false;
+      if (!mounted) return;
+      final slotContext = widget.slotKey.currentContext;
+      final canvasContext = _canvasKey.currentContext;
+      if (slotContext == null || canvasContext == null ||
+          !slotContext.mounted || !canvasContext.mounted) return;
+      final slot = slotContext.findRenderObject();
+      final surface = canvasContext.findRenderObject();
+      if (slot is! RenderBox || surface is! RenderBox ||
+          !slot.hasSize || !surface.hasSize || !slot.attached) return;
+      final rect = (slot.localToGlobal(Offset.zero) -
+          surface.localToGlobal(Offset.zero)) & slot.size;
+      if (_destination != rect) setState(() => _destination = rect);
+    });
   }
 
   @override
   void didUpdateWidget(covariant QrTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.reveal != widget.reveal) {
+      oldWidget.reveal.removeStatusListener(_revealStatusChanged);
+      widget.reveal.addStatusListener(_revealStatusChanged);
+    }
+    _scheduleGeometry();
     if (oldWidget.paymentQr?.payload == widget.paymentQr?.payload &&
         (widget.paymentQr != null || oldWidget.fingerprint == widget.fingerprint)) return;
     final next = widget.paymentQr?.matrix ?? QrMatrix.preview(widget.fingerprint);
@@ -121,17 +151,19 @@ class _QrTransitionState extends State<QrTransition>
 
   @override
   void dispose() {
+    widget.reveal.removeStatusListener(_revealStatusChanged);
     _morph.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => RepaintBoundary(
-    child: CustomPaint(key: _canvasKey,
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, constraints) {
+    _scheduleGeometry();
+    return RepaintBoundary(child: CustomPaint(key: _canvasKey,
       painter: _QrTransitionPainter(paths: _paths, count: _to.count,
         morph: _morph, reveal: widget.reveal,
-        hasPayment: widget.paymentQr != null,
-        canvasKey: _canvasKey, slotKey: widget.slotKey)));
+        hasPayment: widget.paymentQr != null, destination: _destination)));
+  });
 }
 
 class _CellPath {
@@ -159,15 +191,14 @@ List<_CellPath> _groupPaths(QrMatrix from, QrMatrix to) {
 class _QrTransitionPainter extends CustomPainter {
   _QrTransitionPainter({required this.paths, required this.count,
     required this.morph, required this.reveal, required this.hasPayment,
-    required this.canvasKey, required this.slotKey})
+    required this.destination})
       : super(repaint: Listenable.merge([morph, reveal]));
   final List<_CellPath> paths;
   final int count;
   final Animation<double> morph;
   final Animation<double> reveal;
   final bool hasPayment;
-  final GlobalKey canvasKey;
-  final GlobalKey slotKey;
+  final Rect? destination;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -176,13 +207,6 @@ class _QrTransitionPainter extends CustomPainter {
     final side = math.min(480.0, size.width * 0.9);
     final preview = Rect.fromLTWH((size.width - side) / 2,
       56 + math.min(80.0, size.height * 0.12), side, side);
-    Rect? destination;
-    final slot = slotKey.currentContext?.findRenderObject();
-    final surface = canvasKey.currentContext?.findRenderObject();
-    if (hasPayment && slot is RenderBox && surface is RenderBox &&
-        slot.hasSize && surface.hasSize && slot.attached) {
-      destination = (slot.localToGlobal(Offset.zero) - surface.localToGlobal(Offset.zero)) & slot.size;
-    }
     final rect = Rect.lerp(preview, destination ?? preview, transition)!;
     final handoff = const Interval(0.85, 1).transform(reveal.value);
     final opacity = (0.05 + 0.95 * transition) * (1 - handoff);
@@ -209,5 +233,5 @@ class _QrTransitionPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _QrTransitionPainter oldDelegate) =>
       oldDelegate.paths != paths || oldDelegate.hasPayment != hasPayment ||
-      oldDelegate.reveal != reveal;
+      oldDelegate.reveal != reveal || oldDelegate.destination != destination;
 }
