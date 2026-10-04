@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'brand_surface.dart';
+import 'prepared_view_layers.dart';
 
 /// One encoding per confirmed payload; shared by the morph and final QR view.
 class PaymentQrData {
@@ -62,11 +63,13 @@ class QrMatrix {
 
 class QrTransition extends StatefulWidget {
   const QrTransition({super.key, required this.fingerprint,
-    required this.reveal, required this.slotKey, this.paymentQr});
+    required this.reveal, required this.slotKey, this.paymentQr,
+    this.slotMotionPixels = 0});
   final String fingerprint;
   final AnimationController reveal;
   final GlobalKey slotKey;
   final PaymentQrData? paymentQr;
+  final double slotMotionPixels;
 
   @override
   State<QrTransition> createState() => _QrTransitionState();
@@ -108,8 +111,12 @@ class _QrTransitionState extends State<QrTransition>
       final surface = canvasContext.findRenderObject();
       if (slot is! RenderBox || surface is! RenderBox ||
           !slot.hasSize || !surface.hasSize || !slot.attached) return;
+      // Capture the resting slot, excluding its paint-only content rise. This
+      // keeps the QR handoff aligned without reading layout on every frame.
+      final motion = widget.slotMotionPixels *
+          (1 - preparedViewCurve.transform(widget.reveal.value));
       final rect = (slot.localToGlobal(Offset.zero) -
-          surface.localToGlobal(Offset.zero)) & slot.size;
+          surface.localToGlobal(Offset.zero) - Offset(0, motion)) & slot.size;
       if (_destination != rect) setState(() => _destination = rect);
     });
   }
@@ -202,11 +209,12 @@ class _QrTransitionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final transition = Curves.easeInOutCubic.transform(reveal.value);
+    final transition = preparedViewCurve.transform(reveal.value);
     if (reveal.value == 1) return; // Final QR owns painting after the handoff.
     final side = math.min(480.0, size.width * 0.9);
+    // Keep the preview below the scan slot, including on short viewports.
     final preview = Rect.fromLTWH((size.width - side) / 2,
-      56 + math.min(80.0, size.height * 0.12), side, side);
+      56 + 80, side, side);
     final rect = Rect.lerp(preview, destination ?? preview, transition)!;
     final handoff = const Interval(0.85, 1).transform(reveal.value);
     final opacity = hasPayment

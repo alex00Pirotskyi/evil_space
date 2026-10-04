@@ -560,7 +560,9 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                   Flexible(child: Text(_money(_total), style: _mono(12))),
                 ]),
               ))),
-          Expanded(child: LayoutBuilder(builder: (context, constraints) =>
+          Expanded(child: PreparedViewMotion(
+            visibility: widget.reveal.drive(CurveTween(curve: preparedViewCurve)),
+            child: LayoutBuilder(builder: (context, constraints) =>
             ScrollConfiguration(
               behavior: ScrollConfiguration.of(context).copyWith(dragDevices: {
                 ...ScrollConfiguration.of(context).dragDevices, PointerDeviceKind.mouse,
@@ -573,7 +575,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                 )),
               ),
             ),
-          )),
+          ))),
         ])),
     ),
   );
