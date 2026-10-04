@@ -28,6 +28,7 @@ class _LiveCheckoutSheet extends StatefulWidget {
     required this.lines,
     required this.languageCode,
     required this.paymentToken,
+    required this.onClose,
     this.initialOrder,
     this.initialRemoveKey,
   });
@@ -35,6 +36,7 @@ class _LiveCheckoutSheet extends StatefulWidget {
   final List<_CartLine> lines;
   final String languageCode;
   final String paymentToken;
+  final ValueChanged<_LiveCheckoutResult> onClose;
   final MenuOrderPayment? initialOrder;
   final String? initialRemoveKey;
   @override
@@ -63,6 +65,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   bool _resumed = true;
   int _revision = 0;
   int _promoRequest = 0;
+  double _swipeDistance = 0;
 
   String _copy(String key) =>
       _menuCopy[widget.languageCode]?[key] ?? _menuCopy['en']![key]!;
@@ -464,7 +467,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   void _close() {
     if (_closing || _busy || _lines.isEmpty && _error != null) return;
     _closing = true;
-    Navigator.of(context).pop(
+    _pollTimer?.cancel();
+    widget.onClose(
       _LiveCheckoutResult(
         lines: List.unmodifiable(_lines),
         order: _order,
@@ -481,30 +485,49 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) _close();
     },
-    child: _MenuSheetBody(
-      onDismiss: _close,
-      dismissible: !_busy && !(_lines.isEmpty && _error != null),
-      child: Column(
+    child: GestureDetector(
+      key: const ValueKey('menu-payment-view'),
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) => _swipeDistance = 0,
+      onHorizontalDragUpdate: (details) => _swipeDistance += details.primaryDelta ?? 0,
+      onHorizontalDragEnd: (details) {
+        if (_swipeDistance > 65 || (details.primaryVelocity ?? 0) > 350) _close();
+      },
+      child: ColoredBox(color: BrandPalette.paper,
+        child: Column(children: [
+          SizedBox(height: 52, width: double.infinity,
+            child: DecoratedBox(decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: BrandPalette.rule))),
+              child: TextButton.icon(
+                key: const ValueKey('checkout-menu'),
+                onPressed: _busy || _closing || _lines.isEmpty && _error != null ? null : _close,
+                style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
+                  shape: const RoundedRectangleBorder()).copyWith(overlayColor: _menuInkOverlay),
+                icon: const Icon(Icons.arrow_back, size: 18),
+                label: Text(_copy('return_menu'), style: _mono(12)),
+              ))),
+          Expanded(child: LayoutBuilder(builder: (context, constraints) =>
+            ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(dragDevices: {
+                ...ScrollConfiguration.of(context).dragDevices, PointerDeviceKind.mouse,
+              }),
+              child: SingleChildScrollView(
+                child: Center(child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Padding(padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
+                    child: _content()),
+                )),
+              ),
+            ),
+          )),
+        ])),
+    ),
+  );
+
+  Widget _content() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _copy('your_cart').toUpperCase(),
-                  style: _mono(12),
-                ),
-              ),
-              IconButton(
-                tooltip: _copy('close'),
-                style: const ButtonStyle(overlayColor: _menuInkOverlay),
-                onPressed: _busy || _lines.isEmpty && _error != null
-                    ? null
-                    : _close,
-                icon: const Icon(Icons.close, size: 20),
-              ),
-            ],
-          ),
+          Text(_copy('your_cart').toUpperCase(), style: _mono(12)),
           const SizedBox(height: 12),
           for (var i = 0; i < _lines.length; i++) _cartLine(i),
           if (!_paid && !_inactive && _lines.isNotEmpty) ...[
@@ -609,15 +632,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                     },
             ),
           ],
-          const SizedBox(height: 20),
-          _button(
-            _copy('close'),
-            _busy || _lines.isEmpty && _error != null ? null : _close,
-          ),
         ],
-      ),
-    ),
-  );
+      );
 
   Widget _cartLine(int i) {
     final line = _lines[i];

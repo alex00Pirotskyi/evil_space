@@ -121,6 +121,36 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('desktop curtain moves its background and keeps actions inside the panel', (tester) async {
+    await openMenu(tester, OptionsApi());
+    tester.view.physicalSize = const Size(1920, 1080);
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-americano')));
+    final panel = find.byKey(const ValueKey('menu-curtain'));
+    final surface = find.byKey(const ValueKey('menu-curtain-surface'));
+    final initial = tester.getRect(panel);
+    expect(initial.width, 560);
+    expect(initial.right, 1920);
+    expect(tester.getRect(surface), initial);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('menu-curtain-handle'))),
+      kind: PointerDeviceKind.mouse);
+    await gesture.moveBy(const Offset(45, 0));
+    await tester.pump();
+    final moved = tester.getRect(panel);
+    expect(moved.left, greaterThan(initial.left));
+    expect(tester.getRect(surface), moved);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.getRect(surface), initial);
+    final action = tester.getRect(find.widgetWithText(FilledButton, 'ADD TO CART'));
+    expect(action.left, greaterThan(initial.left));
+    expect(action.right, lessThan(initial.right));
+    expect(tester.takeException(), isNull);
+    await tapVisible(tester, find.text('CANCEL'));
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'configuration has one updating price including default options',
     (tester) async {
