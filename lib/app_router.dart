@@ -278,7 +278,7 @@ class _PublicViewsState extends State<_PublicViews>
     _directMenu = widget.route == AppRoute.menu;
     _initialReveal = _directMenu;
     _transition = AnimationController(vsync: this,
-      duration: const Duration(milliseconds: 400));
+      duration: preparedViewDuration);
     _transition.addStatusListener((status) {
       if (status == AnimationStatus.completed && _initialReveal && mounted) {
         setState(() => _initialReveal = false);

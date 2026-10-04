@@ -210,7 +210,7 @@ class _MenuScreenState extends State<MenuScreen>
     super.initState();
     _api = widget.api ?? MenuApi();
     _paymentTransition = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 400));
+      vsync: this, duration: preparedViewDuration);
     widget.localization.addListener(_languageChanged);
     _menu = widget.initialMenu;
     _loading = _menu == null;
@@ -441,12 +441,12 @@ class _MenuScreenState extends State<MenuScreen>
           child: Column(children: [
             _header(),
             Expanded(child: Stack(fit: StackFit.expand, children: [
-              PreparedViewLayers(controller: _paymentTransition,
+              PreparedViewLayers(controller: _paymentTransition, travelPixels: 0,
                 first: _menuView(menu), second: payment),
               Positioned.fill(child: IgnorePointer(child: ExcludeSemantics(
                 child: QrTransition(fingerprint: _cartFingerprint,
                   paymentQr: _readyQr, reveal: _paymentTransition,
-                  slotKey: _qrSlotKey)))),
+                  slotKey: _qrSlotKey, slotMotionPixels: preparedViewTravel)))),
             ])),
           ]),
         ),
@@ -456,7 +456,10 @@ class _MenuScreenState extends State<MenuScreen>
 
   Widget _menuView(MenuCatalog? menu) => Column(children: [
     _cartBar(),
-    Expanded(child: RefreshIndicator(
+    Expanded(child: PreparedViewMotion(
+      visibility: ReverseAnimation(_paymentTransition.drive(
+        CurveTween(curve: preparedViewCurve))),
+      child: RefreshIndicator(
       color: BrandPalette.ink,
       onRefresh: _checkingOut ? () async {} : _load,
       child: ListView(
@@ -486,7 +489,7 @@ class _MenuScreenState extends State<MenuScreen>
           ],
         ],
       ),
-    )),
+    ))),
   ]);
 
   Widget _header() => MenuHeader(localization: widget.localization,

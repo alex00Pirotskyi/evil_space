@@ -162,7 +162,7 @@ void main() {
 
   testWidgets('transition frames do not rebuild either prepared page', (tester) async {
     final controller = AnimationController(vsync: tester,
-      duration: const Duration(milliseconds: 400));
+      duration: preparedViewDuration);
     var firstBuilds = 0;
     var secondBuilds = 0;
     await tester.pumpWidget(MaterialApp(home: PreparedViewLayers(controller: controller,
@@ -181,6 +181,92 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
+  });
+
+  testWidgets('both directions overlap fades with a small fall and rise', (tester) async {
+    final controller = AnimationController(vsync: tester,
+      duration: preparedViewDuration);
+    await tester.pumpWidget(MaterialApp(home: PreparedViewLayers(controller: controller,
+      first: const Text('home'), second: const Text('menu'))));
+    final home = find.text('home', skipOffstage: false);
+    final menu = find.text('menu', skipOffstage: false);
+    final restingTop = tester.getTopLeft(home).dy;
+    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 8, 0.01));
+    double opacity(Finder content) => tester.widget<FadeTransition>(
+      find.ancestor(of: content, matching: find.byType(FadeTransition)).first).opacity.value;
+    unawaited(controller.forward());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 225));
+    expect(opacity(home), closeTo(0.5, 0.01));
+    expect(opacity(menu), closeTo(0.5, 0.01));
+    expect(tester.getTopLeft(home).dy, closeTo(restingTop + 4, 0.1));
+    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 4, 0.1));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(menu).dy, restingTop);
+    unawaited(controller.reverse());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 225));
+    expect(opacity(home), closeTo(0.5, 0.01));
+    expect(opacity(menu), closeTo(0.5, 0.01));
+    expect(tester.getTopLeft(home).dy, closeTo(restingTop + 4, 0.1));
+    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 4, 0.1));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(home).dy, restingTop);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
+  testWidgets('payment rise keeps bars anchored and QR settles before scanning', (tester) async {
+    final api = PreparationApi()..paymentGate = Completer();
+    await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
+      localization: LocalizationController(), onBack: () {})));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-cola')));
+    final header = find.byKey(const ValueKey('menu-app-bar'));
+    final pay = find.byKey(const ValueKey('menu-pay-bar'), skipOffstage: false);
+    final menu = find.byKey(const ValueKey('menu-list'), skipOffstage: false);
+    final headerBounds = tester.getRect(header);
+    final payBounds = tester.getRect(pay);
+    final menuTop = tester.getTopLeft(menu).dy;
+    await tester.tap(find.byKey(const ValueKey('menu-pay')));
+    await tester.pumpAndSettle();
+    api.paymentGate!.complete(api.current!);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump();
+      if (tester.widget<QrTransition>(find.byType(QrTransition)).paymentQr != null) break;
+    }
+    await tester.pump();
+    final qr = tester.widget<QrTransition>(find.byType(QrTransition));
+    expect(qr.paymentQr, isNotNull);
+    final slot = find.byKey(qr.slotKey, skipOffstage: false);
+    await tester.pump(const Duration(milliseconds: 225));
+    final risingQrTop = tester.getTopLeft(slot).dy;
+    expect(tester.getRect(header), headerBounds);
+    expect(tester.getRect(pay), payBounds);
+    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.1));
+    final returnMenu = find.byKey(const ValueKey('checkout-menu'));
+    expect(tester.getRect(returnMenu).top, payBounds.top);
+    expect(tester.getRect(returnMenu).height, payBounds.height);
+    await tester.pumpAndSettle();
+    final settledQrBounds = tester.getRect(slot);
+    expect(risingQrTop, closeTo(settledQrBounds.top + 4, 0.1));
+    await tester.pump(const Duration(seconds: 5));
+    expect(tester.getRect(slot), settledQrBounds);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.tap(returnMenu);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 225));
+    expect(tester.getRect(header), headerBounds);
+    expect(tester.getRect(pay), payBounds);
+    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.1));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(menu).dy, menuTop);
+    expect(find.text('Cola × 1'), findsOneWidget);
+    expect(api.creates, hasLength(1));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('failed preparation retries the same payment token inline', (tester) async {
