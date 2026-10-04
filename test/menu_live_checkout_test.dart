@@ -202,9 +202,7 @@ Future<void> openCart(
   await tester.tap(find.text('Cola'));
   await tester.pump();
   await tester.tap(find.byKey(const ValueKey('menu-pay')));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 500));
-  await tester.pump();
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -401,8 +399,7 @@ void main() {
     expect(find.text('PAY: 30,000 VND'), findsOneWidget);
     expect(tester.widget<TextButton>(pay).onPressed, isNotNull);
     await tester.drag(find.byKey(const ValueKey('menu-pay-bar')), const Offset(-100, 0));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('menu-payment-view')), findsOneWidget);
     await tester.drag(find.byKey(const ValueKey('checkout-menu')), const Offset(600, 0));
     await tester.pumpAndSettle();

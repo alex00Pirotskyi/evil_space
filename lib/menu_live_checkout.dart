@@ -554,7 +554,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                 style: TextButton.styleFrom(foregroundColor: BrandPalette.ink,
                   shape: const RoundedRectangleBorder()).copyWith(overlayColor: _menuInkOverlay),
                 icon: const Icon(Icons.arrow_back, size: 18),
-                label: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                label: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(_copy('return_menu'), style: _mono(12)),
                   const SizedBox(width: 12),
                   Flexible(child: Text(_money(_total), style: _mono(12))),
@@ -786,7 +786,10 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
         builder: (_, constraints) => Center(
           child: Builder(builder: (context) {
             final qr = _encodedQr!;
-            final side = min(300.0, constraints.maxWidth);
+            final viewport = MediaQuery.sizeOf(context);
+            final safePadding = MediaQuery.paddingOf(context).vertical;
+            final side = min(constraints.maxWidth,
+              min(300.0, max(180.0, viewport.height - safePadding - 208)));
             final margin = side * 4 / (qr.matrix.count + 8);
             return Container(key: widget.qrSlotKey,
               width: side, height: side,

@@ -325,7 +325,11 @@ class _PublicViewsState extends State<_PublicViews>
   }
 
   void _menuAction() {
-    if (_failed) { unawaited(_prepare()); return; }
+    if (_failed) {
+      unawaited(_prepare());
+      widget.onNavigate(AppRoute.menu);
+      return;
+    }
     widget.onNavigate(widget.route == AppRoute.menu && !_ready
       ? AppRoute.home : AppRoute.menu);
   }

@@ -53,6 +53,10 @@ void main() {
   });
 
   testWidgets('preload is shared; early navigation waits; menu retains state', (tester) async {
+    tester.view.physicalSize = const Size(390, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = PreparationApi()..menuGate = Completer();
     final localization = LocalizationController();
     final router = EvilSpaceRouterDelegate(localization: localization, menuApi: api);
@@ -79,7 +83,10 @@ void main() {
     final menuState = tester.state(find.byType(MenuScreen));
     await tapVisible(tester, find.byKey(const ValueKey('menu-item-cola')));
     final list = tester.widget<ListView>(find.byKey(const ValueKey('menu-list')));
+    list.controller!.jumpTo(list.controller!.position.maxScrollExtent / 2);
+    await tester.pump();
     final offset = list.controller!.offset;
+    expect(offset, greaterThan(0));
     router.navigate(AppRoute.home);
     await tester.pumpAndSettle();
     router.navigate(AppRoute.menu);
@@ -174,5 +181,39 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
+  });
+
+  testWidgets('failed preparation retries the same payment token inline', (tester) async {
+    final api = PreparationApi()..failCreate = true;
+    await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
+      localization: LocalizationController(), onBack: () {})));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-cola')));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    expect(find.byKey(const ValueKey('menu-list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
+    expect(find.text('Network error'), findsOneWidget);
+    final token = api.creates.single;
+    api.failCreate = false;
+    await tapVisible(tester, find.byKey(const ValueKey('prepare-payment-retry')));
+    expect(api.creates, [token, token]);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('reduced motion reveals ready payment without animation frames', (tester) async {
+    final api = PreparationApi();
+    await tester.pumpWidget(MaterialApp(home: MediaQuery(
+      data: const MediaQueryData(size: Size(390, 844), disableAnimations: true),
+      child: MenuScreen(api: api, localization: LocalizationController(), onBack: () {}))));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-cola')));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    expect(find.byKey(const ValueKey('menu-list')), findsNothing);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 }
