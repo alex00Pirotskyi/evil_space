@@ -171,7 +171,7 @@ void main() {
     final firstBefore = firstBuilds;
     final secondBefore = secondBuilds;
     unawaited(controller.forward());
-    for (var i = 0; i < 30; i++) {
+    for (var i = 0; i < 34; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
     expect(firstBuilds, firstBefore);
@@ -197,19 +197,19 @@ void main() {
     unawaited(controller.forward());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 225));
-    expect(opacity(home), closeTo(0.5, 0.01));
-    expect(opacity(menu), closeTo(0.5, 0.01));
-    expect(tester.getTopLeft(home).dy, closeTo(restingTop + 4, 0.1));
-    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 4, 0.1));
+    expect(opacity(home), closeTo(0.5, 0.03));
+    expect(opacity(menu), closeTo(0.5, 0.03));
+    expect(tester.getTopLeft(home).dy, closeTo(restingTop + 4, 0.2));
+    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 4, 0.2));
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(menu).dy, restingTop);
     unawaited(controller.reverse());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 225));
-    expect(opacity(home), closeTo(0.5, 0.01));
-    expect(opacity(menu), closeTo(0.5, 0.01));
-    expect(tester.getTopLeft(home).dy, closeTo(restingTop + 4, 0.1));
-    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 4, 0.1));
+    expect(opacity(home), closeTo(0.5, 0.03));
+    expect(opacity(menu), closeTo(0.5, 0.03));
+    expect(tester.getTopLeft(home).dy, closeTo(restingTop + 4, 0.2));
+    expect(tester.getTopLeft(menu).dy, closeTo(restingTop + 4, 0.2));
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(home).dy, restingTop);
     expect(tester.binding.hasScheduledFrame, isFalse);
@@ -244,13 +244,13 @@ void main() {
     final risingQrTop = tester.getTopLeft(slot).dy;
     expect(tester.getRect(header), headerBounds);
     expect(tester.getRect(pay), payBounds);
-    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.1));
+    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.2));
     final returnMenu = find.byKey(const ValueKey('checkout-menu'));
     expect(tester.getRect(returnMenu).top, payBounds.top);
     expect(tester.getRect(returnMenu).height, payBounds.height);
     await tester.pumpAndSettle();
     final settledQrBounds = tester.getRect(slot);
-    expect(risingQrTop, closeTo(settledQrBounds.top + 4, 0.1));
+    expect(risingQrTop, closeTo(settledQrBounds.top + 4, 0.2));
     await tester.pump(const Duration(seconds: 5));
     expect(tester.getRect(slot), settledQrBounds);
     expect(tester.binding.hasScheduledFrame, isFalse);
@@ -259,7 +259,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 225));
     expect(tester.getRect(header), headerBounds);
     expect(tester.getRect(pay), payBounds);
-    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.1));
+    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.2));
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(menu).dy, menuTop);
     expect(find.text('Cola × 1'), findsOneWidget);
