@@ -24,6 +24,7 @@ class _LiveCheckoutResult {
 
 class _LiveCheckoutSheet extends StatefulWidget {
   const _LiveCheckoutSheet({
+    super.key,
     required this.api,
     required this.lines,
     required this.languageCode,
