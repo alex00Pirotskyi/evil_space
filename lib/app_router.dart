@@ -12,7 +12,7 @@ import 'package:evil_space/menu_api.dart';
 import 'package:evil_space/menu_screen.dart' deferred as menu_screen;
 import 'package:evil_space/public_telegram_connector.dart';
 import 'package:evil_space/prepared_view_layers.dart';
-import 'package:evil_space/brand_logo.dart';
+import 'package:evil_space/menu_header.dart';
 import 'package:evil_space/brand_surface.dart';
 
 class EvilSpaceRouteParser extends RouteInformationParser<AppRoute> {
@@ -162,6 +162,10 @@ class _PublicWithMenuButtonState extends State<_PublicWithMenuButton> {
   }
 
   String get _label {
+    if (widget.failed) return switch (widget.localization.language) {
+      AppLanguage.en => 'RETRY MENU', AppLanguage.ru => 'ПОВТОРИТЬ',
+      AppLanguage.vi => 'THỬ LẠI',
+    };
     switch (widget.localization.language) {
       case AppLanguage.ru:
         return 'МЕНЮ';
@@ -264,6 +268,7 @@ class _PublicViewsState extends State<_PublicViews>
   bool _failed = false;
   bool _ready = false;
   late final bool _directMenu;
+  bool _initialReveal = false;
   AppRoute _homeRoute = AppRoute.home;
 
   @override
@@ -271,8 +276,14 @@ class _PublicViewsState extends State<_PublicViews>
     super.initState();
     _api = widget.api ?? MenuApi();
     _directMenu = widget.route == AppRoute.menu;
+    _initialReveal = _directMenu;
     _transition = AnimationController(vsync: this,
       duration: const Duration(milliseconds: 400));
+    _transition.addStatusListener((status) {
+      if (status == AnimationStatus.completed && _initialReveal && mounted) {
+        setState(() => _initialReveal = false);
+      }
+    });
     if (widget.route == AppRoute.qr) _homeRoute = AppRoute.qr;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_prepare());
@@ -314,7 +325,10 @@ class _PublicViewsState extends State<_PublicViews>
   @override
   void didUpdateWidget(covariant _PublicViews oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.route != AppRoute.menu) _homeRoute = widget.route;
+    if (widget.route != AppRoute.menu) {
+      _homeRoute = widget.route;
+      _initialReveal = false;
+    }
     if (oldWidget.route != widget.route) _navigateView();
   }
 
@@ -342,9 +356,10 @@ class _PublicViewsState extends State<_PublicViews>
         first: _PublicWithMenuButton(localization: widget.localization,
           onOpenMenu: _menuAction, preparing: pending && !_failed,
           failed: _failed,
-          child: _directMenu && !_ready && widget.route == AppRoute.menu
+          child: _initialReveal && widget.route == AppRoute.menu
             ? _MenuPreparationShell(localization: widget.localization,
-                failed: _failed, onRetry: _menuAction)
+                failed: _failed, onRetry: _menuAction,
+                onBack: () => widget.onNavigate(AppRoute.home))
             : PublicTelegramConnector(localization: widget.localization,
             child: DailyScreen(currentRoute: _homeRoute,
               isActive: widget.route != AppRoute.menu || !_ready,
@@ -360,24 +375,31 @@ class _PublicViewsState extends State<_PublicViews>
 
 class _MenuPreparationShell extends StatelessWidget {
   const _MenuPreparationShell({required this.localization,
-    required this.failed, required this.onRetry});
+    required this.failed, required this.onRetry, required this.onBack});
   final LocalizationController localization;
   final bool failed;
   final VoidCallback onRetry;
+  final VoidCallback onBack;
   @override
-  Widget build(BuildContext context) => SafeArea(child: Column(children: [
-    const SizedBox(height: 68, child: Align(alignment: Alignment.centerLeft,
-      child: Padding(padding: EdgeInsets.only(left: 14),
-        child: EvilCoworkingLogo(width: 108)))),
-    const SizedBox(height: 56, width: double.infinity,
-      child: ColoredBox(color: BrandPalette.paperDeep,
-        child: Center(child: Text('PAY: 0 VND')))),
-    if (failed) TextButton(onPressed: onRetry,
-      child: Text(switch (localization.language) {
-        AppLanguage.ru => 'ПОВТОРИТЬ', AppLanguage.vi => 'THỬ LẠI',
-        AppLanguage.en => 'RETRY MENU',
-      })),
-  ]));
+  Widget build(BuildContext context) => Material(color: BrandPalette.paper,
+    child: ListenableBuilder(listenable: localization,
+    builder: (context, _) => SafeArea(child: Column(children: [
+      MenuHeader(localization: localization, onBack: onBack),
+      SizedBox(height: 56, width: double.infinity,
+        child: ColoredBox(color: BrandPalette.paperDeep,
+          child: Center(child: Text('${switch (localization.language) {
+            AppLanguage.en => 'PAY', AppLanguage.ru => 'ОПЛАТИТЬ',
+            AppLanguage.vi => 'THANH TOÁN',
+          }}: 0 VND', style: const TextStyle(fontFamily: 'Courier New',
+            fontSize: 14, fontWeight: FontWeight.w700,
+            letterSpacing: 0.7, color: BrandPalette.inkMuted))))),
+      if (failed) TextButton(onPressed: onRetry,
+        child: Text(switch (localization.language) {
+          AppLanguage.ru => 'ПОВТОРИТЬ', AppLanguage.vi => 'THỬ LẠI',
+          AppLanguage.en => 'RETRY MENU',
+        })),
+    ]))));
+
 }
 
 class _DeferredAdminPortal extends StatefulWidget {

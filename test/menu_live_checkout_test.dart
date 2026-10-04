@@ -479,8 +479,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('PAY: 20,000 VND'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('menu-pay')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
       expect(api.creates, hasLength(1));
       expect(api.current!.promoGrantId, 1);
       expect(find.byType(QrImageView), findsOneWidget);
@@ -573,8 +572,7 @@ void main() {
     expect(find.text('RETRY'), findsNothing);
     expect(api.cancellations, hasLength(1));
     api.delayedCancel!.complete();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
     expect(api.statusRequests, 0);
     expectPayDisabled(tester);
@@ -666,8 +664,7 @@ void main() {
     await openCart(tester, api);
     final reference = api.current!.paymentMessage;
     await tester.binding.handlePopRoute();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
     expect(find.byKey(const ValueKey('menu-pay')), findsOneWidget);
     expect(

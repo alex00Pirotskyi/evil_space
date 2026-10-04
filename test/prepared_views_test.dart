@@ -202,6 +202,61 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('direct menu entry keeps its header during loading and fades in', (tester) async {
+    final api = PreparationApi()..menuGate = Completer();
+    final localization = LocalizationController();
+    final router = EvilSpaceRouterDelegate(localization: localization, menuApi: api);
+    final provider = PlatformRouteInformationProvider(initialRouteInformation:
+      RouteInformation(uri: Uri.parse('/menu')));
+    await tester.pumpWidget(MaterialApp.router(routerDelegate: router,
+      routeInformationProvider: provider,
+      routeInformationParser: const EvilSpaceRouteParser()));
+    await tester.pumpAndSettle();
+    expect(find.text('EN'), findsOneWidget);
+    expect(find.text('RU'), findsOneWidget);
+    expect(find.text('VI'), findsOneWidget);
+    expect(find.text('PAY: 0 VND'), findsOneWidget);
+    expect(find.text('01  /  COWORKING'), findsNothing);
+    final header = tester.getRect(find.byKey(const ValueKey('menu-app-bar')));
+    api.menuGate!.complete(await api.catalog());
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(tester.getRect(find.byKey(const ValueKey('menu-app-bar'))), header);
+    expect(api.menuRequests, 1);
+    expect(api.creates, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    provider.dispose();
+    router.dispose();
+    localization.dispose();
+  });
+
+  testWidgets('hidden payment pauses polling and resumes when revisited', (tester) async {
+    final api = PreparationApi();
+    final localization = LocalizationController();
+    final router = EvilSpaceRouterDelegate(localization: localization, menuApi: api);
+    await tester.pumpWidget(MaterialApp.router(routerDelegate: router,
+      routeInformationParser: const EvilSpaceRouteParser()));
+    await tester.pumpAndSettle();
+    router.navigate(AppRoute.menu);
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const ValueKey('menu-item-cola')));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-pay')));
+    router.navigate(AppRoute.home);
+    await tester.pumpAndSettle();
+    final before = api.statusRequests;
+    await tester.pump(const Duration(seconds: 10));
+    expect(api.statusRequests, before);
+    router.navigate(AppRoute.menu);
+    await tester.pumpAndSettle();
+    expect(api.statusRequests, greaterThan(before));
+    expect(api.creates, hasLength(1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    router.dispose();
+    localization.dispose();
+  });
+
   testWidgets('reduced motion reveals ready payment without animation frames', (tester) async {
     final api = PreparationApi();
     await tester.pumpWidget(MaterialApp(home: MediaQuery(

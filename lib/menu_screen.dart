@@ -6,11 +6,10 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import 'brand_logo.dart';
 import 'brand_surface.dart';
-import 'language_icon.dart';
 import 'localization.dart';
 import 'menu_api.dart';
+import 'menu_header.dart';
 import 'prepared_view_layers.dart';
 import 'qr_transition.dart';
 
@@ -459,7 +458,7 @@ class _MenuScreenState extends State<MenuScreen>
     _cartBar(),
     Expanded(child: RefreshIndicator(
       color: BrandPalette.ink,
-      onRefresh: _load,
+      onRefresh: _checkingOut ? () async {} : _load,
       child: ListView(
         key: const ValueKey('menu-list'),
         controller: _menuScroll,
@@ -490,61 +489,8 @@ class _MenuScreenState extends State<MenuScreen>
     )),
   ]);
 
-  Widget _header() => Container(
-    key: const ValueKey('menu-app-bar'),
-    height: 68,
-    padding: const EdgeInsets.symmetric(horizontal: 14),
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: BrandPalette.ink)),
-    ),
-    child: Row(
-      children: [
-        const Expanded(child: Align(alignment: Alignment.centerLeft,
-          child: EvilCoworkingLogo(width: 108))),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const LanguageIcon(),
-            const SizedBox(width: 6),
-            ...AppLanguage.values
-              .map((language) {
-                final selected = widget.localization.language == language;
-                return TextButton(
-                  onPressed: () => widget.localization.setLanguage(language),
-                  style: TextButton.styleFrom(
-                    foregroundColor: BrandPalette.ink,
-                    minimumSize: const Size(44, 44),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    shape: const RoundedRectangleBorder(),
-                    side: selected
-                        ? const BorderSide(color: BrandPalette.ink)
-                        : BorderSide.none,
-                  ).copyWith(overlayColor: _menuInkOverlay),
-                  child: Text(language.code.toUpperCase(), style: _mono(9)),
-                );
-              })
-              .toList(growable: false),
-          ],
-        ),
-        const SizedBox(width: 8),
-        if (MediaQuery.sizeOf(context).width < 480)
-          IconButton(
-            tooltip: _copy(_checkingOut ? 'return_menu' : 'back'),
-            onPressed: _back,
-            style: const ButtonStyle(overlayColor: _menuInkOverlay),
-            icon: const Icon(Icons.arrow_back, size: 18),
-          )
-        else
-          TextButton.icon(
-            onPressed: _back,
-            style: const ButtonStyle(overlayColor: _menuInkOverlay),
-            icon: const Icon(Icons.arrow_back, size: 18),
-            label: Text(_copy(_checkingOut ? 'return_menu' : 'back'), style: _mono(10)),
-          ),
-      ],
-    ),
-  );
+  Widget _header() => MenuHeader(localization: widget.localization,
+    onBack: _back, payment: _checkingOut);
 
   void _back() {
     if (_checkingOut) { _checkoutKey.currentState?._close(); }
