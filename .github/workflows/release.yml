@@ -11,6 +11,9 @@ on:
       - 'seo/share.png'
       - 'tool/build_seo.mjs'
       - 'worker/seo_pages.js'
+      - 'worker/casso_webhook.js'
+      - 'worker/app.js'
+      - 'migrations/0022_casso_payments.sql'
       - 'wrangler.toml'
       - 'web/index.html'
 
