@@ -54,7 +54,8 @@ export default {
   },
 };
 
-async function applyTransaction(env, transaction) {
+export async function applyTransaction(env, transaction, provider = 'casso') {
+  if (provider !== 'casso' && provider !== 'vcb_device') return 'ignored';
   if (!transaction.transactionId || !transaction.orderCode) return 'ignored';
   if (!transactionMatchesConfiguredAccount(transaction, env.VIETQR_ACCOUNT_NUMBER)) {
     return 'ignored';
@@ -62,7 +63,7 @@ async function applyTransaction(env, transaction) {
 
   const order = await env.evil_space
     .prepare(`
-      SELECT id, order_code, amount_vnd, status, checkout_revision,
+      SELECT id, order_code, amount_vnd, status, created_at, checkout_revision,
              payment_provider, payment_transaction_id
       FROM menu_orders
       WHERE order_code = ?
@@ -73,8 +74,15 @@ async function applyTransaction(env, transaction) {
 
   if (!order) return 'ignored';
 
+  if (provider === 'vcb_device') {
+    const transactionEpoch = Date.parse(transaction.transactionAt ?? '') / 1000;
+    if (!Number.isFinite(transactionEpoch) ||
+        transactionEpoch < Number(order.created_at) - 120 ||
+        transactionEpoch > nowSeconds() + 120) return 'ignored';
+  }
+
   if (String(order.status) === 'paid') {
-    return String(order.payment_provider ?? '') === 'casso' &&
+    return String(order.payment_provider ?? '') === provider &&
       String(order.payment_transaction_id ?? '') === transaction.transactionId
       ? 'already_paid'
       : 'ignored';
@@ -90,7 +98,7 @@ async function applyTransaction(env, transaction) {
         UPDATE menu_orders
         SET status = 'paid',
             paid_at = ?,
-            payment_provider = 'casso',
+            payment_provider = ?,
             payment_transaction_id = ?,
             payment_bank_reference = ?,
             payment_transaction_at = ?
@@ -101,6 +109,7 @@ async function applyTransaction(env, transaction) {
       `)
       .bind(
         now,
+        provider,
         transaction.transactionId,
         transaction.bankReference || null,
         transaction.transactionAt || null,
@@ -127,7 +136,7 @@ async function applyTransaction(env, transaction) {
       .first();
     if (
       String(raced?.status ?? '') === 'paid' &&
-      String(raced?.payment_provider ?? '') === 'casso' &&
+      String(raced?.payment_provider ?? '') === provider &&
       String(raced?.payment_transaction_id ?? '') === transaction.transactionId
     ) {
       return 'already_paid';

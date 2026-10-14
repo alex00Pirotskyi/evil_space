@@ -35,6 +35,8 @@ test:
 	node --check worker/customer_account.js
 	node --check worker/google_account.js
 	node --check worker/vietqr.js
+	node --check worker/casso_webhook.js
+	node --check worker/vcb_device_webhook.js
 	node --check worker/booking_rules.js
 	node --check worker/pricing.js
 	node --check worker/integration_test.mjs
@@ -44,9 +46,17 @@ test:
 	node --check worker/customer_account_test.mjs
 	node --check worker/google_account_test.mjs
 	node --check worker/vietqr_test.mjs
-	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/menu_options_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs
+	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/menu_options_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs worker/casso_webhook_test.mjs worker/vcb_device_webhook_test.mjs
 	node worker/integration_test.mjs
 	node --test test/seo_site_test.mjs
 
 telegram-setup:
 	dart run tool/telegram_setup.dart
+
+.PHONY: android android-build
+
+android:
+	dart run tool/android_install.dart --ip "$(SAPO_IP)" --serial "$(SAPO_SERIAL)"
+
+android-build:
+	dart run tool/android_install.dart --build-only
