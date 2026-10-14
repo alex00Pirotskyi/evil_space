@@ -221,3 +221,14 @@ The admin approval email destination is `evilssspace79@gmail.com`, configured th
 ## CI
 
 `.github/workflows/web-ci.yml` runs for `main`, `feature/**`, `agent/**`, and pull requests targeting `main`. It verifies Worker runtime integration, Flutter analysis/tests, the optimized Wasm build, generated bootstrap syntax, and the release contract/bundle budget.
+
+## Sapo S6 Max payment notification listener
+
+Use `make android` to compile and install the dedicated Flutter Android entrypoint
+(`lib/payment_listener_main.dart`) onto an ADB-connected Sapo terminal. For a
+Wi-Fi ADB address use `make android SAPO_IP=IP:PORT`; `make android-build` only
+builds an APK. Set `VCB_DEVICE_HMAC_SECRET` on Cloudflare and on the device first.
+The listener reads incoming `com.VCB` notifications and sends signed events to
+`/api/webhooks/vcb-device`; the current menu checkout remains unchanged.
+For pairing, security, and device setup, see
+[docs/sapo-payment-listener.md](docs/sapo-payment-listener.md).

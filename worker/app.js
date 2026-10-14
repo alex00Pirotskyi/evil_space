@@ -8,6 +8,7 @@ import customerAccountWorker, { handleCustomerTelegramShortcut } from './custome
 import googleAccountWorker from './google_account.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
 import cassoWebhookWorker from './casso_webhook.js';
+import vcbDeviceWorker from './vcb_device_webhook.js';
 
 const FEATURE_ROUTES = new Set([
   'POST /api/telegram/webhook',
@@ -30,6 +31,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const route = `${request.method} ${url.pathname}`;
+
+    if (route === 'POST /api/webhooks/vcb-device') {
+      return vcbDeviceWorker.fetch(request, env, ctx);
+    }
 
     if (route === 'POST /api/webhooks/casso') {
       return cassoWebhookWorker.fetch(request, env, ctx);
