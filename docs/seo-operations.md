@@ -2,29 +2,46 @@
 
 ## Publish and verify
 
-1. `https://evils.space/` is the only public indexable page. Keep the Flutter
-   web app and its PWA installation at this URL. The old `/en/`, `/ru/` and
-   `/vi/` landing pages redirect to `/`; internal `/menu`, `/qr` and `/admin`
-   routes work but are not indexable. Do not create localized public URLs to
-   chase keywords without an explicit design change.
-2. The GitHub production release runs automatically when `web/index.html` or
-   another path listed in `.github/workflows/release.yml` changes on `main`.
-   Flutter-only changes require the manual Production release workflow or
-   `make`. Builds run checks, compile Flutter and deploy the Worker together.
-3. After release, check the root URL, its visible rendered text, canonical,
-   `/robots.txt`, `/sitemap.xml` and app installation. Verify that retired
-   language URLs redirect to `/` and that unknown paths return 404. The
-   sitemap must list the root only.
-4. Verify all business facts against the operation before changing copy. The
-   current regular day price is **200K VND** and monthly price **2.5M VND**;
-   promotions or admin pricing may change what the app shows on a given day.
-   Keep the business metadata in `web/index.html`, visible functional labels
-   in `lib/localization.dart`, pricing in `worker/pricing.js`, and the Business
-   Profile consistent. The owner wants a quiet booking tool: use the compact
-   brand, location, hours, prices and actions already on the page. Owner-verified
-   amenities belong in a small icon strip with brief labels and accessible
-   descriptions. Do not add explanatory SEO paragraphs or hidden keyword text
-   to the Flutter UI.
+1. The minimalist Flutter booking app remains canonical and indexable at
+   `https://evils.space/`. Three **real HTML, mobile-friendly, indexable**
+   coworking information guides now supplement it:
+   - `/en/coworking-nha-trang/`
+   - `/ru/kovorking-nyachang/`
+   - `/vi/khong-gian-lam-viec-nha-trang/`
+   Each guide has a unique title, meta description, native visible text,
+   self-canonical, reciprocal `hreflang` tags, genuine Google Maps
+   photos/reviews and directions links, and a booking action to the homepage.
+   The root links to each guide in native HTML and in its Flutter footer.
+   The old `/en/`, `/ru/`, `/vi/`, pricing and visit URLs remain 301
+   redirects to the homepage. `/admin`, `/menu` and `/qr` remain functional
+   but `noindex`. Unknown paths return proper 404.
+2. The localized copy and path manifest live in `seo/pages.mjs` and styles
+   in `seo/site.css`. `tool/build_seo.mjs` generates the three pages,
+   `robots.txt`, `sitemap.xml` and share image during each production build.
+   `worker/seo_pages.js` serves language routes through Cloudflare static
+   assets. Every language page appears in the sitemap, together with the root,
+   with reciprocal EN/RU/VI and `x-default` annotations.
+3. The production workflow deploys SEO-content and HTML changes on `main`.
+   Other Flutter-only updates still follow the manual release process.
+   Before deployment, `node --test test/seo_site_test.mjs`, the Worker
+   integration suite, Flutter tests and `tool/verify_release.dart` validate
+   HTML generation, routing, metadata and bundle size. After deployment,
+   check HTTP 200 for four indexable URLs, HTTP 301 for old language roots,
+   correct content type, self-canonicals, reciprocal `hreflang`, new sitemap,
+   and HTTP 404 for invented URLs. Also test the Flutter app, menu, QR and admin.
+4. Confirm factual business details before edits: owner-verified schedule is
+   **Monday–Friday 10:00–23:00, weekends closed**, with address
+   **60 Cao Văn Bé, Vĩnh Phước, Nha Trang**. The website's default regular
+   day rate is **200K VND**, monthly rate **2.5M VND**; promotions/admin
+   prices can vary. Do not list the studio, lecture room or other amenities
+   as open without operational verification. Do not invent photos, review
+   scores, customer testimonials, location coordinates or rankings.
+5. Preserve the homepage's paper-style, compact booking UI. The service
+   guides are genuinely useful standalone information, not duplicate
+   Flutter app shells, hidden keyword blocks or fabricated doorway pages.
+   Keep all language variations accurate and native. If business hours,
+   rates or address change, update *both* `web/index.html` and
+   `seo/pages.mjs`, plus the localized app copy and Business Profile.
 
 ## Google Search Console
 
@@ -40,10 +57,11 @@ This is too small a sample to infer a reliable generic-query rank.
 Indexing requests do not guarantee ranking, and repeating them does not speed
 up the queue.
 
-1. After significant releases, inspect `https://evils.space/` in URL
-   Inspection. Check the last crawl, indexed canonical and live-rendered page.
-   If a new version has not yet been crawled, wait for normal recrawling; do not
-   keep resubmitting the same URL.
+1. After release, submit/resubmit `https://evils.space/sitemap.xml` in Search
+   Console, then inspect all four canonical URLs (root + three guides).
+   Check status 200, declared vs Google-selected canonical, indexability and
+   rendered text. Crawl/indexing is not instant and ranking is not guaranteed;
+   do not repeatedly request indexing for unchanged pages.
 2. In **Performance → Search results**, select **Web**, compare consistent
    country, date and device filters, and track impressions, clicks, CTR and
    average position for `coworking space nha trang`, `coworking nha trang`,
@@ -75,12 +93,21 @@ up the queue.
    submitted and were pending Google review. Check the published services and
    verify holiday hours and any future schedule changes against the operation.
 
+## Google Maps / local rankings
+
+Website changes **do not directly edit** Google Business Profile. Keep its
+primary category accurate, local schedule, exterior/entrance photos, service
+list, accessible phone and main website link to `https://evils.space/`
+consistent with the actual business. Ask real customers for honest reviews
+without incentives or review gating. The Google Maps photo/review links on
+the SEO pages lead to the existing profile; new original images still require
+real photographs from the venue.
+
 ## Editorial growth
 
-Keep the single page useful in each language through accurate prices, booking
-availability, directions, and concise labels. Earn relevant mentions from
-Nha Trang hotels, remote-work communities, local directories and partners with
-accurate name, address and website; do not buy links or reviews. Google
-recommends distinct URLs for full language-specific search targeting, so the
-one-page design trades some Russian/Vietnamese search reach for its simple
-visitor experience.
+Track *non-branded* EN/RU/VI query impressions, clicks and indexing by page;
+use actual Search Console and Google Business Profile Performance exports
+rather than guessed rankings. Evaluate which page attracts qualified visitors
+and bookings before adding more pages. Keep the native language guides
+well-maintained, address customer questions, and earn relevant citations
+from real Nha Trang partners rather than buying links or reviews.

@@ -130,6 +130,7 @@ class LocalizationController extends ChangeNotifier {
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'CALL',
       'page_one': 'PAGE 1 OF 1',
+      'local_guides': 'MORE ABOUT COWORKING IN NHA TRANG',
     },
     'ru': {
       'brand_daily': 'EVIL SPACE / DAILY',
@@ -220,6 +221,7 @@ class LocalizationController extends ChangeNotifier {
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'ПОЗВОНИТЬ',
       'page_one': 'СТРАНИЦА 1 ИЗ 1',
+      'local_guides': 'ПОДРОБНЕЕ О КОВОРКИНГЕ В НЯЧАНГЕ',
     },
     'vi': {
       'brand_daily': 'EVIL SPACE / DAILY',
@@ -310,6 +312,7 @@ class LocalizationController extends ChangeNotifier {
       'contact_telegram': 'TELEGRAM',
       'contact_phone': 'GỌI',
       'page_one': 'TRANG 1 / 1',
+      'local_guides': 'THÊM THÔNG TIN VỀ COWORKING NHA TRANG',
     },
   };
 }

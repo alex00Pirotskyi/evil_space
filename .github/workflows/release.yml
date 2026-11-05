@@ -9,6 +9,9 @@ on:
       - main
     paths:
       - 'seo/share.png'
+      - 'seo/pages.mjs'
+      - 'seo/site.css'
+      - 'web/_headers'
       - 'tool/build_seo.mjs'
       - 'worker/seo_pages.js'
       - 'worker/casso_webhook.js'
@@ -67,3 +70,8 @@ jobs:
           test "$(curl -sS -L --max-time 20 -o /dev/null -w '%{http_code}' https://evils.space/menu)" = 200
           test "$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' https://evils.space/seo-route-check-404)" = 404
           test "$(curl -sS --max-time 20 -o /dev/null -w '%{http_code} %{redirect_url}' https://evils.space/en/)" = '301 https://evils.space/'
+          for path in             en/coworking-nha-trang/             ru/kovorking-nyachang/             vi/khong-gian-lam-viec-nha-trang/; do
+            test "$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://evils.space/$path")" = 200
+          done
+          curl -fsSL --max-time 20 https://evils.space/en/coworking-nha-trang/ | grep -q 'Coworking space in Nha Trang'
+          curl -fsSL --max-time 20 https://evils.space/sitemap.xml | grep -q '<loc>https://evils.space/vi/khong-gian-lam-viec-nha-trang/</loc>'

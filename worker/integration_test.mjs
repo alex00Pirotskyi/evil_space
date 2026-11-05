@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildSeo } from '../tool/build_seo.mjs';
+import { landingPages, SEO_ORIGIN } from '../seo/pages.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const wranglerVersion = readFileSync(
@@ -306,15 +307,38 @@ async function waitForServer() {
 async function runSeoFlow() {
   const root = await http('/');
   assert.equal(root.status, 200);
-  assert.match(await root.text(), /<title>Evil Space \| Coworking Space in Nha Trang<\/title>/);
+  const rootHtml = await root.text();
+  assert.match(rootHtml, /<title>Evil Space \| Coworking Space in Nha Trang<\/title>/);
+  for (const page of landingPages) {
+    assert.ok(rootHtml.includes('href="' + page.path + '"'));
+    assert.ok(rootHtml.includes('hreflang="' + page.lang + '"'));
+  }
+
+  for (const page of landingPages) {
+    const response = await http(page.path);
+    assert.equal(response.status, 200, 'SEO guide GET failed: ' + page.path);
+    assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+    const html = await response.text();
+    assert.ok(html.includes('<html lang="' + page.lang + '">'));
+    assert.ok(html.includes('<h1 id="main-title">' + page.heading + '</h1>'));
+    assert.ok(html.includes('href="' + SEO_ORIGIN + page.path + '"'));
+    assert.ok(!html.includes('flutter_bootstrap.js'));
+
+    for (const alias of [page.path.slice(0, -1), page.path + 'index.html']) {
+      const redirect = await fetch(baseUrl + alias, {redirect: 'manual'});
+      assert.equal(redirect.status, 301);
+      assert.equal(new URL(redirect.headers.get('location')).pathname, page.path);
+    }
+    const head = await fetch(baseUrl + page.path, {method: 'HEAD'});
+    assert.equal(head.status, 200);
+  }
+
   for (const lang of ['en', 'ru', 'vi']) {
     for (const slug of ['/', '/pricing/', '/visit/']) {
       const redirect = await fetch(`${baseUrl}/${lang}${slug}`, { redirect: 'manual' });
       assert.equal(redirect.status, 301);
-      // Wrangler dev rewrites the redirect host to its local origin.
       assert.equal(new URL(redirect.headers.get('location')).pathname, '/');
     }
-
     const unknown = await http(`/${lang}/this-page-does-not-exist`);
     assert.equal(unknown.status, 404);
   }
@@ -324,7 +348,11 @@ async function runSeoFlow() {
   assert.match(await robots.text(), /Sitemap: https:\/\/evils\.space\/sitemap\.xml/);
   const sitemap = await http('/sitemap.xml');
   assert.equal(sitemap.status, 200);
-  assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map((m) => m[1]), ['https://evils.space/']);
+  assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map((m) => m[1]),
+    [SEO_ORIGIN + '/', ...landingPages.map(page => SEO_ORIGIN + page.path)]);
+  const css = await http('/seo/site.css');
+  assert.equal(css.status, 200);
+  assert.ok((await css.text()).includes('--paper:#f2f0e8'));
   const admin = await http('/admin');
   assert.equal(admin.headers.get('x-robots-tag'), 'noindex, follow');
 }
