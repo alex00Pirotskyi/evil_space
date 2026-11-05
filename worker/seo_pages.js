@@ -1,5 +1,8 @@
-// Redirect the retired localized marketing pages to the sole public homepage.
-// Keep unknown paths out of the Flutter SPA fallback so they cannot be indexed.
+import { landingPages, SEO_ORIGIN } from '../seo/pages.mjs';
+
+// The booking application stays at /. Crawlable language guides are real HTML
+// documents, not Flutter app-shell clones, and have their own canonical URLs.
+const landingByPath = new Map(landingPages.map((page) => [page.path, page]));
 const retiredPages = new Set([
   '', 'index.html',
   'pricing', 'pricing/', 'pricing/index.html',
@@ -14,9 +17,27 @@ export async function seoResponse(request, env) {
       return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } });
     }
 
+    const path = url.pathname;
+    const normalized = path.endsWith('/index.html')
+      ? path.slice(0, -'index.html'.length)
+      : path.endsWith('/') ? path : path + '/';
+    const page = landingByPath.get(normalized);
+    if (page) {
+      if (path !== page.path) {
+        return Response.redirect(SEO_ORIGIN + page.path + url.search, 301);
+      }
+      // Cloudflare ASSETS serves /en/<slug>/index.html at the canonical /en/<slug>/.
+      // The worker runs first for /en/*, /ru/* and /vi/* in wrangler.toml.
+      const response = await env.ASSETS.fetch(request);
+      return new Response(request.method === 'HEAD' ? null : response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    }
+
     const rest = match[2];
     if (retiredPages.has(rest ?? '')) {
-      return Response.redirect('https://evils.space/', 301);
+      return Response.redirect(SEO_ORIGIN + '/', 301);
     }
     return new Response(request.method === 'HEAD' ? null : 'Page not found', {
       status: 404,
@@ -28,14 +49,12 @@ export async function seoResponse(request, env) {
     });
   }
 
-  // Preserve Flutter's existing deep links but keep duplicate app and admin
-  // routes out of search results. The root still works as the booking app.
+  // Keep functional Flutter deep links available, but not indexable. Unknown
+  // paths must return 404 rather than creating duplicate app shell URLs.
   if (url.pathname === '/admin' || url.pathname.startsWith('/admin/') ||
       url.pathname === '/menu' || url.pathname === '/menu/' ||
       url.pathname === '/qr' || url.pathname === '/qr/') {
     if (request.method !== 'GET' && request.method !== 'HEAD') return null;
-    // Explicitly serve the app shell at functional deep links. Cloudflare's
-    // unknown-path fallback is disabled so arbitrary URLs get a real 404.
     const response = await env.ASSETS.fetch(new Request(new URL('/', request.url), request));
     const headers = new Headers(response.headers);
     headers.set('X-Robots-Tag', 'noindex, follow');
