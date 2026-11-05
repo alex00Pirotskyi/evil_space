@@ -35,6 +35,15 @@ void main() {
     await tester.tap(todayButton);
     await tester.pumpAndSettle();
 
+    // The smoke test must behave correctly when CI runs outside opening hours.
+    final localNow = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final closed = localNow.weekday > DateTime.friday || localNow.hour >= 23;
+    if (closed) {
+      expect(find.text('CLOSED'), findsWidgets);
+      expect(find.byType(AlertDialog), findsNothing);
+      return;
+    }
+
     final dialog = find.byType(AlertDialog);
     expect(dialog, findsOneWidget);
     expect(
