@@ -17,6 +17,10 @@ void main(List<String> args) {
     'robots.txt',
     'sitemap.xml',
     'seo/share.png',
+    'seo/site.css',
+    'en/coworking-nha-trang/index.html',
+    'ru/kovorking-nyachang/index.html',
+    'vi/khong-gian-lam-viec-nha-trang/index.html',
   ];
   for (final name in requiredFiles) {
     final file = File('${root.path}${Platform.pathSeparator}$name');
@@ -59,17 +63,47 @@ void main(List<String> args) {
       index.contains('href="/ru/"') ||
       index.contains('href="/vi/"') ||
       index.contains('250K VND')) {
-    _fail('The Flutter app must remain at / without links to retired pages.');
+    _fail('The Flutter booking app must remain canonical at /.');
+  }
+  const paths = [
+    '/en/coworking-nha-trang/',
+    '/ru/kovorking-nyachang/',
+    '/vi/khong-gian-lam-viec-nha-trang/',
+  ];
+  const languages = ['en', 'ru', 'vi'];
+  for (var i = 0; i < paths.length; i++) {
+    final canonical = 'https://evils.space${paths[i]}';
+    if (!index.contains('href="$canonical"') ||
+        !index.contains('hreflang="${languages[i]}"')) {
+      _fail('Homepage is missing native guide links and hreflang: $canonical');
+    }
+    final file = File('${root.path}${Platform.pathSeparator}${paths[i].substring(1)}index.html');
+    final html = file.readAsStringSync();
+    if (!html.contains('<html lang="${languages[i]}">') ||
+        !html.contains('href="$canonical"') ||
+        !html.contains('href="/seo/site.css"') ||
+        !html.contains('href="/"') ||
+        html.contains('flutter_bootstrap.js')) {
+      _fail('Localized guide has incorrect metadata or is a Flutter shell: $canonical');
+    }
   }
   final sitemap = File('${root.path}${Platform.pathSeparator}sitemap.xml')
       .readAsStringSync();
   if (!sitemap.contains('<loc>https://evils.space/</loc>') ||
-      RegExp(r'<loc>').allMatches(sitemap).length != 1) {
-    _fail('The sitemap must list only the Flutter homepage.');
+      RegExp(r'<loc>').allMatches(sitemap).length != 4 ||
+      RegExp(r'hreflang="x-default"').allMatches(sitemap).length != 4) {
+    _fail('The sitemap must list root + three localized coworking guides.');
   }
-  for (final lang in ['en', 'ru', 'vi']) {
-    if (Directory('${root.path}${Platform.pathSeparator}$lang').existsSync()) {
-      _fail('Retired localized pages must not be deployed: /$lang/');
+  for (final path in paths) {
+    if (!sitemap.contains('<loc>https://evils.space$path</loc>')) {
+      _fail('Sitemap missing localized URL: $path');
+    }
+  }
+  for (final lang in languages) {
+    if (File('${root.path}${Platform.pathSeparator}$lang${Platform.pathSeparator}index.html').existsSync() ||
+        Directory('${root.path}${Platform.pathSeparator}$lang${Platform.pathSeparator}pricing').existsSync() ||
+        Directory('${root.path}${Platform.pathSeparator}$lang${Platform.pathSeparator}visit').existsSync()) {
+      _fail('Retired legacy pages must not be deployed: /$lang/');
     }
   }
 
