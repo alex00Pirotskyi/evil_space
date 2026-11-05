@@ -46,7 +46,9 @@ export function isOpenServiceDay(serviceDay) {
 
 export function isBookableServiceDay(serviceDay, now) {
   const today = serviceDayForOffset(0, now);
-  return (serviceDay === today || serviceDay === today + 86400) && isOpenServiceDay(serviceDay);
+  return (serviceDay === today || serviceDay === today + 86400) &&
+    isOpenServiceDay(serviceDay) &&
+    (serviceDay !== today || nhaTrangSecondsIntoDay(now) < 23 * 3600);
 }
 
 export function nhaTrangSecondsIntoDay(now) {
@@ -56,7 +58,7 @@ export function nhaTrangSecondsIntoDay(now) {
 
 export function visitTimestampForServiceDay(serviceDay, now) {
   const today = serviceDayForOffset(0, now);
-  if (serviceDay === today) return Number(now);
+  if (serviceDay === today) return Math.max(Number(now), Number(serviceDay) + 10 * 3600);
   return Number(serviceDay) + 10 * 3600;
 }
 
