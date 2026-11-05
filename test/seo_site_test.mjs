@@ -5,7 +5,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { buildSeo } from '../tool/build_seo.mjs';
 import { seoResponse } from '../worker/seo_pages.js';
-import { landingPages, SEO_ORIGIN } from '../seo/pages.mjs';
+import { landingPages, SEO_ORIGIN, SEO_MAP_URL } from '../seo/pages.mjs';
 
 let output;
 before(async () => {
@@ -62,7 +62,7 @@ test('localized guides are real, useful, accessible HTML with reciprocal hreflan
     assert.ok(html.includes('href="tel:+84565056748"'));
     assert.ok(html.includes('60 Cao Văn Bé'));
     assert.ok(html.includes('10:00') && html.includes('23:00'));
-    assert.ok(html.includes(page.mapsLabel), 'Google Maps photos/reviews action missing');
+    assert.ok(html.includes('href="' + SEO_MAP_URL + '"'), 'Google Maps photos/reviews link missing');
     assert.ok(!html.includes('flutter_bootstrap.js'));
     for (const [lang, href] of all) {
       assert.ok(html.includes('hreflang="' + lang + '" href="' + href + '"'),
