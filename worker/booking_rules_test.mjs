@@ -49,3 +49,15 @@ test('weekends are closed; Friday cannot book Saturday; Sunday can book Monday',
   assert.equal(isBookableServiceDay(serviceDayForOffset(0, sunday), sunday), false);
   assert.equal(isBookableServiceDay(serviceDayForOffset(1, sunday), sunday), true);
 });
+
+
+test('same-day bookings stop at 23:00 Nha Trang time and early bookings start at 10:00', () => {
+  const early = utcSeconds('2026-11-05T00:00:00Z'); // 07:00 ICT
+  const beforeClose = utcSeconds('2026-11-05T15:59:00Z'); // 22:59 ICT
+  const closed = utcSeconds('2026-11-05T16:00:00Z'); // 23:00 ICT
+  const today = serviceDayForOffset(0, early);
+  assert.equal(isBookableServiceDay(today, early), true);
+  assert.equal(visitTimestampForServiceDay(today, early), today + 10 * 3600);
+  assert.equal(isBookableServiceDay(today, beforeClose), true);
+  assert.equal(isBookableServiceDay(today, closed), false);
+});
