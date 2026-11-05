@@ -15,6 +15,10 @@
   >
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://evils.space/">
+  <link rel="alternate" hreflang="en" href="https://evils.space/en/coworking-nha-trang/">
+  <link rel="alternate" hreflang="ru" href="https://evils.space/ru/kovorking-nyachang/">
+  <link rel="alternate" hreflang="vi" href="https://evils.space/vi/khong-gian-lam-viec-nha-trang/">
+  <link rel="alternate" hreflang="x-default" href="https://evils.space/">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Evil Space">
@@ -174,6 +178,16 @@
       font: 16px/1.55 Georgia, "Times New Roman", serif;
     }
 
+    .evil-space-boot-guides {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      font: 700 10px/1.5 "Courier New", monospace;
+      letter-spacing: .5px;
+    }
+
+    .evil-space-boot-guides a { color: var(--ink); text-underline-offset: 3px; }
     noscript a { color: var(--ink); }
   </style>
   <noscript><style>#evil-space-boot { display: none; } body { height: auto; overflow: auto; }</style></noscript>
@@ -186,6 +200,11 @@
       <div class="evil-space-boot-rule"></div>
       <p id="evil-space-boot-copy" class="evil-space-boot-meta">LOADING EVIL SPACE…</p>
       <p class="evil-space-boot-meta">60 CAO VĂN BÉ · VĨNH PHƯỚC</p>
+      <nav class="evil-space-boot-guides" aria-label="Local coworking information">
+        <a href="/en/coworking-nha-trang/">EN / COWORKING</a>
+        <a href="/ru/kovorking-nyachang/">RU / КОВОРКИНГ</a>
+        <a href="/vi/khong-gian-lam-viec-nha-trang/">VI / COWORKING</a>
+      </nav>
     </div>
   </div>
 
@@ -194,7 +213,10 @@
     <p>Visit 60 Cao Văn Bé, Vĩnh Phước, Nha Trang, Monday–Friday 10:00–23:00. Closed Saturday and Sunday.
       A day pass is 200K VND at the regular rate; a one-month plan is 2.5M VND.
       JavaScript is required to open the booking app.</p>
-    <p>The app offers English, Русский and Tiếng Việt on this same page.</p>
+    <p>The booking app supports English, Русский and Tiếng Việt. More coworking information:
+      <a href="/en/coworking-nha-trang/">English</a>,
+      <a href="/ru/kovorking-nyachang/">Русский</a>,
+      <a href="/vi/khong-gian-lam-viec-nha-trang/">Tiếng Việt</a>.</p>
   </noscript>
   <script src="google_sign_in.js" defer></script>
   <script src="flutter_bootstrap.js" async></script>
