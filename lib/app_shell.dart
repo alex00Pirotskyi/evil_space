@@ -1104,7 +1104,21 @@ class _DailyScreenState extends State<DailyScreen>
 
   Widget _footer() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const _Rule(),
+        const SizedBox(height: 12),
+        Text(widget.localization.t('local_guides'), style: _mono(9.5, color: BrandPalette.inkMuted)),
+        Wrap(
+          spacing: 14,
+          runSpacing: 1,
+          children: [
+            _guideLink('EN / COWORKING', 'https://evils.space/en/coworking-nha-trang/'),
+            _guideLink('RU / КОВОРКИНГ', 'https://evils.space/ru/kovorking-nyachang/'),
+            _guideLink('VI / COWORKING', 'https://evils.space/vi/khong-gian-lam-viec-nha-trang/'),
+          ],
+        ),
+        const SizedBox(height: 13),
         const _Rule(),
         const SizedBox(height: 12),
         Row(
@@ -1124,6 +1138,15 @@ class _DailyScreenState extends State<DailyScreen>
       ],
     );
   }
+
+  Widget _guideLink(String label, String url) => TextButton(
+    onPressed: () => _launch(url),
+    style: TextButton.styleFrom(
+      foregroundColor: BrandPalette.ink,
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+    ),
+    child: Text(label, style: _mono(9.5, color: BrandPalette.inkMuted)),
+  );
 
   Widget _sectionKicker(String text) => Text(
     text,
