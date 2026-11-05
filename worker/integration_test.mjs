@@ -511,53 +511,62 @@ async function runFlow() {
   assert.equal('occupied' in payload.status, false);
   assert.equal('total' in payload.status, false);
 
-  const contactValue = `@integration_${randomBytes(6).toString('hex')}`;
-  response = await jsonRequest('/api/public/book', {
-    name: 'Integration Test',
-    contactType: 'telegram',
-    contactValue,
-    serviceDate: nhaTrangDateKey(),
-    language: 'en',
-  });
-  assert.equal(response.status, 201);
-  const booking = await response.json();
-  assert.equal(booking.ok, true);
-  assert.equal(booking.status, 'accepted');
-  assert.ok(typeof booking.token === 'string' && booking.token.length >= 32);
+  // The production site is closed on weekends. This integration booking flow
+  // needs both today and tomorrow to be open; deterministic weekday/weekend
+  // coverage lives in booking_rules_test.mjs.
+  const localToday = new Date(Date.now() + 7 * 3600000);
+  const weekday = localToday.getUTCDay();
+  if (weekday >= 1 && weekday <= 4 && localToday.getUTCHours() < 23) {
+    const contactValue = `@integration_${randomBytes(6).toString('hex')}`;
+    response = await jsonRequest('/api/public/book', {
+      name: 'Integration Test',
+      contactType: 'telegram',
+      contactValue,
+      serviceDate: nhaTrangDateKey(),
+      language: 'en',
+    });
+    assert.equal(response.status, 201);
+    const booking = await response.json();
+    assert.equal(booking.ok, true);
+    assert.equal(booking.status, 'accepted');
+    assert.ok(typeof booking.token === 'string' && booking.token.length >= 32);
 
-  response = await http(
-    `/api/public/booking?token=${encodeURIComponent(booking.token)}`,
-  );
-  assert.equal(response.status, 200);
-  payload = await response.json();
-  assert.equal(payload.status, 'accepted');
+    response = await http(
+      `/api/public/booking?token=${encodeURIComponent(booking.token)}`,
+    );
+    assert.equal(response.status, 200);
+    payload = await response.json();
+    assert.equal(payload.status, 'accepted');
 
-  response = await http('/api/admin/operations', {
-    headers: { Cookie: cookie },
-  });
-  assert.equal(response.status, 200);
-  payload = await response.json();
-  const requestRow = payload.snapshot.booking_requests.find(
-    (row) => row.contact_value === contactValue,
-  );
-  assert.ok(requestRow?.id);
+    response = await http('/api/admin/operations', {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(response.status, 200);
+    payload = await response.json();
+    const requestRow = payload.snapshot.booking_requests.find(
+      (row) => row.contact_value === contactValue,
+    );
+    assert.ok(requestRow?.id);
 
-  response = await jsonRequest(
-    '/api/admin/booking/accept',
-    { id: requestRow.id },
-    { Cookie: cookie },
-  );
-  assert.equal(response.status, 200);
+    response = await jsonRequest(
+      '/api/admin/booking/accept',
+      { id: requestRow.id },
+      { Cookie: cookie },
+    );
+    assert.equal(response.status, 200);
 
-  response = await http(
-    `/api/public/booking?token=${encodeURIComponent(booking.token)}`,
-  );
-  assert.equal(response.status, 200);
-  payload = await response.json();
-  assert.equal(payload.status, 'accepted');
+    response = await http(
+      `/api/public/booking?token=${encodeURIComponent(booking.token)}`,
+    );
+    assert.equal(response.status, 200);
+    payload = await response.json();
+    assert.equal(payload.status, 'accepted');
 
-  await runBookingFlow(cookie, booking, requestRow.id, contactValue);
+    await runBookingFlow(cookie, booking, requestRow.id, contactValue);
 
+  } else {
+    console.log('Integration: skipping two-day booking flow (weekend/Friday/after closing).');
+  }
   const reviewToken = reviewApprovalToken;
   response = await http(
     `/api/admin/review?token=${encodeURIComponent(reviewToken)}`,
