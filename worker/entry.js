@@ -17,7 +17,6 @@ import {
 import {
   bookingWindow,
   isBookableServiceDay,
-  isOpenServiceDay,
   serviceDateKey,
   serviceDayFromDateKey,
 } from './booking_rules.js';
@@ -223,8 +222,8 @@ async function handlePublicStatus(env) {
       updated: new Date(today * 1000).toISOString(),
       todayDate: serviceDateKey(today),
       tomorrowDate: serviceDateKey(tomorrow),
-      todayBookable: isOpenServiceDay(today),
-      tomorrowBookable: isOpenServiceDay(tomorrow),
+      todayBookable: isBookableServiceDay(today, now),
+      tomorrowBookable: isBookableServiceDay(tomorrow, now),
       baseDayPassPrice: todayPricing.base.dayPassVnd,
       baseMonthPassPrice: todayPricing.base.monthPassVnd,
       baseLockerMonthPrice: todayPricing.base.lockerMonthVnd,
