@@ -242,8 +242,11 @@ class _DailyScreenState extends State<DailyScreen>
 
   bool _isWeekdayDate(String serviceDate) {
     final date = DateTime.tryParse(serviceDate);
-    if (date == null) return false;
-    return date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;
+    if (date == null || date.weekday > DateTime.friday) return false;
+    final now = _nhaTrangNow();
+    final nowKey = _serviceDateForOffset(0);
+    if (serviceDate == nowKey && now.hour >= 23) return false;
+    return true;
   }
 
   String _compactServiceDate(String serviceDate) =>
