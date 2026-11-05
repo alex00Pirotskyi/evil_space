@@ -1,6 +1,6 @@
 {
   "status": {
-    "updated": "2026-08-29"
+    "updated": "2026-11-05"
   },
   "prices": [
     {
@@ -19,30 +19,22 @@
   "openings": [
     {
       "label_key": "opening_studio",
-      "opening_date": "2026-10-20",
+      "opening_date": "",
       "is_open": false
     },
     {
       "label_key": "opening_lecture",
-      "opening_date": "2026-10-20",
+      "opening_date": "",
       "is_open": false
     }
   ],
   "announcements": [
     {
-      "date": "20 AUG",
+      "date": "NOV 2026",
       "text": {
-        "en": "WELCOME TO EVIL SPACE",
-        "ru": "ДОБРО ПОЖАЛОВАТЬ В EVIL SPACE",
-        "vi": "CHÀO MỪNG ĐẾN EVIL SPACE"
-      }
-    },
-    {
-      "date": "19 AUG",
-      "text": {
-        "en": "NEW PODCAST MICROPHONES ARRIVED",
-        "ru": "ПРИЕХАЛИ НОВЫЕ МИКРОФОНЫ ДЛЯ ПОДКАСТОВ",
-        "vi": "MICRO PODCAST MỚI ĐÃ VỀ"
+        "en": "OPEN MON–FRI 10:00–23:00 · CLOSED ON WEEKENDS",
+        "ru": "РАБОТАЕМ ПН–ПТ 10:00–23:00 · ВЫХОДНЫЕ СБ–ВС",
+        "vi": "MỞ CỬA THỨ 2–6 10:00–23:00 · NGHỈ THỨ 7–CN"
       }
     }
   ]

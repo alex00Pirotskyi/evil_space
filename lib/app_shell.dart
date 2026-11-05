@@ -240,6 +240,15 @@ class _DailyScreenState extends State<DailyScreen>
     return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
   }
 
+  bool _isWeekdayDate(String serviceDate) {
+    final date = DateTime.tryParse(serviceDate);
+    if (date == null || date.weekday > DateTime.friday) return false;
+    final now = _nhaTrangNow();
+    final nowKey = _serviceDateForOffset(0);
+    if (serviceDate == nowKey && now.hour >= 23) return false;
+    return true;
+  }
+
   String _compactServiceDate(String serviceDate) =>
       serviceDate.replaceAll('-', '');
 
@@ -553,6 +562,8 @@ class _DailyScreenState extends State<DailyScreen>
         : status.tomorrowDate;
     final todayBooking = _bookingFor(todayDate);
     final tomorrowBooking = _bookingFor(tomorrowDate);
+    final todayBookable = _isWeekdayDate(todayDate);
+    final tomorrowBookable = _isWeekdayDate(tomorrowDate);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,11 +577,13 @@ class _DailyScreenState extends State<DailyScreen>
               Expanded(
                 child: _PaperButton(
                   label: widget.localization.t('booking_today'),
-                  detail: _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
+                  detail: !todayBookable
+                      ? widget.localization.t('booking_closed')
+                      : _bookingBusy ? '…' : _moneyLabel(status.todayPrice),
                   icon: Icons.today_outlined,
                   filled: true,
                   onPressed:
-                      _bookingBusy || todayBooking != null
+                      _bookingBusy || !todayBookable || todayBooking != null
                       ? null
                       : () => _requestDesk(todayDate),
                 ),
@@ -578,12 +591,15 @@ class _DailyScreenState extends State<DailyScreen>
               Expanded(
                 child: _PaperButton(
                   label: widget.localization.t('booking_tomorrow'),
-                  detail: _bookingBusy
+                  detail: !tomorrowBookable
+                      ? widget.localization.t('booking_closed')
+                      : _bookingBusy
                       ? '…'
                       : _moneyLabel(status.tomorrowPrice),
                   icon: Icons.event_outlined,
                   onPressed:
                       _bookingBusy ||
+                          !tomorrowBookable ||
                           tomorrowBooking != null
                       ? null
                       : () => _requestDesk(tomorrowDate),
@@ -592,14 +608,26 @@ class _DailyScreenState extends State<DailyScreen>
             ],
           ),
         ),
-        if (status.todayPromoDescription.isNotEmpty) ...[
+        if (!todayBookable || !tomorrowBookable) ...[
+          const SizedBox(height: 12),
+          Text(widget.localization.t('booking_weekend_note'), style: _mono(10, color: BrandPalette.inkMuted)),
+          if (!todayBookable && !tomorrowBookable) ...[
+            const SizedBox(height: 8),
+            _CompactLink(
+              label: widget.localization.t('booking_weekend_contact'),
+              icon: Icons.message_outlined,
+              onPressed: () => _launch(_zaloUrl),
+            ),
+          ],
+        ],
+        if (todayBookable && status.todayPromoDescription.isNotEmpty) ...[
           const SizedBox(height: 10),
           _promoNotice(
             widget.localization.t('booking_today'),
             status.todayPromoDescription,
           ),
         ],
-        if (status.tomorrowPromoDescription.isNotEmpty &&
+        if (tomorrowBookable && status.tomorrowPromoDescription.isNotEmpty &&
             status.tomorrowPromoDescription !=
                 status.todayPromoDescription) ...[
           const SizedBox(height: 8),

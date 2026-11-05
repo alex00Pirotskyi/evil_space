@@ -222,6 +222,8 @@ async function handlePublicStatus(env) {
       updated: new Date(today * 1000).toISOString(),
       todayDate: serviceDateKey(today),
       tomorrowDate: serviceDateKey(tomorrow),
+      todayBookable: isBookableServiceDay(today, now),
+      tomorrowBookable: isBookableServiceDay(tomorrow, now),
       baseDayPassPrice: todayPricing.base.dayPassVnd,
       baseMonthPassPrice: todayPricing.base.monthPassVnd,
       baseLockerMonthPrice: todayPricing.base.lockerMonthVnd,
@@ -251,7 +253,7 @@ async function handlePublicBooking(request, env, ctx) {
     return jsonError('Phone or Telegram is required.', 400);
   }
   if (serviceDay == null || !isBookableServiceDay(serviceDay, now)) {
-    return jsonError('Choose today or tomorrow.', 400);
+    return jsonError('Choose today or tomorrow on a weekday (Monday–Friday). Closed on weekends.', 400);
   }
 
   const serviceEnd = serviceDay + 86400;

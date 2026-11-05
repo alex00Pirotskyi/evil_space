@@ -56,7 +56,7 @@ up the queue.
 ## Google Business Profile
 
 1. Check the current **60 Cao Văn Bé, Vĩnh Phước, Nha Trang** address and map
-   pin, phone **0565 056 748**, daily **11:00–23:00** hours, Website link to
+   pin, phone **0565 056 748**, Monday–Friday **10:00–23:00** hours (closed Saturday–Sunday), Website link to
    `https://evils.space/` and primary category **Coworking space** against the
    actual business. A `53/14 Cao Văn Bé` search query does not prove that
    address belongs to this business; correct outdated external citations only
@@ -69,9 +69,9 @@ up the queue.
    organic website impressions and clicks. The April–September 2026 baseline
    supplied by the owner was **1,982 profile views** and **595 interactions**.
 4. On September 26, 2026, the profile description was updated with the real
-   coworking offer and short English, Russian and Vietnamese wording. Weekend
-   hours were corrected from closed to 11:00–23:00 to match the published site;
-   the Instagram profile was added. The day-pass and monthly-desk services were
+   coworking offer and short English, Russian and Vietnamese wording. The Instagram profile was added. On November 5, 2026 the owner clarified
+   that Google Maps' Monday–Friday 10:00–23:00, weekend-closed schedule is correct;
+   this supersedes the September hours note. The day-pass and monthly-desk services were
    submitted and were pending Google review. Check the published services and
    verify holiday hours and any future schedule changes against the operation.
 

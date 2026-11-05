@@ -38,9 +38,17 @@ export function serviceDayFromCompactDate(raw) {
   return serviceDayFromDateKey(`${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`);
 }
 
+export function isOpenServiceDay(serviceDay) {
+  // 1970-01-01 is a Thursday; Nha Trang's service day is an integer UTC-day offset.
+  const dayOfWeek = new Date((Number(serviceDay) + NHA_TRANG_OFFSET_SECONDS) * 1000).getUTCDay();
+  return dayOfWeek >= 1 && dayOfWeek <= 5;
+}
+
 export function isBookableServiceDay(serviceDay, now) {
   const today = serviceDayForOffset(0, now);
-  return serviceDay === today || serviceDay === today + 86400;
+  return (serviceDay === today || serviceDay === today + 86400) &&
+    isOpenServiceDay(serviceDay) &&
+    (serviceDay !== today || nhaTrangSecondsIntoDay(now) < 23 * 3600);
 }
 
 export function nhaTrangSecondsIntoDay(now) {
@@ -50,8 +58,8 @@ export function nhaTrangSecondsIntoDay(now) {
 
 export function visitTimestampForServiceDay(serviceDay, now) {
   const today = serviceDayForOffset(0, now);
-  if (serviceDay === today) return Number(now);
-  return Number(serviceDay) + 11 * 3600;
+  if (serviceDay === today) return Math.max(Number(now), Number(serviceDay) + 10 * 3600);
+  return Number(serviceDay) + 10 * 3600;
 }
 
 export function bookingWindow(now) {
