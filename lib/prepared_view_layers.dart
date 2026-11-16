@@ -32,13 +32,14 @@ class PreparedViewMotion extends StatelessWidget {
 class PreparedViewLayers extends StatefulWidget {
   const PreparedViewLayers({super.key, required this.controller,
     required this.first, this.second, this.blockFirst = false,
-    this.travelPixels = preparedViewTravel});
+    this.travelPixels = preparedViewTravel, this.firstTravelPixels});
 
   final AnimationController controller;
   final Widget first;
   final Widget? second;
   final bool blockFirst;
   final double travelPixels;
+  final double? firstTravelPixels;
 
   @override
   State<PreparedViewLayers> createState() => _PreparedViewLayersState();
@@ -81,7 +82,7 @@ class _PreparedViewLayersState extends State<PreparedViewLayers> {
   }
 
   Widget _layer(Widget child, {required bool hidden, required bool interactive,
-    required Animation<double> opacity}) => Offstage(
+    required Animation<double> opacity, required double travelPixels}) => Offstage(
       offstage: hidden,
       child: TickerMode(enabled: !hidden,
         child: IgnorePointer(ignoring: !interactive,
@@ -89,16 +90,18 @@ class _PreparedViewLayersState extends State<PreparedViewLayers> {
             child: ExcludeSemantics(excluding: !interactive,
               child: FadeTransition(opacity: opacity,
                 child: PreparedViewMotion(visibility: opacity,
-                  travelPixels: widget.travelPixels,
+                  travelPixels: travelPixels,
                   child: RepaintBoundary(child: child))))))));
 
   @override
   Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
     _layer(widget.first, hidden: widget.controller.isCompleted,
       interactive: widget.controller.isDismissed && !widget.blockFirst,
-      opacity: ReverseAnimation(_fade)),
+      opacity: ReverseAnimation(_fade),
+      travelPixels: widget.firstTravelPixels ?? widget.travelPixels),
     if (widget.second != null)
       _layer(widget.second!, hidden: widget.controller.isDismissed,
-        interactive: widget.controller.isCompleted, opacity: _fade),
+        interactive: widget.controller.isCompleted, opacity: _fade,
+        travelPixels: widget.travelPixels),
   ]);
 }
