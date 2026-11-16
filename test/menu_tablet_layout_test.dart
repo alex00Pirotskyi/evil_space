@@ -102,6 +102,13 @@ void main() {
     final realQr = tester.getRect(find.byType(QrImageView));
     expect(realQr.center.dx, lessThan(1194 / 2));
     expect(find.byKey(const ValueKey('menu-payment-view')), findsOneWidget);
+    await tester.tap(find.text('PAY CASH'));
+    await tester.pumpAndSettle();
+    expect(find.byType(QrImageView), findsNothing);
+    expect(find.text('YOUR CART'), findsOneWidget);
+    await tester.tap(find.text('PAY BY QR INSTEAD'));
+    await tester.pumpAndSettle();
+    expect(find.byType(QrImageView), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('checkout-menu')));
     await tester.pumpAndSettle();
     expect(cart, findsOneWidget);
