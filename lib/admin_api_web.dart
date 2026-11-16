@@ -106,12 +106,10 @@ class AdminApi {
   Future<OperationsSnapshot> updatePricing({
     required int dayPassVnd,
     required int monthPassVnd,
-    required int lockerMonthVnd,
   }) async {
     return _operation('POST', '/api/admin/pricing', {
       'dayPassVnd': dayPassVnd,
       'monthPassVnd': monthPassVnd,
-      'lockerMonthVnd': lockerMonthVnd,
     });
   }
 
@@ -123,7 +121,6 @@ class AdminApi {
     String? endTime,
     int? dayPassVnd,
     int? monthPassVnd,
-    int? lockerMonthVnd,
   }) async {
     return _operation('POST', '/api/admin/promotions', {
       'description': description,
@@ -133,7 +130,6 @@ class AdminApi {
       'endTime': endTime,
       'dayPassVnd': dayPassVnd,
       'monthPassVnd': monthPassVnd,
-      'lockerMonthVnd': lockerMonthVnd,
     });
   }
 
