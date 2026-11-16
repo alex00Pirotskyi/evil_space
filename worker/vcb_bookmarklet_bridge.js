@@ -19,19 +19,22 @@ export default {
     let body;
     try { body = JSON.parse(raw); } catch { return json({ok: false, error: 'Invalid JSON'}, 400); }
     const transaction = normalizeBookmarkletCredit(body);
-    if (!transaction) return json({ok: true, status: 'ignored'});
+    if (!transaction) return json({ok: true, status: 'ignored', reason: 'Unsupported transaction details or reference format'});
     const account = String(env.VIETQR_ACCOUNT_NUMBER ?? '');
     if (!/^\d{6,20}$/.test(account)) return json({ok: false, error: 'VietQR account not configured'}, 503);
-    if (transaction.accountNumber !== account) return json({ok: true, status: 'ignored'});
+    if (transaction.accountNumber !== account) return json({ok: true, status: 'ignored', reason: 'Selected VCB account differs from VietQR receiving account'});
     const status = await applyTransaction(env, transaction, 'vcb_browser');
-    return json({ok: true, status, orderCode: transaction.orderCode});
+    const reason = status === 'ignored' ? await explainUnmatched(env, transaction) : undefined;
+    return json({ok: true, status, ...(reason ? {reason} : {}), orderCode: transaction.orderCode});
   },
 };
 
 export function normalizeBookmarkletCredit(body, now = Date.now()) {
   if (!body || body.source !== 'vcb_web_history' || body.direction !== 'credit') return null;
   const accountNumber = String(body.accountNumber ?? '');
-  const reference = String(body.reference ?? '').trim();
+  // VCB Digibank Web displays a reference such as '5389 - 10535'.
+  // Normalize presentation whitespace, not the reference's identity.
+  const reference = String(body.reference ?? '').trim().replace(/\s*[-–—]\s*/g, '-').replace(/\s+/g, '');
   const description = String(body.description ?? '').trim();
   const amountVnd = Number(body.amountVnd);
   const date = String(body.date ?? '');
@@ -47,7 +50,7 @@ export function normalizeBookmarkletCredit(body, now = Date.now()) {
   const vietnamDate = (ms) => new Date(ms + 7 * 3600000).toISOString().slice(0, 10);
   if (bankDate !== vietnamDate(now) && bankDate !== vietnamDate(now - 86400000)) return null;
   return {
-    transactionId: 'acct:' + accountNumber + ':ref:' + reference.toUpperCase(),
+    transactionId: 'acct:' + accountNumber + ':date:' + bankDate + ':ref:' + reference.toUpperCase(),
     bankReference: reference,
     transactionAt: null, // History exposes only a date.
     bankDate,
@@ -56,6 +59,25 @@ export function normalizeBookmarkletCredit(body, now = Date.now()) {
     description,
     orderCode,
   };
+}
+
+async function explainUnmatched(env, transaction) {
+  const order = await env.evil_space.prepare(`
+    SELECT status, amount_vnd, created_at FROM menu_orders
+    WHERE order_code = ? LIMIT 1
+  `).bind(transaction.orderCode).first();
+  if (!order) return 'No checkout order with this EVIL code';
+  if (String(order.status) === 'paid') return 'Checkout already paid (possibly via Telegram)';
+  if (String(order.status) !== 'pending') return 'Checkout is no longer pending';
+  if (Number(order.amount_vnd) !== transaction.amountVnd) return 'Transfer amount differs from checkout total';
+  const created = Number(order.created_at);
+  const now = Math.floor(Date.now() / 1000);
+  const vietnamDay = (seconds) => new Date((seconds + 7 * 3600) * 1000).toISOString().slice(0, 10);
+  if (!Number.isSafeInteger(created) || created > now + 120 || now - created > 172800 ||
+      transaction.bankDate < vietnamDay(created) || transaction.bankDate > vietnamDay(now)) {
+    return 'Transfer date does not match active checkout';
+  }
+  return 'Transaction did not pass final order checks';
 }
 
 function json(data, status = 200) {
@@ -125,9 +147,10 @@ const RELAY_HTML = `<!doctype html>
      const data = await response.json();
      if (response.status === 401) { authorized = false; await checkSession(); }
      const status = response.ok && data.ok ? data.status : 'retry';
-     last.textContent = status + ' · EVIL ' + (data.orderCode || '') + ' · ' + new Date().toLocaleTimeString();
-     reply('EVIL_VCB_ACK',{id,status});
-   } catch (_) { reply('EVIL_VCB_ACK',{id,status:'retry'}); }
+     const reason = response.ok && data.ok ? String(data.reason || '') : 'HTTP ' + response.status + ' ' + String(data.error || '');
+     last.textContent = status + (reason ? ' · ' + reason : '') + ' · EVIL ' + (data.orderCode || '') + ' · ' + new Date().toLocaleTimeString();
+     reply('EVIL_VCB_ACK',{id,status,reason});
+   } catch (_) { reply('EVIL_VCB_ACK',{id,status:'retry',reason:'Could not reach Evil Space server'}); }
  });
  checkSession();
  setInterval(checkSession,30000);
