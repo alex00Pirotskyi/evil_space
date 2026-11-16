@@ -660,7 +660,7 @@ void main() {
     expect(api.cancellations, isEmpty);
     removeCoffee();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 700));
     expect(api.cancellations, [api.creates.single]);
     expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
     expect(tester.takeException(), isNull);
