@@ -242,10 +242,8 @@ class PricingConfig {
   const PricingConfig({
     required this.dayPassVnd,
     required this.monthPassVnd,
-    required this.lockerMonthVnd,
     required this.currentDayPassVnd,
     required this.currentMonthPassVnd,
-    required this.currentLockerMonthVnd,
     required this.activePromoId,
     required this.activePromoDescription,
   });
@@ -253,20 +251,16 @@ class PricingConfig {
   static const defaults = PricingConfig(
     dayPassVnd: 200000,
     monthPassVnd: 2500000,
-    lockerMonthVnd: 1000000,
     currentDayPassVnd: 200000,
     currentMonthPassVnd: 2500000,
-    currentLockerMonthVnd: 1000000,
     activePromoId: 0,
     activePromoDescription: '',
   );
 
   final int dayPassVnd;
   final int monthPassVnd;
-  final int lockerMonthVnd;
   final int currentDayPassVnd;
   final int currentMonthPassVnd;
-  final int currentLockerMonthVnd;
   final int activePromoId;
   final String activePromoDescription;
 
@@ -274,11 +268,8 @@ class PricingConfig {
     return PricingConfig(
       dayPassVnd: _asInt(json['day_pass_vnd']) ?? 200000,
       monthPassVnd: _asInt(json['month_pass_vnd']) ?? 2500000,
-      lockerMonthVnd: _asInt(json['locker_month_vnd']) ?? 1000000,
       currentDayPassVnd: _asInt(json['current_day_pass_vnd']) ?? 200000,
       currentMonthPassVnd: _asInt(json['current_month_pass_vnd']) ?? 2500000,
-      currentLockerMonthVnd:
-          _asInt(json['current_locker_month_vnd']) ?? 1000000,
       activePromoId: _asInt(json['active_promo_id']) ?? 0,
       activePromoDescription:
           json['active_promo_description']?.toString() ?? '',
@@ -299,7 +290,6 @@ class PromotionRecord {
     this.endMinute,
     this.dayPassVnd,
     this.monthPassVnd,
-    this.lockerMonthVnd,
   });
 
   final int id;
@@ -310,7 +300,6 @@ class PromotionRecord {
   final int? endMinute;
   final int? dayPassVnd;
   final int? monthPassVnd;
-  final int? lockerMonthVnd;
   final bool enabled;
   final int createdAt;
   final String createdByEmail;
@@ -327,7 +316,6 @@ class PromotionRecord {
       endMinute: _asInt(json['end_minute']),
       dayPassVnd: _asInt(json['day_pass_vnd']),
       monthPassVnd: _asInt(json['month_pass_vnd']),
-      lockerMonthVnd: _asInt(json['locker_month_vnd']),
       enabled: (_asInt(json['enabled']) ?? 0) == 1,
       createdAt: _asInt(json['created_at']) ?? 0,
       createdByEmail: json['created_by_email']?.toString() ?? '',
