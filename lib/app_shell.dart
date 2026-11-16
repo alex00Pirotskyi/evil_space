@@ -446,8 +446,6 @@ class _DailyScreenState extends State<DailyScreen>
                                     const SizedBox(height: 32),
                                     _bookingSection(),
                                     const SizedBox(height: 50),
-                                    _prices(compact),
-                                    const SizedBox(height: 50),
                                     _amenities(),
                                     const SizedBox(height: 50),
                                     _openings(compact),
@@ -766,43 +764,46 @@ class _DailyScreenState extends State<DailyScreen>
     return '$value VND';
   }
 
-  Widget _prices(bool compact) {
+  // Day and Month passes belong to the Coworking offering, not a
+  // separate price list. Both values use the existing live pricing source.
+  Widget _coworkingPasses() {
     final status = _liveStatus ?? _content.status;
-    final prices = <(String, int)>[
+    final passes = <(String, int)>[
       ('price_day_pass', status.baseDayPassPrice),
       ('price_month', status.baseMonthPassPrice),
-      ('price_locker', status.baseLockerMonthPrice),
     ];
-    return _Section(
-      title: widget.localization.t('prices_title'),
-      child: Column(
-        children: prices
-            .map((price) {
-              return Container(
-                constraints: const BoxConstraints(minHeight: 76),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: BrandPalette.rule)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.localization.t(price.$1),
-                        style: _mono(11, spacing: 0.8),
-                      ),
-                    ),
-                    Text(
-                      _moneyLabel(price.$2),
-                      textAlign: TextAlign.right,
-                      style: _serif(compact ? 24 : 30),
-                    ),
-                  ],
-                ),
-              );
-            })
-            .toList(growable: false),
-      ),
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(widget.localization.t('prices_title').toUpperCase(),
+        style: _mono(10, color: BrandPalette.inkMuted, spacing: 0.7)),
+      const SizedBox(height: 12),
+      LayoutBuilder(builder: (_, constraints) {
+        final narrow = constraints.maxWidth < 330;
+        Widget pass((String, int) entry) => Container(
+          key: ValueKey('coworking-pass-${entry.$1}'),
+          constraints: const BoxConstraints(minHeight: 96),
+          decoration: BoxDecoration(border: Border.all(color: BrandPalette.rule)),
+          padding: const EdgeInsets.fromLTRB(12, 14, 10, 14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(widget.localization.t(entry.$1), style: _mono(9.5),
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+              FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                child: Text(_moneyLabel(entry.$2), style: _serif(24))),
+            ]),
+        );
+        if (narrow) return Column(children: [
+          for (final entry in passes) ...[
+            SizedBox(width: double.infinity, child: pass(entry)),
+            const SizedBox(height: 8),
+          ],
+        ]);
+        return Row(children: [
+          Expanded(child: pass(passes[0])),
+          const SizedBox(width: 10),
+          Expanded(child: pass(passes[1])),
+        ]);
+      }),
+    ]);
   }
 
   Widget _amenities() {
@@ -812,7 +813,6 @@ class _DailyScreenState extends State<DailyScreen>
       (Icons.table_restaurant_outlined, 'amenity_desks', 'amenity_desks_detail', false),
       (Icons.ac_unit_outlined, 'amenity_air', 'amenity_air_detail', false),
       (Icons.view_week_outlined, 'amenity_panels', 'amenity_panels_detail', false),
-      (Icons.lock_outline, 'amenity_locker', 'amenity_locker_detail', false),
     ];
     const cafe = <(IconData, String, String, bool)>[
       (Icons.coffee_outlined, 'amenity_coffee', 'amenity_coffee_detail', false),
@@ -831,7 +831,12 @@ class _DailyScreenState extends State<DailyScreen>
                 children: [
                   Expanded(
                     flex: 2,
-                    child: _amenityGroup('01', 'amenity_work_zone', work, 3),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _amenityGroup('01', 'amenity_work_zone', work, 3),
+                        const SizedBox(height: 22),
+                        _coworkingPasses(),
+                      ]),
                   ),
                   const SizedBox(width: 20),
                   Expanded(
@@ -849,6 +854,8 @@ class _DailyScreenState extends State<DailyScreen>
                   work,
                   constraints.maxWidth < 270 ? 2 : 3,
                 ),
+                const SizedBox(height: 22),
+                _coworkingPasses(),
                 const SizedBox(height: 28),
                 _amenityGroup('02', 'amenity_cafe_zone', cafe, 2),
               ],
