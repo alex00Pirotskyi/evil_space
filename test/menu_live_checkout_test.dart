@@ -530,6 +530,10 @@ void main() {
             .onPressed,
         isNull,
       );
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-list')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );

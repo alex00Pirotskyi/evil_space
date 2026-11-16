@@ -55,7 +55,7 @@ export default {
 };
 
 export async function applyTransaction(env, transaction, provider = 'casso') {
-  if (provider !== 'casso' && provider !== 'vcb_device') return 'ignored';
+  if (!['casso', 'vcb_device', 'vcb_browser'].includes(provider)) return 'ignored';
   if (!transaction.transactionId || !transaction.orderCode) return 'ignored';
   if (!transactionMatchesConfiguredAccount(transaction, env.VIETQR_ACCOUNT_NUMBER)) {
     return 'ignored';
@@ -79,6 +79,19 @@ export async function applyTransaction(env, transaction, provider = 'casso') {
     if (!Number.isFinite(transactionEpoch) ||
         transactionEpoch < Number(order.created_at) - 120 ||
         transactionEpoch > nowSeconds() + 120) return 'ignored';
+  }
+
+  if (provider === 'vcb_browser') {
+    const created = Number(order.created_at);
+    const now = nowSeconds();
+    const bankDate = transaction.bankDate;
+    const localDay = (epochSeconds) => new Date((epochSeconds + 7 * 3600) * 1000)
+      .toISOString().slice(0, 10);
+    // VCB Web exposes a calendar date only, not a transaction timestamp.
+    // Don't apply an old or future credit to a newly created checkout.
+    if (!Number.isSafeInteger(created) || created > now + 120 || now - created > 172800 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(bankDate ?? '') ||
+        bankDate < localDay(created) || bankDate > localDay(now)) return 'ignored';
   }
 
   if (String(order.status) === 'paid') {

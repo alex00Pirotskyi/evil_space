@@ -47,6 +47,8 @@ Future<void> main(List<String> args) async {
   await _run('node', ['--check', 'worker/vietqr.js']);
   await _run('node', ['--check', 'worker/booking_rules.js']);
   await _run('node', ['--check', 'worker/pricing.js']);
+  await _run('node', ['--check', 'worker/vcb_bookmarklet_bridge.js']);
+  await _run('node', ['--check', 'worker/vcb_bookmarklet_bridge_test.mjs']);
   await _run('node', ['--check', 'worker/integration_test.mjs']);
   await _run('node', ['--check', 'worker/menu_i18n_test.mjs']);
   await _run('node', ['--check', 'worker/menu_cart_test.mjs']);
@@ -72,6 +74,7 @@ Future<void> main(List<String> args) async {
     'worker/google_account_test.mjs',
     'worker/vietqr_test.mjs',
   ]);
+  await _run('node', ['--test', 'worker/vcb_bookmarklet_bridge_test.mjs']);
   await _run('node', ['worker/integration_test.mjs']);
   await _run('node', ['--test', 'test/seo_site_test.mjs']);
 

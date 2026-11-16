@@ -9,6 +9,7 @@ import googleAccountWorker from './google_account.js';
 import { handleMenuTelegramShortcut } from './menu_telegram.js';
 import cassoWebhookWorker from './casso_webhook.js';
 import vcbDeviceWorker from './vcb_device_webhook.js';
+import vcbBookmarkletBridge from './vcb_bookmarklet_bridge.js';
 
 const FEATURE_ROUTES = new Set([
   'POST /api/telegram/webhook',
@@ -34,6 +35,11 @@ export default {
 
     if (route === 'POST /api/webhooks/vcb-device') {
       return vcbDeviceWorker.fetch(request, env, ctx);
+    }
+
+    if (route === 'GET /api/admin/vcb-relay' ||
+        route === 'POST /api/admin/vcb-confirm') {
+      return vcbBookmarkletBridge.fetch(request, env, ctx);
     }
 
     if (route === 'POST /api/webhooks/casso') {
