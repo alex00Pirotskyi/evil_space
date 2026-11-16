@@ -54,7 +54,7 @@ export default {
   },
 };
 
-export async function applyTransaction(env, transaction, provider = 'casso', {preview = false} = {}) {
+export async function applyTransaction(env, transaction, provider = 'casso') {
   if (!['casso', 'vcb_device', 'vcb_browser'].includes(provider)) return 'ignored';
   if (!transaction.transactionId || !transaction.orderCode) return 'ignored';
   if (!transactionMatchesConfiguredAccount(transaction, env.VIETQR_ACCOUNT_NUMBER)) {
@@ -102,7 +102,6 @@ export async function applyTransaction(env, transaction, provider = 'casso', {pr
   }
   if (String(order.status) !== 'pending') return 'ignored';
   if (Number(order.amount_vnd) !== transaction.amountVnd) return 'ignored';
-  if (preview) return 'candidate';
 
   const now = nowSeconds();
   let result;
