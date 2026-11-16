@@ -13,7 +13,8 @@ export function curateLegacyMenuGroups(groups) {
   const result = [];
   for (const group of groups) {
     if (!group || group.id === 'storage-locker') continue;
-    const items = (Array.isArray(group.items) ? group.items : []).filter(item =>
+    const sourceItems = Array.isArray(group.items) ? group.items : [];
+    const items = sourceItems.filter(item =>
       item && item.id !== 'storage-locker-month' &&
       !(monthly && group.id !== 'coworking' && item.id === 'coworking-month'));
 
@@ -21,7 +22,9 @@ export function curateLegacyMenuGroups(groups) {
         !items.some(item => item.id === 'coworking-month')) {
       items.push(monthly);
     }
-    if (items.length) result.push({ ...group, items });
+    // Keep ordinary empty draft groups. Only remove groups emptied by
+    // discontinuing an item or relocating Monthly Desk to Coworking.
+    if (items.length || sourceItems.length === 0) result.push({ ...group, items });
   }
   return result;
 }
