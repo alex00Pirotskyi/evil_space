@@ -87,7 +87,7 @@ export function normalizeBrowserTransaction(body, now = Date.now()) {
     orderCode,
     accountNumber,
     bankDate: localDay,
-    transactionAt: localDay + 'T00:00:00+07:00',
+    transactionAt: null, // History shows date only; do not invent a bank timestamp.
   };
 }
 
