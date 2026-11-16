@@ -17,8 +17,20 @@ test('extracts a valid incoming VCB history credit', () => {
   const tx=normalizeBookmarkletCredit(credit());
   assert.equal(tx.orderCode,'ABC234');
   assert.equal(tx.amountVnd,250000);
-  assert.equal(tx.transactionId,'acct:0123456789:ref:FT2611161234');
+  assert.equal(tx.transactionId,'acct:0123456789:date:'+tx.bankDate+':ref:FT2611161234');
   assert.equal(tx.transactionAt,null);
+});
+test('accepts VCB Digibank Web space-padded numeric reference', () => {
+  const tx = normalizeBookmarkletCredit({
+    ...credit(),
+    description:'EVIL VLWYLT#SP#BANKTRANSFER',
+    reference:'5389 - 10535',
+    amountVnd:25000,
+  });
+  assert.equal(tx.orderCode,'VLWYLT');
+  assert.equal(tx.amountVnd,25000);
+  assert.equal(tx.bankReference,'5389-10535');
+  assert.match(tx.transactionId,/date:\\d{4}-\\d{2}-\\d{2}:ref:5389-10535$/);
 });
 test('rejects invalid credits and forged order codes', () => {
   for(const bad of [
@@ -68,6 +80,20 @@ function makeDb() {
   };
   return {db,getOrder:()=>order};
 }
+test('returns a clear diagnostic for unknown checkout order', async () => {
+  const {db}=makeDb();
+  const env={evil_space:db,VIETQR_ACCOUNT_NUMBER:account};
+  const url='https://evils.space/api/admin/vcb-confirm';
+  const headers={Origin:'https://evils.space',Cookie:'__Host-evil_admin_session='+('A'.repeat(48))};
+  const request=new Request(url,{method:'POST',headers,body:JSON.stringify({
+    ...credit(),reference:'5389 - 10535',amountVnd:200000,
+  })});
+  const r=await bridge.fetch(request,env);
+  assert.equal(r.status,200);
+  const data=await r.json();
+  assert.equal(data.status,'ignored');
+  assert.match(data.reason,/amount differs/i);
+});
 test('admin relay marks exact matching order once and ignores mismatches',async()=>{
   const {db,getOrder}=makeDb();
   const env={evil_space:db,VIETQR_ACCOUNT_NUMBER:account};
