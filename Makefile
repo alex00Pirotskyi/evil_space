@@ -28,6 +28,8 @@ test:
 	node --check worker/security.js
 	node --check worker/telegram.js
 	node --check worker/menu.js
+	node --check worker/menu_catalog_policy.js
+	node --check worker/menu_catalog_policy_test.mjs
 	node --check worker/menu_i18n.js
 	node --check worker/menu_cart.js
 	node --check worker/menu_options.js
@@ -48,7 +50,7 @@ test:
 	node --check worker/customer_account_test.mjs
 	node --check worker/google_account_test.mjs
 	node --check worker/vietqr_test.mjs
-	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/menu_options_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs worker/casso_webhook_test.mjs worker/vcb_device_webhook_test.mjs worker/vcb_bookmarklet_bridge_test.mjs
+	node --test worker/security_test.mjs worker/telegram_test.mjs worker/booking_rules_test.mjs worker/pricing_test.mjs worker/menu_catalog_policy_test.mjs worker/menu_i18n_test.mjs worker/menu_cart_test.mjs worker/menu_options_test.mjs worker/customer_account_test.mjs worker/google_account_test.mjs worker/vietqr_test.mjs worker/casso_webhook_test.mjs worker/vcb_device_webhook_test.mjs worker/vcb_bookmarklet_bridge_test.mjs
 	node worker/integration_test.mjs
 	node --test test/seo_site_test.mjs
 
