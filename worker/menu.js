@@ -529,7 +529,7 @@ function validateMenu(value, defaultVersion) {
   return { menu: { version, groups } };
 }
 
-async function authenticatedAdmin(request, env) {
+export async function authenticatedAdmin(request, env) {
   const token = cookieValue(request, SESSION_COOKIE);
   if (!token || !isReasonableToken(token)) return null;
   const tokenHash = await hashToken(token);
