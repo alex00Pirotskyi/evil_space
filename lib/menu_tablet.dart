@@ -61,7 +61,7 @@ extension _TabletMenuLayout on _MenuScreenState {
       ? _selectedCategoryId : groups.first.id;
     return Container(
       key: const ValueKey('menu-category-bar'),
-      height: 62,
+      height: 66,
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: BrandPalette.rule))),
       child: ScrollConfiguration(
@@ -71,7 +71,7 @@ extension _TabletMenuLayout on _MenuScreenState {
         }),
         child: ListView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
             for (final group in groups)
               Padding(
@@ -90,7 +90,7 @@ extension _TabletMenuLayout on _MenuScreenState {
                   },
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 18),
-                    minimumSize: const Size(64, 42),
+                    minimumSize: const Size(72, 48),
                     foregroundColor: active == group.id
                       ? BrandPalette.paperLift : BrandPalette.ink,
                     backgroundColor: active == group.id
