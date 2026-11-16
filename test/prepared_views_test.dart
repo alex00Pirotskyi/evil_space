@@ -175,6 +175,13 @@ void main() {
     final code = tester.widget<QrImageView>(find.byType(QrImageView));
     final qr = tester.widget<QrTransition>(find.byType(QrTransition)).paymentQr!;
     expect(code.padding.left, code.size! * 4 / (qr.matrix.count + 8));
+    expect(code.backgroundColor, Colors.transparent);
+    // Ink on the warm paper substrate must remain comfortably scan-safe.
+    final contrast = (BrandPalette.paper.computeLuminance() + 0.05) /
+      (BrandPalette.ink.computeLuminance() + 0.05);
+    expect(contrast, greaterThan(10));
+    expect(qr.payload, api.current!.qrPayload);
+
     expect(tester.binding.hasScheduledFrame, isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
