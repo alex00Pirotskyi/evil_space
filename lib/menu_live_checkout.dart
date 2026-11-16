@@ -601,7 +601,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
 
   Widget _content() {
     final tablet = MediaQuery.sizeOf(context).width >= 1024;
-    if (tablet && _paymentReady && !_cashSelected) {
+    if (tablet && _paymentReady) {
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(flex: 5, child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -609,7 +609,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
             Text('${_copy('pay_now').toUpperCase()} ${_money(_total)}',
               textAlign: TextAlign.center, style: _mono(13)),
             const SizedBox(height: 40),
-            _qrView(),
+            if (_cashSelected) _cashView() else _qrView(),
           ],
         )),
         const SizedBox(width: 28),
