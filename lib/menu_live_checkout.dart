@@ -586,7 +586,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
               }),
               child: SingleChildScrollView(
                 child: Center(child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 680),
+                  constraints: BoxConstraints(maxWidth:
+                    MediaQuery.sizeOf(context).width >= 1024 ? 1060 : 680),
                   child: Padding(padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
                     child: _content()),
                 )),
@@ -598,16 +599,40 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   );
   }
 
-  Widget _content() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_paymentReady) ...[
+  Widget _content() {
+    final tablet = MediaQuery.sizeOf(context).width >= 1024;
+    if (tablet && _paymentReady && !_cashSelected) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(flex: 5, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text('${_copy('pay_now').toUpperCase()} ${_money(_total)}',
               textAlign: TextAlign.center, style: _mono(13)),
-            const SizedBox(height: 16),
-            if (_cashSelected) _cashView() else _qrView(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 40),
+            _qrView(),
           ],
+        )),
+        const SizedBox(width: 28),
+        Expanded(flex: 4, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _checkoutDetails(),
+        )),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_paymentReady) ...[
+          Text('${_copy('pay_now').toUpperCase()} ${_money(_total)}',
+            textAlign: TextAlign.center, style: _mono(13)),
+          const SizedBox(height: 40),
+          if (_cashSelected) _cashView() else _qrView(),
+          const SizedBox(height: 24),
+        ],
+        ..._checkoutDetails(),
+      ]);
+  }
+
+  List<Widget> _checkoutDetails() => [
           Text(_copy('your_cart').toUpperCase(), style: _mono(12)),
           const SizedBox(height: 12),
           for (var i = 0; i < _lines.length; i++) _cartLine(i),
@@ -697,8 +722,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                     },
             ),
           ],
-        ],
-      );
+      ];
 
   Widget _cartLine(int i) {
     final line = _lines[i];
