@@ -520,19 +520,18 @@ async function handlePricingUpdate(request, env) {
 
   const dayPassVnd = toPriceInt(body.dayPassVnd);
   const monthPassVnd = toPriceInt(body.monthPassVnd);
-  const lockerMonthVnd = toPriceInt(body.lockerMonthVnd);
-  if (!dayPassVnd || !monthPassVnd || !lockerMonthVnd) {
-    return jsonError('All base prices must be positive VND amounts.', 400);
+  if (!dayPassVnd || !monthPassVnd) {
+    return jsonError('Both coworking pass prices must be positive VND amounts.', 400);
   }
 
   await env.evil_space
     .prepare(`
       UPDATE pricing_settings
-      SET day_pass_vnd = ?, month_pass_vnd = ?, locker_month_vnd = ?,
+      SET day_pass_vnd = ?, month_pass_vnd = ?,
           updated_at = ?, updated_by_email = ?
       WHERE id = 1
     `)
-    .bind(dayPassVnd, monthPassVnd, lockerMonthVnd, nowSeconds(), session.email)
+    .bind(dayPassVnd, monthPassVnd, nowSeconds(), session.email)
     .run();
   return json({ ok: true, snapshot: await operationsSnapshot(env) });
 }
@@ -564,11 +563,10 @@ async function handleCreatePromotion(request, env) {
 
   const dayPassVnd = optionalPriceInt(body.dayPassVnd);
   const monthPassVnd = optionalPriceInt(body.monthPassVnd);
-  const lockerMonthVnd = optionalPriceInt(body.lockerMonthVnd);
-  if (dayPassVnd === false || monthPassVnd === false || lockerMonthVnd === false) {
+  if (dayPassVnd === false || monthPassVnd === false) {
     return jsonError('Promotion prices must be positive VND amounts.', 400);
   }
-  if (dayPassVnd == null && monthPassVnd == null && lockerMonthVnd == null) {
+  if (dayPassVnd == null && monthPassVnd == null) {
     return jsonError('Set at least one promotional price.', 400);
   }
 
@@ -576,9 +574,9 @@ async function handleCreatePromotion(request, env) {
     .prepare(`
       INSERT INTO promotions
         (description, start_day, end_day, start_minute, end_minute,
-         day_pass_vnd, month_pass_vnd, locker_month_vnd, enabled,
+         day_pass_vnd, month_pass_vnd, enabled,
          created_at, created_by_email)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `)
     .bind(
       description,
@@ -588,7 +586,6 @@ async function handleCreatePromotion(request, env) {
       endMinute,
       dayPassVnd,
       monthPassVnd,
-      lockerMonthVnd,
       nowSeconds(),
       session.email,
     )
