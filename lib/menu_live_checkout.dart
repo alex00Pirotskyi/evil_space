@@ -60,6 +60,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   List<PromoPreview> _promos = const [];
   MenuOrderPayment? _order;
   Timer? _pollTimer;
+  Timer? _paidReturnTimer;
   int? _selectedGrantId;
   String _status = 'pending';
   String? _error;
@@ -161,6 +162,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    _paidReturnTimer?.cancel();
     super.dispose();
   }
 
@@ -382,6 +384,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   void _applyStatus(MenuOrderStatus status) {
     _status = status.status;
     if (status.paid) {
+      _returnToMenuAfterPayment();
       _lines
         ..clear()
         ..addAll(_syncedLines);
@@ -512,10 +515,24 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
     _syncCart();
   }
 
+  void _returnToMenuAfterPayment() {
+    if (_paidReturnTimer != null) return;
+    _paidReturnTimer = Timer(const Duration(milliseconds: 1100), () {
+      _paidReturnTimer = null;
+      if (!mounted || _closing || !_paid) return;
+      if (_busy) {
+        _returnToMenuAfterPayment();
+        return;
+      }
+      _close();
+    });
+  }
+
   void _close() {
     if (_closing || _busy || _lines.isEmpty && _error != null) return;
     _closing = true;
     _pollTimer?.cancel();
+    _paidReturnTimer?.cancel();
     widget.onClose(
       _LiveCheckoutResult(
         lines: List.unmodifiable(_lines),
