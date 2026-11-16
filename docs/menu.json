@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "groups": [
     {
       "id": "coworking",
@@ -23,17 +23,7 @@
             "vi": "Sử dụng coworking cả ngày"
           },
           "enabled": true
-        }
-      ]
-    },
-    {
-      "id": "membership",
-      "name": {
-        "en": "Monthly",
-        "ru": "Месяц",
-        "vi": "Gói tháng"
-      },
-      "items": [
+        },
         {
           "id": "coworking-month",
           "name": {
@@ -46,31 +36,6 @@
             "en": "One month coworking access",
             "ru": "Доступ в коворкинг на один месяц",
             "vi": "Sử dụng coworking trong một tháng"
-          },
-          "enabled": true
-        }
-      ]
-    },
-    {
-      "id": "storage-locker",
-      "name": {
-        "en": "Storage Locker",
-        "ru": "Камера хранения",
-        "vi": "Tủ cá nhân"
-      },
-      "items": [
-        {
-          "id": "storage-locker-month",
-          "name": {
-            "en": "Storage Locker · Month",
-            "ru": "Камера хранения · месяц",
-            "vi": "Tủ cá nhân · tháng"
-          },
-          "priceVnd": 1000000,
-          "description": {
-            "en": "Personal storage locker for one month",
-            "ru": "Личная камера хранения на один месяц",
-            "vi": "Tủ cá nhân trong một tháng"
           },
           "enabled": true
         }
