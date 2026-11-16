@@ -5,7 +5,6 @@ import {
 
 export const DEFAULT_DAY_PASS_VND = 200000;
 export const DEFAULT_MONTH_PASS_VND = 2500000;
-export const DEFAULT_LOCKER_MONTH_VND = 1000000;
 
 function positivePrice(value, fallback) {
   const number = Number(value);
@@ -33,7 +32,7 @@ export function promotionApplies(promotion, serviceDay, now) {
 export async function loadPricingConfig(env) {
   const row = await env.evil_space
     .prepare(`
-      SELECT day_pass_vnd, month_pass_vnd, locker_month_vnd
+      SELECT day_pass_vnd, month_pass_vnd
       FROM pricing_settings
       WHERE id = 1
     `)
@@ -41,7 +40,6 @@ export async function loadPricingConfig(env) {
   return {
     dayPassVnd: positivePrice(row?.day_pass_vnd, DEFAULT_DAY_PASS_VND),
     monthPassVnd: positivePrice(row?.month_pass_vnd, DEFAULT_MONTH_PASS_VND),
-    lockerMonthVnd: positivePrice(row?.locker_month_vnd, DEFAULT_LOCKER_MONTH_VND),
   };
 }
 
@@ -49,9 +47,10 @@ export async function listPromotions(env) {
   const result = await env.evil_space
     .prepare(`
       SELECT id, description, start_day, end_day, start_minute, end_minute,
-             day_pass_vnd, month_pass_vnd, locker_month_vnd, enabled,
+             day_pass_vnd, month_pass_vnd, enabled,
              created_at, created_by_email
       FROM promotions
+      WHERE day_pass_vnd IS NOT NULL OR month_pass_vnd IS NOT NULL
       ORDER BY enabled DESC, start_day DESC, id DESC
       LIMIT 100
     `)
@@ -63,10 +62,11 @@ export async function activePromotion(env, serviceDay, now) {
   const result = await env.evil_space
     .prepare(`
       SELECT id, description, start_day, end_day, start_minute, end_minute,
-             day_pass_vnd, month_pass_vnd, locker_month_vnd, enabled,
+             day_pass_vnd, month_pass_vnd, enabled,
              created_at, created_by_email
       FROM promotions
-      WHERE enabled = 1 AND start_day <= ? AND end_day >= ?
+      WHERE enabled = 1 AND (day_pass_vnd IS NOT NULL OR month_pass_vnd IS NOT NULL)
+        AND start_day <= ? AND end_day >= ?
       ORDER BY id DESC
       LIMIT 30
     `)
@@ -85,7 +85,6 @@ export async function resolvePricing(env, serviceDay, now) {
     promotion,
     dayPassVnd: positivePrice(promotion?.day_pass_vnd, base.dayPassVnd),
     monthPassVnd: positivePrice(promotion?.month_pass_vnd, base.monthPassVnd),
-    lockerMonthVnd: positivePrice(promotion?.locker_month_vnd, base.lockerMonthVnd),
   };
 }
 
@@ -95,10 +94,8 @@ export async function pricingSnapshot(env, now) {
   return {
     day_pass_vnd: resolved.base.dayPassVnd,
     month_pass_vnd: resolved.base.monthPassVnd,
-    locker_month_vnd: resolved.base.lockerMonthVnd,
     current_day_pass_vnd: resolved.dayPassVnd,
     current_month_pass_vnd: resolved.monthPassVnd,
-    current_locker_month_vnd: resolved.lockerMonthVnd,
     active_promo_id: Number(resolved.promotion?.id ?? 0),
     active_promo_description: resolved.promotion?.description ?? '',
   };
