@@ -14,7 +14,11 @@ extension _TabletMenuLayout on _MenuScreenState {
       Expanded(child: Column(children: [
         if (!hasSidebar) _cartBar(),
         _tabletCategories(groups),
-        Expanded(child: RefreshIndicator(
+        Expanded(child: PreparedViewMotion(
+          visibility: ReverseAnimation(_paymentTransition.drive(
+            CurveTween(curve: preparedViewCurve))),
+          travelPixels: 26,
+          child: RefreshIndicator(
             color: BrandPalette.ink,
             onRefresh: _checkingOut ? () async {} : _load,
             child: ListView(
@@ -45,7 +49,7 @@ extension _TabletMenuLayout on _MenuScreenState {
                 ],
               ],
             ),
-          )),
+          ))),
       ])),
       if (hasSidebar) _tabletCart(sidebarWidth),
     ]);
