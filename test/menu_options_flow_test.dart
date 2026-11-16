@@ -125,7 +125,7 @@ void main() {
     await openMenu(tester, OptionsApi());
     tester.view.physicalSize = const Size(1920, 1080);
     await tester.pumpAndSettle();
-    await tapVisible(tester, find.byKey(const ValueKey('menu-item-americano')));
+    await tapVisible(tester, find.byKey(const ValueKey('menu-grid-item-americano')));
     final panel = find.byKey(const ValueKey('menu-curtain'));
     final surface = find.byKey(const ValueKey('menu-curtain-surface'));
     final initial = tester.getRect(panel);
