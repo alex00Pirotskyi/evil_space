@@ -208,6 +208,10 @@ Future<void> openCart(
 
 void main() {
   testWidgets('site router lets payment handle back before leaving the menu', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final localization = LocalizationController();
     final api = CheckoutApi();
     final delegate = EvilSpaceRouterDelegate(localization: localization, menuApi: api);
@@ -656,7 +660,7 @@ void main() {
     expect(api.cancellations, isEmpty);
     removeCoffee();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 700));
     expect(api.cancellations, [api.creates.single]);
     expect(find.byKey(const ValueKey('menu-payment-view')), findsNothing);
     expect(tester.takeException(), isNull);

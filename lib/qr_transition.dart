@@ -81,10 +81,6 @@ class _QrTransitionState extends State<QrTransition>
   late QrMatrix _from;
   late QrMatrix _to;
   late List<_CellPath> _paths;
-  final _canvasKey = GlobalKey();
-  Rect? _destination;
-  bool _geometryScheduled = false;
-
   @override
   void initState() {
     super.initState();
@@ -92,43 +88,11 @@ class _QrTransitionState extends State<QrTransition>
       duration: const Duration(milliseconds: 450));
     _from = _to = widget.paymentQr?.matrix ?? QrMatrix.preview(widget.fingerprint);
     _paths = _groupPaths(_from, _to);
-    widget.reveal.addStatusListener(_revealStatusChanged);
-  }
-
-  void _revealStatusChanged(AnimationStatus _) => _scheduleGeometry();
-
-  void _scheduleGeometry() {
-    if (_geometryScheduled || widget.paymentQr == null) return;
-    _geometryScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _geometryScheduled = false;
-      if (!mounted) return;
-      final slotContext = widget.slotKey.currentContext;
-      final canvasContext = _canvasKey.currentContext;
-      if (slotContext == null || canvasContext == null ||
-          !slotContext.mounted || !canvasContext.mounted) return;
-      final slot = slotContext.findRenderObject();
-      final surface = canvasContext.findRenderObject();
-      if (slot is! RenderBox || surface is! RenderBox ||
-          !slot.hasSize || !surface.hasSize || !slot.attached) return;
-      // Capture the resting slot, excluding its paint-only content rise. This
-      // keeps the QR handoff aligned without reading layout on every frame.
-      final motion = widget.slotMotionPixels *
-          (1 - preparedViewCurve.transform(widget.reveal.value));
-      final rect = (slot.localToGlobal(Offset.zero) -
-          surface.localToGlobal(Offset.zero) - Offset(0, motion)) & slot.size;
-      if (_destination != rect) setState(() => _destination = rect);
-    });
   }
 
   @override
   void didUpdateWidget(covariant QrTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.reveal != widget.reveal) {
-      oldWidget.reveal.removeStatusListener(_revealStatusChanged);
-      widget.reveal.addStatusListener(_revealStatusChanged);
-    }
-    _scheduleGeometry();
     if (oldWidget.paymentQr?.payload == widget.paymentQr?.payload &&
         (widget.paymentQr != null || oldWidget.fingerprint == widget.fingerprint)) return;
     final next = widget.paymentQr?.matrix ?? QrMatrix.preview(widget.fingerprint);
@@ -151,26 +115,22 @@ class _QrTransitionState extends State<QrTransition>
       _morph.value = 1;
     } else {
       _morph.duration = widget.paymentQr == null
-        ? const Duration(milliseconds: 450) : const Duration(milliseconds: 300);
+        ? const Duration(milliseconds: 500) : const Duration(milliseconds: 420);
       _morph.forward(from: 0);
     }
   }
 
   @override
   void dispose() {
-    widget.reveal.removeStatusListener(_revealStatusChanged);
     _morph.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, constraints) {
-    _scheduleGeometry();
-    return RepaintBoundary(child: CustomPaint(key: _canvasKey,
-      painter: _QrTransitionPainter(paths: _paths, count: _to.count,
-        morph: _morph, reveal: widget.reveal,
-        hasPayment: widget.paymentQr != null, destination: _destination)));
-  });
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(painter: _QrTransitionPainter(
+      paths: _paths, count: _to.count, morph: _morph,
+      reveal: widget.reveal, hasPayment: widget.paymentQr != null)));
 }
 
 class _CellPath {
@@ -195,31 +155,46 @@ List<_CellPath> _groupPaths(QrMatrix from, QrMatrix to) {
   return groups.values.toList(growable: false);
 }
 
+/// A single fixed scan position shared by the ambient and confirmed QR.
+///
+/// Tablet checkout uses a centered 1060px content area and 5:4 columns.
+/// This rectangle is independent of the reveal animation value.
+Rect qrBackdropRect(Size size) {
+  final side = math.min(300.0, math.min(size.width * 0.9,
+    math.max(180.0, size.height + 68 - 208)));
+  var centerX = size.width / 2;
+  if (size.width >= 1024) {
+    final sheetWidth = math.min(size.width, 1060.0);
+    final panelWidth = math.max(0.0, sheetWidth - 44 - 28) * 5 / 9;
+    centerX = (size.width - sheetWidth) / 2 + 22 + panelWidth / 2;
+  }
+  return Rect.fromLTWH(centerX - side / 2, 136, side, side);
+}
+
 class _QrTransitionPainter extends CustomPainter {
   _QrTransitionPainter({required this.paths, required this.count,
     required this.morph, required this.reveal, required this.hasPayment,
-    required this.destination})
+    })
       : super(repaint: Listenable.merge([morph, reveal]));
   final List<_CellPath> paths;
   final int count;
   final Animation<double> morph;
   final Animation<double> reveal;
   final bool hasPayment;
-  final Rect? destination;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (reveal.value >= 1) return; // Final real QR owns painting.
     final transition = preparedViewCurve.transform(reveal.value);
-    if (reveal.value == 1) return; // Final QR owns painting after the handoff.
-    final side = math.min(480.0, size.width * 0.9);
-    // Keep the preview below the scan slot, including on short viewports.
-    final preview = Rect.fromLTWH((size.width - side) / 2,
-      56 + 80, side, side);
-    final rect = Rect.lerp(preview, destination ?? preview, transition)!;
-    final handoff = const Interval(0.85, 1).transform(reveal.value);
+
+    // No interpolation to a new QR position: only contrast and cells evolve.
+    final rect = qrBackdropRect(size);
+    final handoff = const Interval(0.85, 1, curve: Curves.easeInOut)
+      .transform(reveal.value);
+    const menuContrast = 0.12;
     final opacity = hasPayment
-      ? (0.05 + 0.95 * transition) * (1 - handoff)
-      : 0.05 * (1 - transition);
+      ? (menuContrast + (1 - menuContrast) * transition) * (1 - handoff)
+      : menuContrast * (1 - transition);
     final paint = Paint()..isAntiAlias = false;
     canvas.save();
     canvas.clipRect(Offset.zero & size);
@@ -243,5 +218,5 @@ class _QrTransitionPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _QrTransitionPainter oldDelegate) =>
       oldDelegate.paths != paths || oldDelegate.hasPayment != hasPayment ||
-      oldDelegate.reveal != reveal || oldDelegate.destination != destination;
+      oldDelegate.reveal != reveal;
 }

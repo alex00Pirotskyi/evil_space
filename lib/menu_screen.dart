@@ -14,6 +14,7 @@ import 'prepared_view_layers.dart';
 import 'qr_transition.dart';
 
 part 'menu_live_checkout.dart';
+part 'menu_tablet.dart';
 
 const _menuInkOverlay = WidgetStateProperty<Color>.fromMap({
   WidgetState.disabled: Colors.transparent,
@@ -187,6 +188,8 @@ class _MenuScreenState extends State<MenuScreen>
   String? _pendingCartFingerprint;
   double _cartSwipeDistance = 0;
   final _menuScroll = ScrollController();
+  final Map<String, GlobalKey> _groupAnchors = {};
+  String? _selectedCategoryId;
   final _checkoutKey = GlobalKey<_LiveCheckoutSheetState>();
   late final AnimationController _paymentTransition;
   final _qrSlotKey = GlobalKey();
@@ -210,7 +213,7 @@ class _MenuScreenState extends State<MenuScreen>
     super.initState();
     _api = widget.api ?? MenuApi();
     _paymentTransition = AnimationController(
-      vsync: this, duration: preparedViewDuration);
+      vsync: this, duration: const Duration(milliseconds: 560));
     widget.localization.addListener(_languageChanged);
     _menu = widget.initialMenu;
     _loading = _menu == null;
@@ -237,6 +240,11 @@ class _MenuScreenState extends State<MenuScreen>
 
   void _languageChanged() {
     if (mounted) setState(() {});
+  }
+
+  // Keep State's protected notification API inside its owner, not a layout extension.
+  void _updateTabletState(VoidCallback update) {
+    if (mounted) setState(update);
   }
 
   String _copy(String key) {
@@ -454,11 +462,17 @@ class _MenuScreenState extends State<MenuScreen>
     );
   }
 
-  Widget _menuView(MenuCatalog? menu) => Column(children: [
+  Widget _menuView(MenuCatalog? menu) => LayoutBuilder(builder: (_, constraints) =>
+    constraints.maxWidth >= 700
+      ? _tabletMenu(menu, constraints.maxWidth)
+      : _mobileMenu(menu));
+
+  Widget _mobileMenu(MenuCatalog? menu) => Column(children: [
     _cartBar(),
     Expanded(child: PreparedViewMotion(
       visibility: ReverseAnimation(_paymentTransition.drive(
         CurveTween(curve: preparedViewCurve))),
+      travelPixels: 26,
       child: RefreshIndicator(
       color: BrandPalette.ink,
       onRefresh: _checkingOut ? () async {} : _load,

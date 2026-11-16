@@ -586,7 +586,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
               }),
               child: SingleChildScrollView(
                 child: Center(child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 680),
+                  constraints: BoxConstraints(maxWidth:
+                    MediaQuery.sizeOf(context).width >= 1024 ? 1060 : 680),
                   child: Padding(padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
                     child: _content()),
                 )),
@@ -598,16 +599,40 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
   );
   }
 
-  Widget _content() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_paymentReady) ...[
+  Widget _content() {
+    final tablet = MediaQuery.sizeOf(context).width >= 1024;
+    if (tablet && _paymentReady) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(flex: 5, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text('${_copy('pay_now').toUpperCase()} ${_money(_total)}',
               textAlign: TextAlign.center, style: _mono(13)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 40),
             if (_cashSelected) _cashView() else _qrView(),
-            const SizedBox(height: 24),
           ],
+        )),
+        const SizedBox(width: 28),
+        Expanded(flex: 4, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _checkoutDetails(),
+        )),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_paymentReady) ...[
+          Text('${_copy('pay_now').toUpperCase()} ${_money(_total)}',
+            textAlign: TextAlign.center, style: _mono(13)),
+          const SizedBox(height: 40),
+          if (_cashSelected) _cashView() else _qrView(),
+          const SizedBox(height: 24),
+        ],
+        ..._checkoutDetails(),
+      ]);
+  }
+
+  List<Widget> _checkoutDetails() => [
           Text(_copy('your_cart').toUpperCase(), style: _mono(12)),
           const SizedBox(height: 12),
           for (var i = 0; i < _lines.length; i++) _cartLine(i),
@@ -697,8 +722,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                     },
             ),
           ],
-        ],
-      );
+      ];
 
   Widget _cartLine(int i) {
     final line = _lines[i];
@@ -813,7 +837,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
             return Container(key: widget.qrSlotKey,
               width: side, height: side,
               child: FadeTransition(
-                opacity: widget.reveal.drive(CurveTween(curve: const Interval(0.85, 1))),
+                opacity: widget.reveal.drive(CurveTween(curve:
+                  const Interval(0.85, 1, curve: Curves.easeInOut))),
                 child: TweenAnimationBuilder<double>(
                   key: ValueKey(qr.payload),
                   duration: MediaQuery.disableAnimationsOf(context)
@@ -829,16 +854,16 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
           }),
         ),
       ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 12),
       Text(_copy('transfer_reference').toUpperCase(), style: _mono(9)),
-      const SizedBox(height: 6),
+      const SizedBox(height: 4),
       SelectableText(_order!.paymentMessage, style: _mono(15)),
-      const SizedBox(height: 18),
+      const SizedBox(height: 10),
       Text(
         _copy('waiting_bank'),
         style: _serif(15, color: BrandPalette.inkMuted),
       ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 10),
       _button(
         _copy('pay_cash'),
         () => setState(() => _cashSelected = true),

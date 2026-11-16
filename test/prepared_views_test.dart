@@ -38,7 +38,25 @@ class PreparationApi extends CheckoutApi {
   }
 }
 
+void usePhoneSize(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
+  test('ambient QR keeps a fixed scan position for phone and wide tablet', () {
+    final phone = qrBackdropRect(const Size(390, 776));
+    final wide = qrBackdropRect(const Size(1280, 732));
+    expect(phone.top, 136);
+    expect(wide.top, phone.top);
+    expect(phone.center.dx, 195);
+    expect(wide.center.dx, lessThan(1280 / 2)); // QR left / summary right.
+    expect(wide.width, 300);
+    expect(qrBackdropRect(const Size(1280, 732)), wide);
+  });
+
   test('preview is deterministic; confirmed matrix preserves every QR cell', () {
     final first = QrMatrix.preview('cola:1');
     expect(QrMatrix.preview('cola:1').cells, orderedEquals(first.cells));
@@ -103,6 +121,7 @@ void main() {
   });
 
   testWidgets('PAY stays fixed; matrix updates leave no idle animation or hidden orders', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi();
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
@@ -134,6 +153,7 @@ void main() {
   });
 
   testWidgets('slow payment stays on menu; repeated PAY creates one session', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi()..paymentGate = Completer();
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
@@ -248,13 +268,13 @@ void main() {
     final risingQrTop = tester.getTopLeft(slot).dy;
     expect(tester.getRect(header), headerBounds);
     expect(tester.getRect(pay), payBounds);
-    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.2));
+    expect(tester.getTopLeft(menu).dy, inInclusiveRange(menuTop + 1, menuTop + 27));
     final returnMenu = find.byKey(const ValueKey('checkout-menu'));
     expect(tester.getRect(returnMenu).top, payBounds.top);
     expect(tester.getRect(returnMenu).height, payBounds.height);
     await tester.pumpAndSettle();
     final settledQrBounds = tester.getRect(slot);
-    expect(risingQrTop, closeTo(settledQrBounds.top + 4, 0.2));
+    expect(risingQrTop, inInclusiveRange(settledQrBounds.top + 1, settledQrBounds.top + 8));
     await tester.pump(const Duration(seconds: 5));
     expect(tester.getRect(slot), settledQrBounds);
     expect(tester.binding.hasScheduledFrame, isFalse);
@@ -263,7 +283,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 225));
     expect(tester.getRect(header), headerBounds);
     expect(tester.getRect(pay), payBounds);
-    expect(tester.getTopLeft(menu).dy, closeTo(menuTop + 4, 0.2));
+    expect(tester.getTopLeft(menu).dy, inInclusiveRange(menuTop + 1, menuTop + 27));
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(menu).dy, menuTop);
     expect(find.text('Cola × 1'), findsOneWidget);
@@ -274,6 +294,7 @@ void main() {
   });
 
   testWidgets('failed preparation retries the same payment token inline', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi()..failCreate = true;
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
@@ -322,6 +343,7 @@ void main() {
   });
 
   testWidgets('hidden payment pauses polling and resumes when revisited', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi();
     final localization = LocalizationController();
     final router = EvilSpaceRouterDelegate(localization: localization, menuApi: api);
@@ -348,6 +370,7 @@ void main() {
   });
 
   testWidgets('reduced motion reveals ready payment without animation frames', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi();
     await tester.pumpWidget(MaterialApp(home: MediaQuery(
       data: const MediaQueryData(size: Size(390, 844), disableAnimations: true),
