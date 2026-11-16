@@ -90,7 +90,9 @@ async function handleCreateOrder(request, env, ctx) {
     .bind(itemKey)
     .first();
 
-  if (!item || discontinuedMenuItem(itemKey)) return jsonError('This menu item is unavailable.', 404);
+  if (!item || discontinuedMenuItem(itemKey) || item.group_key === 'storage-locker') {
+    return jsonError('This menu item is unavailable.', 404);
+  }
 
   const now = nowSeconds();
   const expiresAt = 0;
