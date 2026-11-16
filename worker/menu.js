@@ -412,12 +412,23 @@ async function adminSnapshot(env) {
           version: Number(catalog.version),
           createdAt: Number(catalog.created_at),
           createdByEmail: String(catalog.created_by_email),
-          sourceJson: String(catalog.source_json),
+          sourceJson: curatedSourceJson(catalog.source_json),
           groups,
         }
       : null,
     orders: (orders.results ?? []).map(adminOrder),
   };
+}
+
+function curatedSourceJson(value) {
+  const source = String(value ?? '');
+  try {
+    const menu = JSON.parse(source);
+    if (!Array.isArray(menu.groups)) return source;
+    return JSON.stringify({ ...menu, groups: curateLegacyMenuGroups(menu.groups) }, null, 2);
+  } catch {
+    return source;
+  }
 }
 
 async function activeCatalog(env) {
