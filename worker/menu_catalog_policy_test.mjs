@@ -23,6 +23,11 @@ test('legacy published catalog merges Monthly into Coworking without losing orig
   assert.equal(canonicalMenuGroupForItem('coworking-month','membership'),'coworking');
 });
 
+test('ordinary empty editor draft groups survive curation',()=>{
+  const groups=[{id:'new-section',name:'Untitled',items:[]}];
+  assert.deepEqual(curateLegacyMenuGroups(groups),groups);
+});
+
 test('existing published catalog without separate Monthly still renders once',()=>{
   const groups=[
     {id:'coworking',items:[{id:'coworking-day'},{id:'coworking-month'}]},
