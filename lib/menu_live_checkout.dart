@@ -846,7 +846,7 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
                   tween: Tween(begin: 0, end: 1),
                   builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),
                   child: QrImageView.withQr(qr: qr.code, size: side,
-                    padding: EdgeInsets.all(margin), backgroundColor: Colors.white,
+                    padding: EdgeInsets.all(margin), backgroundColor: Colors.transparent,
                     eyeStyle: const QrEyeStyle(color: BrandPalette.ink),
                     dataModuleStyle: const QrDataModuleStyle(color: BrandPalette.ink)),
                 ),
