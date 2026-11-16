@@ -1,13 +1,14 @@
 #include <flutter/runtime_effect.glsl>
 
-// Uniforms passed from Flutter
+// Evil Space / Ultra-Premium Matte — 110 gsm black archival paper.
+// An intentionally empty, full-bleed canvas: no cuts, holes or dust overlays.
+// The mouse/touch steers a soft virtual light; no ongoing animation is needed.
 uniform vec2 u_resolution;
-uniform vec2 u_lightPos; // Passed as raw pixel coordinates from top-left
-uniform float u_time;
+uniform vec2 u_lightPos;
+uniform float u_time; // Reserved for future design studies; currently static.
 
 out vec4 fragColor;
 
-// --- NOISE FUNCTIONS ---
 // Simplex 2D noise
 vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
 float snoise(vec2 v){
@@ -33,124 +34,92 @@ float snoise(vec2 v){
     return 130.0 * dot(m, g);
 }
 
-// Random hash for dust
-float random(vec2 st) {
-    return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-}
-
-// --- HEIGHT MAP GENERATION ---
-float getHeight(vec2 uv) {
-    float macro = snoise(uv * 2.0) * 1.0;
-    float micro = snoise(vec2(uv.x * 350.0, uv.y * 250.0)) * 0.12;
-    float height = macro + micro;
-
-    float perfX = 0.06;
-    float distToPerf = abs(uv.x - perfX);
-    if(uv.x < 0.1) {
-        height += (1.0 - smoothstep(0.0, 0.015, distToPerf)) * 0.15;
-    }
-
-    return height * 0.03;
+// Two-scale paper height: extremely subtle, rigid-stock warp plus fine tooth.
+// The different fiber frequencies add a faint Y-directed paper grain.
+float paperHeight(vec2 p) {
+    float rigidWarp = snoise(p * 1.45) * 0.0011;
+    float fiberTooth = snoise(vec2(p.x * 320.0, p.y * 250.0)) * 0.00045;
+    return rigidWarp + fiberTooth;
 }
 
 void main() {
-    // 1. Calculate UVs and project to 3D Space
-    vec2 fragCoord = FlutterFragCoord().xy;
-    vec2 uv = fragCoord / u_resolution;
-    
-    // Invert Y so math matches standard 3D coordinates (Y goes up)
-    vec2 st = vec2(uv.x, 1.0 - uv.y);
-    vec2 aspectUv = st * vec2(u_resolution.x / u_resolution.y, 1.0);
+    // Match Flutter's top-left pixel coordinates, even on narrow mobile screens.
+    vec2 resolution = max(u_resolution, vec2(1.0));
+    vec2 uv = FlutterFragCoord().xy / resolution;
+    float aspect = resolution.x / resolution.y;
+    vec2 paperUv = vec2(uv.x * aspect, 1.0 - uv.y);
 
-    // Reconstruct 3D positions purely from 2D coordinates
-    vec3 cameraPosition = vec3(0.0, 0.0, 3.5);
-    vec3 vPosition = vec3(
-        (st.x - 0.5) * 2.0 * (u_resolution.x / u_resolution.y),
-        (st.y - 0.5) * 2.0,
+    // Reconstruct a shallow virtual 3D surface and cursor-controlled light.
+    vec3 surfacePos = vec3(
+        (uv.x - 0.5) * 2.0 * aspect,
+        (0.5 - uv.y) * 2.0,
         0.0
     );
+    vec2 pointer = clamp(u_lightPos / resolution, vec2(0.0), vec2(1.0));
+    vec3 lightPos = vec3(
+        (pointer.x - 0.5) * 2.0 * aspect,
+        (0.5 - pointer.y) * 2.0,
+        0.80
+    );
+    vec3 cameraPos = vec3(0.0, 0.0, 3.5);
 
-    // Convert Flutter light pixel coordinates to the same 3D space
-    vec2 lightNorm = u_lightPos / u_resolution;
-    vec2 lightSt = vec2(lightNorm.x, 1.0 - lightNorm.y);
-    vec3 lightPos3D = vec3(
-        (lightSt.x - 0.5) * 2.0 * (u_resolution.x / u_resolution.y),
-        (lightSt.y - 0.5) * 2.0,
-        0.6 // Light hovers slightly above the paper
+    // Height derivatives generate normals directly, no normal texture needed.
+    float eps = 0.001;
+    float height = paperHeight(paperUv);
+    float heightX = paperHeight(paperUv + vec2(eps, 0.0));
+    float heightY = paperHeight(paperUv + vec2(0.0, eps));
+    vec3 normal = normalize(vec3(
+        -(heightX - height) / eps,
+        -(heightY - height) / eps,
+        1.0
+    ));
+
+    // Very deep black stock with only barely visible irregular pigmentation.
+    // Albedo is physical reflectance, not the final displayed RGB value.
+    float pigment = snoise(paperUv * 6.0);
+    vec3 albedo = vec3(0.0042) * (1.0 + 0.045 * pigment);
+
+    // Mostly untouched matte paper. Tiny oil/smudge patches gently lower
+    // roughness without creating the slick highlights of a plastic surface.
+    float oil = max(0.0, snoise(paperUv * 5.0));
+    float roughness = 0.95 - 0.07 * oil;
+
+    vec3 viewDir = normalize(cameraPos - surfacePos);
+    vec3 lightDir = normalize(lightPos - surfacePos);
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float ndl = max(dot(normal, lightDir), 0.0);
+    float ndv = max(dot(normal, viewDir), 0.0);
+    float ndh = max(dot(normal, halfDir), 0.0);
+
+    float distanceToLight = length(lightPos - surfacePos);
+    float attenuation = 1.0 / (
+        1.0 + 0.55 * distanceToLight + 0.18 * distanceToLight * distanceToLight
     );
 
-    // --- PERFORATION MASK ---
-    float perfX = 0.06 * (u_resolution.x / u_resolution.y); 
-    float holeSpacing = 50.0;
-    float holeY = fract(aspectUv.y * holeSpacing) - 0.5;
-    float holeDist = length(vec2((aspectUv.x - perfX) * 1.5, holeY));
-    
-    // Transparent holes instead of 'discard' for better Flutter compatibility
-    if (aspectUv.x < perfX + 0.02 && holeDist < 0.12) {
-        fragColor = vec4(0.0);
-        return;
-    }
+    // A broad, low-F0 Blinn/Schlick response suitable for nonmetallic fibers.
+    float f0 = 0.016;
+    float fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+    float broadHighlight = pow(ndh, 2.5) * fresnel *
+        (1.0 - roughness) * 0.28;
 
-    // --- NORMALS ---
-    float h = getHeight(aspectUv);
-    float eps = 0.001;
-    float hx = getHeight(aspectUv + vec2(eps, 0.0));
-    float hy = getHeight(aspectUv + vec2(0.0, eps));
-    
-    vec3 tx = vec3(eps, 0.0, hx - h);
-    vec3 ty = vec3(0.0, eps, hy - h);
-    vec3 normal = normalize(cross(tx, ty));
+    // Tiny vertical anisotropy and soft grazing-angle fiber sheen.
+    vec3 fiberHalf = normalize(halfDir + vec3(0.0, 0.28, 0.0));
+    float directionalSheen =
+        pow(max(dot(normal, fiberHalf), 0.0), 2.0) *
+        (1.0 - roughness) * 0.005;
+    float grazingSheen =
+        pow(1.0 - ndv, 3.0) * ndl *
+        (1.0 - roughness) * 0.010;
 
-    // --- MATERIAL PROPERTIES ---
-    vec3 albedo = vec3(0.04, 0.04, 0.04);
-    
-    float distToPerf = abs(aspectUv.x - perfX);
-    albedo += (1.0 - smoothstep(0.0, 0.01, distToPerf)) * vec3(0.02);
-    
-    float dustHash = random(aspectUv * 15.0);
-    if (dustHash > 0.9996) {
-        albedo = vec3(0.4); 
-    }
+    vec3 ambient = albedo * 0.085;
+    vec3 diffuse = albedo * ndl * attenuation * 2.3;
+    vec3 specular = vec3(
+        (broadHighlight * ndl + directionalSheen + grazingSheen) *
+        attenuation
+    );
 
-    float smudgeNoise = snoise(aspectUv * 8.0);
-    float roughness = 0.95 - (max(0.0, smudgeNoise) * 0.25);
-    roughness = mix(roughness, 1.0, (1.0 - smoothstep(0.0, 0.01, distToPerf)));
-
-    // --- LIGHTING ---
-    vec3 viewDir = normalize(cameraPosition - vPosition);
-    vec3 lightDir = normalize(lightPos3D - vPosition);
-    vec3 halfVector = normalize(lightDir + viewDir);
-
-    float NdotL = max(dot(normal, lightDir), 0.0);
-    float NdotV = max(dot(normal, viewDir), 0.0);
-    float NdotH = max(dot(normal, halfVector), 0.0);
-
-    float dist = length(lightPos3D - vPosition);
-    float attenuation = 1.0 / (1.0 + 0.5 * dist + 0.1 * dist * dist);
-    float lightIntensity = 4.5; 
-
-    vec3 diffuse = albedo * NdotL;
-
-    float shininess = 2.0 / (pow(roughness, 4.0) + 0.001) - 2.0;
-    float spec = pow(NdotH, max(shininess, 0.0001));
-    
-    float F0 = 0.015; 
-    float fresnel = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
-    
-    float anisotropyMask = pow(max(dot(normal, normalize(halfVector + vec3(0.0, 0.5, 0.0))), 0.0), shininess * 0.5);
-    vec3 specular = vec3(spec * fresnel + (anisotropyMask * 0.01)) * NdotL * 0.5;
-
-    float sheenFresnel = pow(1.0 - NdotV, 3.0);
-    vec3 sheen = vec3(0.04) * sheenFresnel * NdotL * (1.0 - roughness); 
-
-    vec3 ambient = albedo * 0.05;
-
-    // --- COMBINE & OUTPUT ---
-    vec3 finalColor = ambient + (diffuse + specular + sheen) * attenuation * lightIntensity;
-    
-    // Tone mapping
+    vec3 finalColor = ambient + diffuse + specular;
     finalColor = finalColor / (finalColor + vec3(1.0));
-    finalColor = pow(finalColor, vec3(1.0/2.2));
-
+    finalColor = pow(finalColor, vec3(1.0 / 2.2));
     fragColor = vec4(finalColor, 1.0);
 }
