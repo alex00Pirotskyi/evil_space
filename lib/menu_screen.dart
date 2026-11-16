@@ -449,8 +449,7 @@ class _MenuScreenState extends State<MenuScreen>
           child: Column(children: [
             _header(),
             Expanded(child: Stack(fit: StackFit.expand, children: [
-              PreparedViewLayers(controller: _paymentTransition,
-                travelPixels: 8, firstTravelPixels: 26,
+              PreparedViewLayers(controller: _paymentTransition, travelPixels: 0,
                 first: _menuView(menu), second: payment),
               Positioned.fill(child: IgnorePointer(child: ExcludeSemantics(
                 child: QrTransition(fingerprint: _cartFingerprint,
@@ -470,7 +469,11 @@ class _MenuScreenState extends State<MenuScreen>
 
   Widget _mobileMenu(MenuCatalog? menu) => Column(children: [
     _cartBar(),
-    Expanded(child: RefreshIndicator(
+    Expanded(child: PreparedViewMotion(
+      visibility: ReverseAnimation(_paymentTransition.drive(
+        CurveTween(curve: preparedViewCurve))),
+      travelPixels: 26,
+      child: RefreshIndicator(
       color: BrandPalette.ink,
       onRefresh: _checkingOut ? () async {} : _load,
       child: ListView(
@@ -500,7 +503,7 @@ class _MenuScreenState extends State<MenuScreen>
           ],
         ],
       ),
-    )),
+    ))),
   ]);
 
   Widget _header() => MenuHeader(localization: widget.localization,
