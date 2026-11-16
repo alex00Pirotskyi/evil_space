@@ -242,6 +242,11 @@ class _MenuScreenState extends State<MenuScreen>
     if (mounted) setState(() {});
   }
 
+  // Keep State's protected notification API inside its owner, not a layout extension.
+  void _updateTabletState(VoidCallback update) {
+    if (mounted) setState(update);
+  }
+
   String _copy(String key) {
     final language = widget.localization.language.code;
     return _menuCopy[language]?[key] ?? _menuCopy['en']![key]!;
