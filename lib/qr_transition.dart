@@ -155,6 +155,22 @@ List<_CellPath> _groupPaths(QrMatrix from, QrMatrix to) {
   return groups.values.toList(growable: false);
 }
 
+/// A single fixed scan position shared by the ambient and confirmed QR.
+///
+/// Tablet checkout uses a centered 1060px content area and 5:4 columns.
+/// This rectangle is independent of the reveal animation value.
+Rect qrBackdropRect(Size size) {
+  final side = math.min(300.0, math.min(size.width * 0.9,
+    math.max(180.0, size.height + 68 - 208)));
+  var centerX = size.width / 2;
+  if (size.width >= 1024) {
+    final sheetWidth = math.min(size.width, 1060.0);
+    final panelWidth = math.max(0.0, sheetWidth - 44 - 28) * 5 / 9;
+    centerX = (size.width - sheetWidth) / 2 + 22 + panelWidth / 2;
+  }
+  return Rect.fromLTWH(centerX - side / 2, 136, side, side);
+}
+
 class _QrTransitionPainter extends CustomPainter {
   _QrTransitionPainter({required this.paths, required this.count,
     required this.morph, required this.reveal, required this.hasPayment,
@@ -171,19 +187,8 @@ class _QrTransitionPainter extends CustomPainter {
     if (reveal.value >= 1) return; // Final real QR owns painting.
     final transition = preparedViewCurve.transform(reveal.value);
 
-    // The QR is fixed to its eventual scan position. Only its matrix and
-    // contrast change; it no longer flies across the menu during checkout.
-    final side = math.min(300.0, math.min(size.width * 0.9,
-      math.max(180.0, size.height + 68 - 208)));
-    var centerX = size.width / 2;
-    if (size.width >= 1024) {
-      // Mirrors the tablet payment's centered 1060px sheet with a 5:4 split.
-      final sheetWidth = math.min(size.width, 1060.0);
-      final panelWidth = math.max(0.0, sheetWidth - 44 - 28) * 5 / 9;
-      centerX = (size.width - sheetWidth) / 2 + 22 + panelWidth / 2;
-    }
-    const top = 136.0;
-    final rect = Rect.fromLTWH(centerX - side / 2, top, side, side);
+    // No interpolation to a new QR position: only contrast and cells evolve.
+    final rect = qrBackdropRect(size);
     final handoff = const Interval(0.85, 1, curve: Curves.easeInOut)
       .transform(reveal.value);
     const menuContrast = 0.12;
