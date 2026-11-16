@@ -286,6 +286,7 @@ async function loadTrustedCart(env, requestedItems) {
       WHERE mc.active = 1
         AND mi.enabled = 1
         AND mi.item_key <> 'storage-locker-month'
+        AND mi.group_key <> 'storage-locker'
         AND mi.item_key IN (${placeholders})
     `)
     .bind(...requestedKeys)
