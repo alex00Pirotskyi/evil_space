@@ -38,6 +38,13 @@ class PreparationApi extends CheckoutApi {
   }
 }
 
+void usePhoneSize(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   test('ambient QR keeps a fixed scan position for phone and wide tablet', () {
     final phone = qrBackdropRect(const Size(390, 776));
@@ -114,6 +121,7 @@ void main() {
   });
 
   testWidgets('PAY stays fixed; matrix updates leave no idle animation or hidden orders', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi();
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
@@ -145,6 +153,7 @@ void main() {
   });
 
   testWidgets('slow payment stays on menu; repeated PAY creates one session', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi()..paymentGate = Completer();
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
@@ -285,6 +294,7 @@ void main() {
   });
 
   testWidgets('failed preparation retries the same payment token inline', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi()..failCreate = true;
     await tester.pumpWidget(MaterialApp(home: MenuScreen(api: api,
       localization: LocalizationController(), onBack: () {})));
@@ -333,6 +343,7 @@ void main() {
   });
 
   testWidgets('hidden payment pauses polling and resumes when revisited', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi();
     final localization = LocalizationController();
     final router = EvilSpaceRouterDelegate(localization: localization, menuApi: api);
@@ -359,6 +370,7 @@ void main() {
   });
 
   testWidgets('reduced motion reveals ready payment without animation frames', (tester) async {
+    usePhoneSize(tester);
     final api = PreparationApi();
     await tester.pumpWidget(MaterialApp(home: MediaQuery(
       data: const MediaQueryData(size: Size(390, 844), disableAnimations: true),
