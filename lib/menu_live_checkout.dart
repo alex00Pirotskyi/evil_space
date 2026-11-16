@@ -837,7 +837,8 @@ class _LiveCheckoutSheetState extends State<_LiveCheckoutSheet>
             return Container(key: widget.qrSlotKey,
               width: side, height: side,
               child: FadeTransition(
-                opacity: widget.reveal.drive(CurveTween(curve: const Interval(0.85, 1))),
+                opacity: widget.reveal.drive(CurveTween(curve:
+                  const Interval(0.85, 1, curve: Curves.easeInOut))),
                 child: TweenAnimationBuilder<double>(
                   key: ValueKey(qr.payload),
                   duration: MediaQuery.disableAnimationsOf(context)
