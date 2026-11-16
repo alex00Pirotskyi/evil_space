@@ -24,7 +24,7 @@ The public site provides:
 - live desk availability from D1
 - booking for today or tomorrow
 - booking status and cancellation through an opaque client token
-- base pricing of `200K VND` day pass, `2.5M VND` month pass, and `1M VND / month` locker unless an active promotion overrides it
+- Coworking pricing: `200K VND` day pass and `2.5M VND` monthly pass, grouped in the Coworking section; active promotions can override pricing
 - English, Russian, and Vietnamese
 - October room-opening information
 - Instagram, Google Maps, Zalo, and phone contact actions

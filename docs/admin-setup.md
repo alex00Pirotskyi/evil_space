@@ -134,6 +134,8 @@ All three localized group names are required when `name` is an object. Legacy me
 
 The current Evil Space menu is kept in `docs/menu.json` and can be uploaded directly from `/admin/menu`.
 
+The bundled catalog now groups **Day Pass** and **Monthly Desk** under **Coworking** and removes the former **Storage Locker** category. The public Worker also curates older already-published D1 catalogs at read time and blocks new Locker orders, so these changes take effect after the normal `make` deployment without requiring a menu upload. Historical catalog rows stay intact for existing orders. The admin draft/editor receives the same curated view; publishing later will persist the new grouping.
+
 Menu groups, item names and optional item descriptions support English, Russian and Vietnamese in the same JSON object. The admin menu builder preserves all three languages when editing or publishing.
 
 The public menu is `/menu`. The main public page has a language-aware **MENU / МЕНЮ / THỰC ĐƠN** action. The menu page keeps the selected site language and lets the customer switch between EN, RU, and VI. Group headings update immediately without another API request.

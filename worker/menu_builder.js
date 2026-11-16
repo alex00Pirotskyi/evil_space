@@ -1,5 +1,6 @@
 import localizedMenuWorker, { normalizeMenuGroupNames } from './menu_i18n.js';
 import { validateMenuOptions } from './menu_options.js';
+import { curateLegacyMenuGroups } from './menu_catalog_policy.js';
 
 const ADMIN_SESSION_COOKIE = '__Host-evil_admin_session';
 const MAX_MENU_BYTES = 256 * 1024;
@@ -56,6 +57,7 @@ async function handleGetDraft(request, env) {
     source = 'published';
   }
   if (!menu) menu = { version: Number(active?.version ?? 1), groups: [] };
+  menu = { ...menu, groups: curateLegacyMenuGroups(menu.groups) };
 
   return json({
     ok: true,
@@ -167,6 +169,9 @@ export function validateDraftMenu(value, { allowEmptyGroups = false } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { error: 'Menu must be a JSON object.' };
   }
+  // The live catalog may predate the removal of the Locker offer.
+  // Apply the same curation to saved drafts and every new publish.
+  value = { ...value, groups: curateLegacyMenuGroups(value.groups) };
   try {
     normalizeMenuGroupNames(value);
   } catch (error) {

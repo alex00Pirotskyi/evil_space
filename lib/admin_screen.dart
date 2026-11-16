@@ -921,11 +921,6 @@ class _AdminScreenState extends State<AdminScreen> {
         '',
         _money(snapshot.pricing.monthPassVnd),
       ),
-      _row(
-        t('ЛИЧНЫЙ ШКАФЧИК', 'PERSONAL LOCKER'),
-        '',
-        _money(snapshot.pricing.lockerMonthVnd),
-      ),
     ]);
   }
 
@@ -941,7 +936,6 @@ class _AdminScreenState extends State<AdminScreen> {
       () => widget.api.updatePricing(
         dayPassVnd: result.dayPassVnd,
         monthPassVnd: result.monthPassVnd,
-        lockerMonthVnd: result.lockerMonthVnd,
       ),
       success: t('Цены обновлены', 'Prices updated'),
     );
@@ -963,7 +957,6 @@ class _AdminScreenState extends State<AdminScreen> {
         endTime: result.endTime,
         dayPassVnd: result.dayPassVnd,
         monthPassVnd: result.monthPassVnd,
-        lockerMonthVnd: result.lockerMonthVnd,
       ),
       success: t('Акция запущена', 'Promotion created'),
     );
@@ -1013,11 +1006,6 @@ class _AdminScreenState extends State<AdminScreen> {
         '',
         _money(pricing.monthPassVnd),
       ),
-      _row(
-        t('ЛИЧНЫЙ ШКАФЧИК', 'PERSONAL LOCKER'),
-        '',
-        _money(pricing.lockerMonthVnd),
-      ),
       const SizedBox(height: 14),
       OutlinedButton.icon(
         onPressed: _busy ? null : () => _editPricing(snapshot),
@@ -1061,8 +1049,6 @@ class _AdminScreenState extends State<AdminScreen> {
         '${t('ДЕНЬ', 'DAY')} ${_money(promotion.dayPassVnd!)}',
       if (promotion.monthPassVnd != null)
         '${t('МЕСЯЦ', 'MONTH')} ${_money(promotion.monthPassVnd!)}',
-      if (promotion.lockerMonthVnd != null)
-        '${t('ШКАФ', 'LOCKER')} ${_money(promotion.lockerMonthVnd!)}',
     ].join(' · ');
 
     return Container(
@@ -1689,11 +1675,9 @@ class _PricingEditResult {
   const _PricingEditResult(
     this.dayPassVnd,
     this.monthPassVnd,
-    this.lockerMonthVnd,
   );
   final int dayPassVnd;
   final int monthPassVnd;
-  final int lockerMonthVnd;
 }
 
 class _PricingEditorDialog extends StatefulWidget {
@@ -1708,7 +1692,6 @@ class _PricingEditorDialog extends StatefulWidget {
 class _PricingEditorDialogState extends State<_PricingEditorDialog> {
   late final TextEditingController _day;
   late final TextEditingController _month;
-  late final TextEditingController _locker;
   String? _error;
 
   String t(String ru, String en) => widget.russian ? ru : en;
@@ -1718,14 +1701,12 @@ class _PricingEditorDialogState extends State<_PricingEditorDialog> {
     super.initState();
     _day = TextEditingController(text: '${widget.pricing.dayPassVnd}');
     _month = TextEditingController(text: '${widget.pricing.monthPassVnd}');
-    _locker = TextEditingController(text: '${widget.pricing.lockerMonthVnd}');
   }
 
   @override
   void dispose() {
     _day.dispose();
     _month.dispose();
-    _locker.dispose();
     super.dispose();
   }
 
@@ -1739,14 +1720,13 @@ class _PricingEditorDialogState extends State<_PricingEditorDialog> {
   void _save() {
     final day = _price(_day);
     final month = _price(_month);
-    final locker = _price(_locker);
-    if (day == null || month == null || locker == null) {
+    if (day == null || month == null) {
       setState(
         () => _error = t('Введите все цены в VND.', 'Enter all prices in VND.'),
       );
       return;
     }
-    Navigator.of(context).pop(_PricingEditResult(day, month, locker));
+    Navigator.of(context).pop(_PricingEditResult(day, month));
   }
 
   @override
@@ -1771,14 +1751,6 @@ class _PricingEditorDialogState extends State<_PricingEditorDialog> {
               keyboardType: TextInputType.number,
               decoration: _inputDecoration(
                 t('МЕСЯЦ · VND', 'MONTH PASS · VND'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _locker,
-              keyboardType: TextInputType.number,
-              decoration: _inputDecoration(
-                t('ШКАФ · VND', 'LOCKER / MONTH · VND'),
               ),
             ),
             if (_error != null) ...[
@@ -1819,7 +1791,6 @@ class _PromotionDraft {
     this.endTime,
     this.dayPassVnd,
     this.monthPassVnd,
-    this.lockerMonthVnd,
   });
   final String description;
   final String startDate;
@@ -1828,7 +1799,6 @@ class _PromotionDraft {
   final String? endTime;
   final int? dayPassVnd;
   final int? monthPassVnd;
-  final int? lockerMonthVnd;
 }
 
 class _PromotionEditorDialog extends StatefulWidget {
@@ -1843,7 +1813,6 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
   final _description = TextEditingController();
   final _dayPrice = TextEditingController();
   final _monthPrice = TextEditingController();
-  final _lockerPrice = TextEditingController();
   late DateTime _startDate;
   late DateTime _endDate;
   bool _limitTime = false;
@@ -1866,7 +1835,6 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
     _description.dispose();
     _dayPrice.dispose();
     _monthPrice.dispose();
-    _lockerPrice.dispose();
     super.dispose();
   }
 
@@ -1920,7 +1888,6 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
     final description = _description.text.trim();
     final day = _optionalPrice(_dayPrice);
     final month = _optionalPrice(_monthPrice);
-    final locker = _optionalPrice(_lockerPrice);
     final startMinutes = _startTime.hour * 60 + _startTime.minute;
     final endMinutes = _endTime.hour * 60 + _endTime.minute;
     if (description.isEmpty) {
@@ -1932,7 +1899,7 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
       );
       return;
     }
-    if ([day, month, locker].contains(-1)) {
+    if ([day, month].contains(-1)) {
       setState(
         () => _error = t(
           'Цена должна быть больше 0.',
@@ -1941,7 +1908,7 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
       );
       return;
     }
-    if (day == null && month == null && locker == null) {
+    if (day == null && month == null) {
       setState(
         () => _error = t(
           'Укажите хотя бы одну акционную цену.',
@@ -1968,7 +1935,6 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
         endTime: _limitTime ? _timeValue(_endTime) : null,
         dayPassVnd: day,
         monthPassVnd: month,
-        lockerMonthVnd: locker,
       ),
     );
   }
@@ -2068,14 +2034,6 @@ class _PromotionEditorDialogState extends State<_PromotionEditorDialog> {
                 keyboardType: TextInputType.number,
                 decoration: _inputDecoration(
                   t('МЕСЯЦ · VND', 'MONTH PASS · VND'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _lockerPrice,
-                keyboardType: TextInputType.number,
-                decoration: _inputDecoration(
-                  t('ШКАФ · VND', 'LOCKER / MONTH · VND'),
                 ),
               ),
               if (_error != null) ...[

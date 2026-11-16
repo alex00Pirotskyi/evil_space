@@ -63,6 +63,31 @@ void main() {
       expect(find.byType(Overlay), findsWidgets);
     });
 
+    testWidgets('coworking merges day and month passes and removes Locker',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final localization = LocalizationController();
+      await tester.pumpWidget(MaterialApp.router(
+        routerDelegate: EvilSpaceRouterDelegate(localization: localization, menuApi: CheckoutApi()),
+        routeInformationParser: const EvilSpaceRouteParser()));
+      await tester.pumpAndSettle();
+      final month = find.byKey(const ValueKey('coworking-pass-price_month'));
+      final day = find.byKey(const ValueKey('coworking-pass-price_day_pass'));
+      await tester.ensureVisible(month);
+      await tester.pumpAndSettle();
+      expect(day, findsOneWidget);
+      expect(month, findsOneWidget);
+      expect(find.text('ONE MONTH'), findsOneWidget);
+      expect(find.text('PERSONAL LOCKER'), findsNothing);
+      expect(find.text('1 MLN VND / MONTH'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      localization.dispose();
+    });
+
     testWidgets('the café amenity opens the existing menu', (tester) async {
       final localization = LocalizationController();
       await tester.pumpWidget(MaterialApp.router(
@@ -86,19 +111,16 @@ void main() {
       final localization = LocalizationController(AppLanguage.en);
       expect(localization.t('brand_daily'), 'EVIL SPACE / DAILY');
       expect(localization.t('prices_title'), 'SIMPLE PRICES');
-      expect(localization.t('price_locker'), 'PERSONAL LOCKER');
       expect(localization.t('amenity_cafe_zone'), 'CAFÉ');
       expect(localization.t('visit_title'), 'FIND EVIL SPACE');
 
       localization.setLanguage(AppLanguage.ru);
       expect(localization.t('price_month'), 'ОДИН МЕСЯЦ');
-      expect(localization.t('price_locker'), 'ЛИЧНЫЙ ШКАФЧИК');
       expect(localization.t('amenity_menu'), 'ОТКРЫТЬ МЕНЮ');
       expect(localization.t('opening_studio'), 'ПОДКАСТ / СТУДИЯ');
 
       localization.setLanguage(AppLanguage.vi);
       expect(localization.t('prices_title'), 'BẢNG GIÁ');
-      expect(localization.t('price_locker'), 'TỦ CÁ NHÂN');
       expect(localization.t('amenity_menu'), 'XEM THỰC ĐƠN');
       expect(localization.t('opening_lecture'), 'PHÒNG HỘI THẢO');
       expect(localization.t('contact_map'), 'ẢNH & ĐÁNH GIÁ');
@@ -155,7 +177,7 @@ void main() {
       expect(content.openings, isNotEmpty);
       expect(
         content.prices.map((price) => price.price),
-        orderedEquals(['200K VND', '2.5 MLN VND', '1 MLN VND / MONTH']),
+        orderedEquals(['200K VND', '2.5 MLN VND']),
       );
     });
   });

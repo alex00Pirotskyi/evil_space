@@ -40,7 +40,6 @@ class AdminApi {
   Future<OperationsSnapshot> updatePricing({
     required int dayPassVnd,
     required int monthPassVnd,
-    required int lockerMonthVnd,
   }) async => _webOnly();
 
   Future<OperationsSnapshot> createPromotion({
@@ -51,7 +50,6 @@ class AdminApi {
     String? endTime,
     int? dayPassVnd,
     int? monthPassVnd,
-    int? lockerMonthVnd,
   }) async => _webOnly();
 
   Future<OperationsSnapshot> setPromotionEnabled(int id, bool enabled) async =>

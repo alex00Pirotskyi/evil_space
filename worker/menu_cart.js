@@ -1,3 +1,4 @@
+import { canonicalMenuGroupForItem } from './menu_catalog_policy.js';
 import localizedMenuWorker from './menu_i18n.js';
 import { buildVietQrPayload, VIETCOMBANK_BIN } from './vietqr.js';
 import {
@@ -284,6 +285,8 @@ async function loadTrustedCart(env, requestedItems) {
       JOIN menu_catalogs mc ON mc.id = mi.catalog_id
       WHERE mc.active = 1
         AND mi.enabled = 1
+        AND mi.item_key <> 'storage-locker-month'
+        AND mi.group_key <> 'storage-locker'
         AND mi.item_key IN (${placeholders})
     `)
     .bind(...requestedKeys)
@@ -311,7 +314,7 @@ async function loadTrustedCart(env, requestedItems) {
       itemId: Number(item.id),
       catalogId: Number(item.catalog_id),
       itemKey: String(item.item_key),
-      groupKey: String(item.group_key),
+      groupKey: canonicalMenuGroupForItem(String(item.item_key), String(item.group_key)),
       itemName: resolved.displayName,
       baseItemName: String(item.name),
       unitPriceVnd: resolved.unitPriceVnd,

@@ -198,10 +198,8 @@ class _QrTransitionPainter extends CustomPainter {
     final paint = Paint()..isAntiAlias = false;
     canvas.save();
     canvas.clipRect(Offset.zero & size);
-    if (hasPayment && transition > 0) {
-      paint.color = Colors.white.withValues(alpha: transition * (1 - handoff));
-      canvas.drawRect(rect, paint);
-    }
+    // Draw only opaque ink modules on the persistent paper surface.
+    // No white tile: the surrounding 4-module quiet zone is naturally paper.
     final unit = rect.width / (count + 8);
     canvas.translate(rect.left + 4 * unit, rect.top + 4 * unit);
     canvas.scale(unit);

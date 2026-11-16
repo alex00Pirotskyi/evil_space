@@ -4,6 +4,7 @@ import {
   releasePromoForMenuOrder,
 } from './promo_engine.js';
 import { parseMenuOptions, validateMenuOptions } from './menu_options.js';
+import { curateLegacyMenuGroups, discontinuedMenuItem } from './menu_catalog_policy.js';
 
 const SESSION_COOKIE = '__Host-evil_admin_session';
 const MAX_MENU_BYTES = 256 * 1024;
@@ -89,7 +90,9 @@ async function handleCreateOrder(request, env, ctx) {
     .bind(itemKey)
     .first();
 
-  if (!item) return jsonError('This menu item is unavailable.', 404);
+  if (!item || discontinuedMenuItem(itemKey) || item.group_key === 'storage-locker') {
+    return jsonError('This menu item is unavailable.', 404);
+  }
 
   const now = nowSeconds();
   const expiresAt = 0;
@@ -411,12 +414,23 @@ async function adminSnapshot(env) {
           version: Number(catalog.version),
           createdAt: Number(catalog.created_at),
           createdByEmail: String(catalog.created_by_email),
-          sourceJson: String(catalog.source_json),
+          sourceJson: curatedSourceJson(catalog.source_json),
           groups,
         }
       : null,
     orders: (orders.results ?? []).map(adminOrder),
   };
+}
+
+function curatedSourceJson(value) {
+  const source = String(value ?? '');
+  try {
+    const menu = JSON.parse(source);
+    if (!Array.isArray(menu.groups)) return source;
+    return JSON.stringify({ ...menu, groups: curateLegacyMenuGroups(menu.groups) }, null, 2);
+  } catch {
+    return source;
+  }
 }
 
 async function activeCatalog(env) {
@@ -461,14 +475,14 @@ async function catalogGroups(env, catalogId, includeDisabled) {
       options: parseMenuOptions(row.options_json),
     });
   }
-  return groups;
+  return curateLegacyMenuGroups(groups);
 }
 
 function validateMenu(value, defaultVersion) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { error: 'Menu must be a JSON object.' };
   }
-  const rawGroups = value.groups;
+  const rawGroups = curateLegacyMenuGroups(value.groups);
   if (!Array.isArray(rawGroups) || rawGroups.length < 1 || rawGroups.length > MAX_GROUPS) {
     return { error: `Menu must contain 1-${MAX_GROUPS} groups.` };
   }

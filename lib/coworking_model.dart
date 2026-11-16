@@ -11,7 +11,6 @@ class SiteStatus {
     this.tomorrowPrice = 200000,
     this.baseDayPassPrice = 200000,
     this.baseMonthPassPrice = 2500000,
-    this.baseLockerMonthPrice = 1000000,
     this.todayPromoDescription = '',
     this.tomorrowPromoDescription = '',
   });
@@ -23,7 +22,6 @@ class SiteStatus {
   final int tomorrowPrice;
   final int baseDayPassPrice;
   final int baseMonthPassPrice;
-  final int baseLockerMonthPrice;
   final String todayPromoDescription;
   final String tomorrowPromoDescription;
 
@@ -37,8 +35,6 @@ class SiteStatus {
       baseDayPassPrice: (json['baseDayPassPrice'] as num?)?.toInt() ?? 200000,
       baseMonthPassPrice:
           (json['baseMonthPassPrice'] as num?)?.toInt() ?? 2500000,
-      baseLockerMonthPrice:
-          (json['baseLockerMonthPrice'] as num?)?.toInt() ?? 1000000,
       todayPromoDescription: json['todayPromoDescription']?.toString() ?? '',
       tomorrowPromoDescription:
           json['tomorrowPromoDescription']?.toString() ?? '',
@@ -163,7 +159,6 @@ class SiteContent {
     prices: [
       SitePrice(labelKey: 'price_day_pass', price: '200K VND'),
       SitePrice(labelKey: 'price_month', price: '2.5 MLN VND'),
-      SitePrice(labelKey: 'price_locker', price: '1 MLN VND / MONTH'),
     ],
     announcements: [
       SiteAnnouncement(
