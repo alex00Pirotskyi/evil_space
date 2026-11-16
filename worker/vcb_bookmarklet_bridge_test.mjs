@@ -30,7 +30,7 @@ test('accepts VCB Digibank Web space-padded numeric reference', () => {
   assert.equal(tx.orderCode,'VLWYLT');
   assert.equal(tx.amountVnd,25000);
   assert.equal(tx.bankReference,'5389-10535');
-  assert.match(tx.transactionId,/date:\\d{4}-\\d{2}-\\d{2}:ref:5389-10535$/);
+  assert.match(tx.transactionId,/date:\d{4}-\d{2}-\d{2}:ref:5389-10535$/);
 });
 test('rejects invalid credits and forged order codes', () => {
   for(const bad of [
