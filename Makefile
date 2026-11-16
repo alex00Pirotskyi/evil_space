@@ -1,12 +1,24 @@
 .DEFAULT_GOAL := deploy
 
-.PHONY: deploy deploy-local build verify test telegram-setup
+.PHONY: deploy deploy-local debug debug-local debug-build build verify test telegram-setup
 
 deploy:
 	bash tool/trigger_github_release.sh
 
 deploy-local:
 	dart run tool/release.dart
+
+# Deploy the design study to the isolated test.evils.space Worker.
+debug:
+	bash tool/trigger_github_debug.sh
+
+# Deploy local, possibly unpushed changes to test.evils.space.
+debug-local:
+	dart run tool/debug.dart
+
+# Build the staging site but do not publish it.
+debug-build:
+	dart run tool/debug.dart --build-only
 
 build:
 	dart run tool/release.dart --build-only

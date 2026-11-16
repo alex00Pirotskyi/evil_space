@@ -1,0 +1,71 @@
+name: Design preview - test.evils.space
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/debug.yml'
+      - 'shaders/paper_shader.frag'
+      - 'lib/main_debug.dart'
+      - 'lib/premium_paper_widget.dart'
+      - 'tool/debug.dart'
+      - 'tool/prepare_debug_web.mjs'
+      - 'wrangler.debug.toml'
+      - 'pubspec.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evil-space-test-deploy
+  cancel-in-progress: true
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Ensure lockfile stays unchanged
+        run: git diff --exit-code -- pubspec.lock
+
+      - name: Analyze app and preview code
+        run: flutter analyze --no-pub --no-fatal-infos
+
+      - name: Build isolated shader page
+        run: dart run tool/debug.dart --build-only
+
+      - name: Verify staging shell
+        run: |
+          test -f build/debug_web/index.html
+          test -f build/debug_web/flutter_bootstrap.js
+          grep -q 'noindex,nofollow,noarchive' build/debug_web/index.html
+          ! grep -q '/api/public/status' build/debug_web/flutter_bootstrap.js
+
+      - name: Check Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN" >&2; exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID" >&2; exit 1)
+
+      - name: Deploy isolated Cloudflare Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes "wrangler@$(cat tool/wrangler_version.txt)" deploy --config wrangler.debug.toml

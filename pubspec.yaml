@@ -29,3 +29,6 @@ flutter:
 
   assets:
     - assets/content/
+
+  shaders:
+    - shaders/paper_shader.frag

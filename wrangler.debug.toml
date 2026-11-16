@@ -1,0 +1,10 @@
+# Isolated static-only Worker: no D1, no API, no production main.
+name = "evil-space-test"
+compatibility_date = "2026-08-29"
+
+[assets]
+directory = "./build/debug_web"
+
+[[routes]]
+pattern = "test.evils.space"
+custom_domain = true
