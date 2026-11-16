@@ -75,7 +75,7 @@ extension _TabletMenuLayout on _MenuScreenState {
                 child: TextButton(
                   key: ValueKey('menu-category-${group.id}'),
                   onPressed: () {
-                    setState(() => _selectedCategoryId = group.id);
+                    _updateTabletState(() => _selectedCategoryId = group.id);
                     final target = _groupAnchors[group.id]?.currentContext;
                     if (target != null) {
                       Scrollable.ensureVisible(target,
@@ -311,7 +311,7 @@ extension _TabletMenuLayout on _MenuScreenState {
     if (_checkingOut || _editingItem) return;
     final index = _cart.indexWhere((line) => line.key == key);
     if (index < 0 || _cart[index].quantity >= 20) return;
-    setState(() {
+    _updateTabletState(() {
       final line = _cart[index];
       _cart[index] = line.copyWith(quantity: line.quantity + 1);
     });
@@ -326,10 +326,13 @@ extension _TabletMenuLayout on _MenuScreenState {
       await _checkout(removeKey: key);
       return;
     }
-    setState(() {
+    _updateTabletState(() {
       final line = _cart[index];
-      if (line.quantity == 1) _cart.removeAt(index);
-      else _cart[index] = line.copyWith(quantity: line.quantity - 1);
+      if (line.quantity == 1) {
+        _cart.removeAt(index);
+      } else {
+        _cart[index] = line.copyWith(quantity: line.quantity - 1);
+      }
     });
   }
 }
