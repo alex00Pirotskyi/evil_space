@@ -1,6 +1,6 @@
 #include <flutter/runtime_effect.glsl>
 
-// Evil Space / Ultra-Premium Matte — 110 gsm black archival paper.
+// Evil Space / Ultra-Premium Minimalist — heavyweight graphite art paper.
 // An intentionally empty, full-bleed canvas: no cuts, holes or dust overlays.
 // The mouse/touch steers a soft virtual light; no ongoing animation is needed.
 uniform vec2 u_resolution;
@@ -37,7 +37,7 @@ float snoise(vec2 v){
 // Two-scale paper height: extremely subtle, rigid-stock warp plus fine tooth.
 // The different fiber frequencies add a faint Y-directed paper grain.
 float paperHeight(vec2 p) {
-    float rigidWarp = snoise(p * 1.45) * 0.0011;
+    float rigidWarp = snoise(p * 1.45) * 0.00030;
     float fiberTooth = snoise(vec2(p.x * 320.0, p.y * 250.0)) * 0.00045;
     return rigidWarp + fiberTooth;
 }
@@ -74,15 +74,15 @@ void main() {
         1.0
     ));
 
-    // Very deep black stock with only barely visible irregular pigmentation.
+    // Graphite/charcoal stock: enough reflectance to reveal the micro-tooth.
     // Albedo is physical reflectance, not the final displayed RGB value.
     float pigment = snoise(paperUv * 6.0);
-    vec3 albedo = vec3(0.0042) * (1.0 + 0.045 * pigment);
+    vec3 albedo = vec3(0.035) * (1.0 + 0.045 * pigment);
 
     // Mostly untouched matte paper. Tiny oil/smudge patches gently lower
     // roughness without creating the slick highlights of a plastic surface.
-    float oil = max(0.0, snoise(paperUv * 5.0));
-    float roughness = 0.95 - 0.07 * oil;
+    float oil = clamp(max(0.0, snoise(paperUv * 5.0)) * 2.0, 0.0, 1.0);
+    float roughness = 0.95 - 0.01 * oil; // Subtle smudges, never below 0.94.
 
     vec3 viewDir = normalize(cameraPos - surfacePos);
     vec3 lightDir = normalize(lightPos - surfacePos);
